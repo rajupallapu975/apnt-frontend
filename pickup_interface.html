@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pickup Code Interface - Print Service</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 48px 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .icon-container {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .icon {
+            font-size: 40px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--primary-light), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 400;
+        }
+
+        .form-group {
+            margin-bottom: 32px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 16px 20px;
+            font-size: 24px;
+            font-weight: 600;
+            text-align: center;
+            letter-spacing: 8px;
+            background: var(--bg-dark);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+            font-family: 'Inter', monospace;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        input[type="text"]::placeholder {
+            color: var(--text-secondary);
+            letter-spacing: 4px;
+            font-weight: 400;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 18px;
+            font-size: 16px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .submit-btn:hover::before {
+            left: 100%;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(99, 102, 241, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .submit-btn:disabled:hover {
+            transform: none;
+        }
+
+        .message {
+            margin-top: 24px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success-color);
+            color: var(--success-color);
+            display: block;
+        }
+
+        .message.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error-color);
+            color: var(--error-color);
+            display: block;
+        }
+
+        .order-details {
+            margin-top: 24px;
+            padding: 20px;
+            background: var(--bg-dark);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .order-details.show {
+            display: block;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .detail-value {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .print-btn {
+            width: 100%;
+            padding: 16px;
+            margin-top: 20px;
+            font-size: 15px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--success-color), #059669);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .print-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(16, 185, 129, 0.4);
+        }
+
+        .print-btn:active {
+            transform: translateY(0);
+        }
+
+        .print-btn:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .print-btn:disabled:hover {
+            transform: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <div class="icon-container">
+                    <div class="icon">🖨️</div>
+                </div>
+                <h1>Enter Pickup Code</h1>
+                <p class="subtitle">Enter your 4-digit code to retrieve your order</p>
+            </div>
+
+            <form id="pickupForm">
+                <div class="form-group">
+                    <label for="pickupCode">Pickup Code</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="pickupCode" name="pickupCode" placeholder="0000" maxlength="4"
+                            pattern="[0-9]{4}" required autocomplete="off">
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <span id="btnText">Retrieve Order</span>
+                </button>
+            </form>
+
+            <div id="message" class="message"></div>
+
+            <div id="orderDetails" class="order-details">
+                <div class="detail-row">
+                    <span class="detail-label">Order ID</span>
+                    <span class="detail-value" id="orderId">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Status</span>
+                    <span class="detail-value" id="orderStatus">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Total Pages</span>
+                    <span class="detail-value" id="totalPages">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Total Price</span>
+                    <span class="detail-value" id="totalPrice">-</span>
+                </div>
+
+                <button type="button" class="print-btn" id="printBtn" onclick="triggerPrint()">
+                    🖨️ Print Now
+                </button>
+            </div>
+
+            <div class="footer">
+                Powered by Print Service © 2026
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('pickupForm');
+        const input = document.getElementById('pickupCode');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const message = document.getElementById('message');
+        const orderDetails = document.getElementById('orderDetails');
+
+        // Auto-focus input on load
+        input.focus();
+
+        // Only allow numbers
+        input.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const pickupCode = input.value.trim();
+
+            if (pickupCode.length !== 4) {
+                showMessage('Please enter a valid 4-digit code', 'error');
+                return;
+            }
+
+            // Show loading state
+            submitBtn.disabled = true;
+            btnText.innerHTML = '<span class="spinner"></span>Processing...';
+            message.style.display = 'none';
+            orderDetails.classList.remove('show');
+
+            try {
+                // TODO: Replace with your actual API endpoint
+                // For now, this is a mock implementation
+                const response = await mockApiCall(pickupCode);
+
+                if (response.success) {
+                    showMessage('Order retrieved successfully!', 'success');
+                    displayOrderDetails(response.data);
+                } else {
+                    showMessage(response.message || 'Invalid pickup code', 'error');
+                }
+            } catch (error) {
+                showMessage('Error retrieving order. Please try again.', 'error');
+                console.error('Error:', error);
+            } finally {
+                // Reset button state
+                submitBtn.disabled = false;
+                btnText.textContent = 'Retrieve Order';
+            }
+        });
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = `message ${type}`;
+            message.style.display = 'block';
+        }
+
+        function displayOrderDetails(data) {
+            document.getElementById('orderId').textContent = data.orderId || '-';
+            document.getElementById('orderStatus').textContent = data.status || 'Ready';
+            document.getElementById('totalPages').textContent = data.totalPages || '-';
+            document.getElementById('totalPrice').textContent = data.totalPrice ? `₹${data.totalPrice}` : '-';
+            orderDetails.classList.add('show');
+        }
+
+        // API call to backend
+        async function mockApiCall(pickupCode) {
+            try {
+                const response = await fetch('http://localhost:5000/get-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ pickupCode })
+                });
+
+                return await response.json();
+            } catch (error) {
+                console.error('API Error:', error);
+                return {
+                    success: false,
+                    message: 'Unable to connect to server. Please ensure the backend is running.'
+                };
+            }
+        }
+
+        // Trigger print job
+        async function triggerPrint() {
+            const pickupCode = input.value.trim();
+            const printBtn = document.getElementById('printBtn');
+
+            if (!pickupCode || pickupCode.length !== 4) {
+                showMessage('Please enter a valid pickup code first', 'error');
+                return;
+            }
+
+            // Disable button and show loading
+            printBtn.disabled = true;
+            const originalText = printBtn.innerHTML;
+            printBtn.innerHTML = '<span class="spinner"></span>Triggering Print...';
+
+            try {
+                const response = await fetch('http://localhost:5000/trigger-print', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ pickupCode })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(`✅ ${result.message} - ${result.filesCount} file(s) sent to printer`, 'success');
+                    // Update status
+                    document.getElementById('orderStatus').textContent = 'Printing';
+                    printBtn.innerHTML = '✅ Print Triggered';
+
+                    // Re-enable after 3 seconds
+                    setTimeout(() => {
+                        printBtn.disabled = false;
+                        printBtn.innerHTML = originalText;
+                    }, 3000);
+                } else {
+                    showMessage(`❌ ${result.message}`, 'error');
+                    printBtn.disabled = false;
+                    printBtn.innerHTML = originalText;
+                }
+            } catch (error) {
+                console.error('Print Error:', error);
+                showMessage('Error triggering print. Please ensure the backend is running.', 'error');
+                printBtn.disabled = false;
+                printBtn.innerHTML = originalText;
+            }
+        }
+
+        // Add keyboard shortcut (Enter) for quick submission
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && document.activeElement !== input) {
+                input.focus();
+            }
+        });
+    </script>
+</body>
+
+</html>
