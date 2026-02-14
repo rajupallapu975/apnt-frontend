@@ -110,7 +110,7 @@ class PrintPreviewCarousel extends StatelessWidget {
                         border: Border.all(color: Colors.grey.shade300),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
+                            color: Colors.black.withOpacity(0.12),
                             blurRadius: 10,
                           ),
                         ],

@@ -1,8 +1,13 @@
+// ============================================================================
+// PAYMENT PROCESSING PAGE (UPDATED - BACKEND CONTROLLED)
+// ============================================================================
+
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:apnt/services/firestore_service.dart';
 import 'package:apnt/services/cloudinary_storage_service.dart';
+import 'package:apnt/services/backend_service.dart';
 import 'package:apnt/views/screens/payment_error_page.dart';
 import 'package:flutter/material.dart';
 import 'payment_success_page.dart';
@@ -10,7 +15,7 @@ import 'payment_success_page.dart';
 class PaymentProcessingPage extends StatefulWidget {
   final List<File?> selectedFiles;
   final List<Uint8List?> selectedBytes;
-  final Map<String, dynamic> printSettings; 
+  final Map<String, dynamic> printSettings;
   final int expectedPages;
   final double expectedPrice;
 
@@ -28,106 +33,145 @@ class PaymentProcessingPage extends StatefulWidget {
       _PaymentProcessingPageState();
 }
 
-class _PaymentProcessingPageState extends State<PaymentProcessingPage> {
-  
+class _PaymentProcessingPageState
+    extends State<PaymentProcessingPage> {
+
   @override
   void initState() {
     super.initState();
     _startProcessing();
   }
 
-Future<void> _startProcessing() async {
-  try {
-    // Check if there are any valid files or bytes
-    final hasFiles = widget.selectedFiles.any((f) => f != null);
-    final hasBytes = widget.selectedBytes.any((b) => b != null);
+  // ==========================================================================
+  // MAIN PROCESSING WORKFLOW
+  // ==========================================================================
+  Future<void> _startProcessing() async {
+    try {
+      // STEP 1: VALIDATE FILES
+      final hasFiles =
+          widget.selectedFiles.any((f) => f != null);
+      final hasBytes =
+          widget.selectedBytes.any((b) => b != null);
 
-    if (!hasFiles && !hasBytes) {
-      throw Exception("No valid files selected");
-    }
+      if (!hasFiles && !hasBytes) {
+        throw Exception("No valid files selected");
+      }
 
-    // 🚀 CLOUD-ONLY FLOW (No Backend Connection Required during upload)
-    final String tempOrderId = "ORD_${DateTime.now().millisecondsSinceEpoch}";
-    
-    print('📤 Uploading files to Cloudinary...');
-    // Pass original lists (with nulls) to maintain index alignment
-    final uploadedUrls = await CloudinaryStorageService().uploadFiles(
-      orderId: tempOrderId,
-      files: widget.selectedFiles,
-      bytes: widget.selectedBytes,
-    );
+      print('📡 Creating order via backend...');
 
-    if (uploadedUrls.isEmpty) {
-      throw Exception("Internal Error: File upload returned no links.");
-    }
+      // STEP 2: CREATE ORDER VIA BACKEND
+      final backendResult = await BackendService()
+          .createOrder(widget.printSettings);
 
-    print('💾 Saving order directly to Firestore...');
-    // This generates the 6-digit pickup code and saves everything to the cloud
-    final pickupCode = await FirestoreService().saveOrderDirectly(
-      printSettings: widget.printSettings,
-      totalPages: widget.expectedPages,
-      totalPrice: widget.expectedPrice,
-      fileUrls: uploadedUrls,
-    );
+      final String orderId = backendResult.orderId;
+      final String pickupCode =
+          backendResult.pickupCode;
 
-    print('✅ Cloud Save Successful! Pickup Code: $pickupCode');
+      print('✅ Order Created: $orderId');
+      print('🔑 Pickup Code: $pickupCode');
 
-    if (!mounted) return;
+      // STEP 3: UPLOAD FILES TO CLOUDINARY
+      print('📤 Uploading files...');
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentSuccessPage(
-          orderId: tempOrderId,
-          pickupCode: pickupCode,
+      final uploadedUrls =
+          await CloudinaryStorageService()
+              .uploadFiles(
+        pickupCode: pickupCode,
+        files: widget.selectedFiles,
+        bytes: widget.selectedBytes,
+      );
+
+      if (uploadedUrls.isEmpty) {
+        throw Exception(
+            "File upload failed - no URLs returned");
+      }
+
+      print('✅ Files uploaded successfully');
+
+      // STEP 4: ATTACH FILE URLS TO ORDER
+      await FirestoreService().attachFilesToOrder(
+        orderId: orderId,
+        fileUrls: uploadedUrls,
+      );
+
+      print('✅ Files attached to order');
+
+      // STEP 5: NAVIGATE TO SUCCESS PAGE
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentSuccessPage(
+            orderId: orderId,
+            pickupCode: pickupCode,
+          ),
         ),
-      ),
-    );
-  } catch (e, st) {
-    print("❌ CLOUD UPLOAD ERROR: $e");
-    print(st);
+      );
 
-    if (!mounted) return;
+    } catch (e, stackTrace) {
+      print("❌ ORDER PROCESSING ERROR: $e");
+      print(stackTrace);
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentErrorPage(
-          message: e.toString(),
-          onRetry: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PaymentProcessingPage(
-                  selectedFiles: widget.selectedFiles,
-                  selectedBytes: widget.selectedBytes,
-                  printSettings: widget.printSettings,
-                  expectedPages: widget.expectedPages,
-                  expectedPrice: widget.expectedPrice,
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentErrorPage(
+            message: e.toString(),
+            onRetry: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      PaymentProcessingPage(
+                    selectedFiles:
+                        widget.selectedFiles,
+                    selectedBytes:
+                        widget.selectedBytes,
+                    printSettings:
+                        widget.printSettings,
+                    expectedPages:
+                        widget.expectedPages,
+                    expectedPrice:
+                        widget.expectedPrice,
+                  ),
                 ),
-              ),
-            );
-          },
-          onGoBack: () => Navigator.pop(context),
+              );
+            },
+            onGoBack: () =>
+                Navigator.pop(context),
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
+  // ==========================================================================
+  // UI
+  // ==========================================================================
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        appBar: AppBar(title: const Text("Processing Order"), automaticallyImplyLeading: false,),
+        appBar: AppBar(
+          title: const Text("Processing Order"),
+          automaticallyImplyLeading: false,
+        ),
         body: const Center(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment:
+                MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(),
               SizedBox(height: 20),
-              Text("Uploading and securing your files...\nPlease wait"),
+              Text(
+                "Processing payment and securing your files...\nPlease wait",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
             ],
           ),
         ),

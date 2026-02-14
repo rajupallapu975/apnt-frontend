@@ -543,7 +543,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             border: Border.all(
                 color: selected ? Colors.green : Colors.black12),
             color: selected
-                ? Colors.green.withValues(alpha: 0.15)
+                ? Colors.green.withOpacity(0.15)
                 : Colors.white,
           ),
           child: Text(

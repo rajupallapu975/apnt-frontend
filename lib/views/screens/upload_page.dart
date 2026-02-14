@@ -5,6 +5,7 @@ import 'package:apnt/models/print_order_model.dart';
 import 'package:apnt/services/firestore_service.dart';
 import 'package:apnt/views/profile_page.dart';
 import 'package:apnt/views/screens/history_page.dart';
+import 'package:apnt/views/screens/payment_processing_page.dart';
 import 'package:apnt/views/screens/print_options/print_options_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -270,7 +271,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isExpired ? Colors.red.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3),
+            color: isExpired ? Colors.red.withOpacity(0.3) : Colors.green.withOpacity(0.3),
             width: 1,
           ),
         ),
@@ -286,7 +287,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'ID: ${order.orderId.substring(0, 10).toUpperCase()}',
+                        'ID: ${order.orderId.length >= 10 ? order.orderId.substring(0, 10).toUpperCase() : order.orderId.toUpperCase()}',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -302,7 +303,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isExpired ? Colors.red.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+                      color: isExpired ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -320,7 +321,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isExpired ? Colors.red.withValues(alpha: 0.05) : Colors.blue.withValues(alpha: 0.1),
+                  color: isExpired ? Colors.red.withOpacity(0.05) : Colors.blue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -415,55 +416,49 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
     );
   }
 
-  Future<void> _reprintOrder(PrintOrderModel order) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reprint Order'),
-        content: Text(
-          'Do you want to reprint this order?\n\n'
-          'Pages: ${order.totalPages}\n'
-          'Price: ₹${order.totalPrice.toStringAsFixed(2)}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Reprint'),
-          ),
-        ],
+Future<void> _reprintOrder(
+    PrintOrderModel order) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Reprint Order'),
+      content: Text(
+        'Pages: ${order.totalPages}\n'
+        'Price: ₹${order.totalPrice.toStringAsFixed(2)}\n\n'
+        'Proceed to payment?',
       ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      setState(() => _isLoading = true);
-      final newOrderId = await _firestoreService.reprintOrder(order);
-      setState(() => _isLoading = false);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order reprinted! New Order ID: ${newOrderId.substring(0, 8)}'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.pop(context, false),
+          child: const Text('Cancel'),
         ),
-      );
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to reprint: $e'),
-          backgroundColor: Colors.red,
+        ElevatedButton(
+          onPressed: () =>
+              Navigator.pop(context, true),
+          child: const Text('Proceed'),
         ),
-      );
-    }
-  }
+      ],
+    ),
+  );
+
+  if (confirmed != true) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => PaymentProcessingPage(
+        selectedFiles: [],
+        selectedBytes: [],
+        printSettings: order.printSettings,
+        expectedPages: order.totalPages,
+        expectedPrice: order.totalPrice,
+      ),
+    ),
+  );
+}
+
+
 }
 
 /// =======================================================

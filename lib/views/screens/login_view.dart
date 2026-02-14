@@ -25,9 +25,9 @@ class LoginView extends StatelessWidget {
             end: Alignment.bottomCenter,
             stops: const [0.0, 0.4, 1.0],
             colors: [
-              const Color(0xFF6366F1).withValues(alpha: 0.08),
+              const Color(0xFF6366F1).withOpacity(0.08),
               Colors.white,
-              const Color(0xFF6366F1).withValues(alpha: 0.05),
+              const Color(0xFF6366F1).withOpacity(0.05),
             ],
           ),
         ),
@@ -48,7 +48,7 @@ class LoginView extends StatelessWidget {
                     boxShadow: [
                       BoxShadow(
                         color:
-                            const Color(0xFF6366F1).withValues(alpha: 0.1),
+                            const Color(0xFF6366F1).withOpacity(0.1),
                         blurRadius: 32,
                         offset: const Offset(0, 16),
                       ),
