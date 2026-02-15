@@ -84,21 +84,34 @@ class FilePickerSheet extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Text('Add More Files', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
-          ListTile(
-            leading: const Icon(Icons.camera_alt, color: Colors.blue),
-            title: const Text('Camera'),
-            onTap: pickCamera,
-          ),
-          ListTile(
-            leading: const Icon(Icons.photo_library, color: Colors.orange),
-            title: const Text('Gallery'),
-            onTap: pickGallery,
-          ),
-          ListTile(
-            leading: const Icon(Icons.folder, color: Colors.purple),
-            title: const Text('Files'),
-            onTap: pickFiles,
-          ),
+          if (kIsWeb) ...[
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: Colors.blue),
+              title: const Text('Camera Scanner'),
+              onTap: pickCamera,
+            ),
+            ListTile(
+              leading: const Icon(Icons.upload_file_rounded, color: Colors.indigo),
+              title: const Text('Media Picker'),
+              onTap: pickFiles,
+            ),
+          ] else ...[
+            ListTile(
+              leading: const Icon(Icons.camera_enhance_rounded, color: Colors.pink),
+              title: const Text('Camera'),
+              onTap: pickCamera,
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: Colors.orange),
+              title: const Text('Gallery'),
+              onTap: pickGallery,
+            ),
+            ListTile(
+              leading: const Icon(Icons.grid_view_rounded, color: Colors.purple),
+              title: const Text('Files'),
+              onTap: pickFiles,
+            ),
+          ],
           const SizedBox(height: 12),
         ],
       ),

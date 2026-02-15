@@ -118,7 +118,7 @@ class PrintPreviewCarousel extends StatelessWidget {
                       child: AspectRatio(
                         aspectRatio: a4Ratio,
                         child: Container(
-                          clipBehavior: Clip.antiAlias,
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(6),
