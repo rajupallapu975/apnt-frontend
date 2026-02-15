@@ -22,9 +22,9 @@ class PrintOptionsPage extends StatefulWidget {
 }
 
 class _PrintOptionsPageState extends State<PrintOptionsPage> {
-  bool isDoubleSide = false;
   bool _showPriceDetails = false;
   int _currentPageIndex = 0;
+  final PageController _pageController = PageController();
 
   late List<FileModel> pickedFiles;
   late List<PagePrintConfig> pageConfigs;
@@ -36,8 +36,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     for (final p in pageConfigs) {
       final unitPrice = p.isColor ? 10 : 3;
       final pages = p.pageCount;
-      final effectiveCopies = isDoubleSide ? (p.copies / 2).ceil() : p.copies;
-      total += unitPrice * pages * effectiveCopies;
+      total += unitPrice * pages * p.copies;
     }
     return total;
   }
@@ -137,7 +136,6 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     
     final current = pageConfigs[_currentPageIndex];
     final paymentService = PaymentService();
-    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
@@ -170,13 +168,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   SizedBox(
                     height: previewHeight,
                     child: PrintPreviewCarousel(
+                      controller: _pageController,
                       fileNames: pickedFiles.map((e) => e.name).toList(),
                       files: pickedFiles.map((e) => e.file).toList(),
                       bytes: pickedFiles.map((e) => e.bytes).toList(),
                       isPortraitList: pageConfigs.map((e) => e.isPortrait).toList(),
                       isColorList: pageConfigs.map((e) => e.isColor).toList(),
-                      fitToA4List: pageConfigs.map((e) => e.fitToA4).toList(),
-                      isDoubleSide: isDoubleSide,
                       onPageChanged: (i) => setState(() => _currentPageIndex = i),
                       onEdit: (index) {
                         _currentPageIndex = index;
@@ -254,34 +251,6 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                           ),
                         ),
 
-                        if (pageCount > 1) ...[
-                          const SizedBox(height: 12),
-                          _section(
-                            child: Row(
-                              children: [
-                                _option('One side', !isDoubleSide, () => setState(() => isDoubleSide = false)),
-                                const SizedBox(width: 12),
-                                _option('Both sides', isDoubleSide, () => setState(() => isDoubleSide = true)),
-                              ],
-                            ),
-                          ),
-                        ],
-                        
-                        const SizedBox(height: 12),
-                        
-                        _section(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Scale to A4 Full Content', style: TextStyle(fontWeight: FontWeight.bold)),
-                              Switch(
-                                value: current.fitToA4, 
-                                activeColor: Colors.green,
-                                onChanged: (val) => setState(() => current.fitToA4 = val),
-                              ),
-                            ],
-                          ),
-                        ),
                         
                         SizedBox(height: isKeyboardOpen ? 20 : 80),
                       ],
@@ -349,7 +318,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                       if (!isPaid || !context.mounted) return;
 
                       final printSettings = {
-                        "doubleSide": isDoubleSide,
+                        "doubleSide": false,
                         "files": List.generate(pageConfigs.length, (i) {
                           final c = pageConfigs[i];
                           final model = pickedFiles[i];
@@ -359,14 +328,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                             "color": c.isColor ? "COLOR" : "BW",
                             "orientation": c.isPortrait ? "PORTRAIT" : "LANDSCAPE",
                             "copies": c.copies,
-                            "fitToA4": c.fitToA4,
                           };
                         }),
                       };
 
                       int localTotalPages = 0;
                       for (var pc in pageConfigs) localTotalPages += pc.pageCount * pc.copies;
-                      final finalTotalPages = isDoubleSide ? (localTotalPages + 1) ~/ 2 : localTotalPages;
 
                       Navigator.push(
                         context,
@@ -375,7 +342,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                             selectedFiles: pickedFiles.map((e) => e.file).toList(),
                             selectedBytes: pickedFiles.map((e) => e.bytes).toList(),
                             printSettings: printSettings,
-                            expectedPages: finalTotalPages,
+                            expectedPages: localTotalPages,
                             expectedPrice: totalPrice.toDouble(),
                           ),
                         ),
@@ -399,10 +366,6 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
        return;
     }
 
-    if (isDoubleSide) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Disable double side to edit pages')));
-      return;
-    }
 
     final String sourcePath = kIsWeb ? model.path : (model.file?.path ?? model.path);
     
@@ -471,13 +434,11 @@ class PagePrintConfig {
   bool isColor;
   int copies;
   int pageCount;
-  bool fitToA4;
 
   PagePrintConfig({
     this.isPortrait = true,
     this.isColor = true,
     this.copies = 1,
     this.pageCount = 1,
-    this.fitToA4 = true,
   });
 }
