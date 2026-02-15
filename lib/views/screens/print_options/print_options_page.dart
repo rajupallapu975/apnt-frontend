@@ -6,18 +6,15 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:apnt/services/payment_service.dart';
 import 'package:apnt/views/screens/payment_processing_page.dart';
 import 'package:apnt/views/screens/print_options/widgets/file_picker_sheet.dart';
+import 'package:apnt/models/file_model.dart';
 import 'widgets/print_preview_carousel.dart';
 
 class PrintOptionsPage extends StatefulWidget {
-  final List<File?> files;
-  final List<Uint8List?> bytes;
-  final List<int> pageIndices;
+  final List<FileModel> pickedFiles;
 
   const PrintOptionsPage({
     super.key,
-    required this.files,
-    required this.bytes,
-    required this.pageIndices,
+    required this.pickedFiles,
   });
 
   @override
@@ -29,22 +26,17 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   bool _showPriceDetails = false;
   int _currentPageIndex = 0;
 
-  late List<File?> files;
-  late List<Uint8List?> bytes;
-  late List<int> pageIndices;
+  late List<FileModel> pickedFiles;
   late List<PagePrintConfig> pageConfigs;
 
-  int get pageCount => files.length;
+  int get pageCount => pickedFiles.length;
 
   int get totalPrice {
     int total = 0;
     for (final p in pageConfigs) {
       final unitPrice = p.isColor ? 10 : 3;
-      // ✅ For PDFs: pageCount × copies × unitPrice
-      // ✅ For images: 1 × copies × unitPrice
       final pages = p.pageCount;
-      final effectiveCopies =
-          isDoubleSide ? (p.copies / 2).ceil() : p.copies;
+      final effectiveCopies = isDoubleSide ? (p.copies / 2).ceil() : p.copies;
       total += unitPrice * pages * effectiveCopies;
     }
     return total;
@@ -53,37 +45,42 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   @override
   void initState() {
     super.initState();
-    files = List.from(widget.files);
-    bytes = List.from(widget.bytes);
-    pageIndices = List.from(widget.pageIndices);
+    pickedFiles = List.from(widget.pickedFiles);
     
-    // ✅ Initialize configs, detect PDFs and set pageCount
-    pageConfigs = List.generate(files.length, (i) {
-      final file = files[i];
-      if (file != null && file.path.toLowerCase().endsWith('.pdf')) {
-        // Will be loaded async, default to 1 for now
-        _loadPdfPageCount(i, file);
-        return PagePrintConfig(pageCount: 1);
+    // Initialize configs
+    pageConfigs = List.generate(pickedFiles.length, (i) {
+      final fileModel = pickedFiles[i];
+      final isPdf = fileModel.name.toLowerCase().endsWith('.pdf');
+      
+      if (isPdf) {
+        _loadPdfPageCount(i, fileModel);
+        return PagePrintConfig(pageCount: 1); // Default to 1, will update async
       }
-      return PagePrintConfig();
+      return PagePrintConfig(); // Normal image = 1 page
     });
   }
 
-  /// Load PDF page count asynchronously
-  Future<void> _loadPdfPageCount(int index, File file) async {
+  /// Load PDF page count asynchronously using bytes (works for both web & mobile)
+  Future<void> _loadPdfPageCount(int index, FileModel model) async {
     try {
-      final bytes = await file.readAsBytes();
-      final doc = await PdfDocument.openData(bytes);
-      final count = doc.pagesCount;
-      doc.close();
+      Uint8List? data = model.bytes;
+      if (data == null && !kIsWeb && model.file != null) {
+        data = await model.file!.readAsBytes();
+      }
       
-      if (mounted) {
-        setState(() {
-          pageConfigs[index].pageCount = count;
-        });
+      if (data != null) {
+        final doc = await PdfDocument.openData(data);
+        final count = doc.pagesCount;
+        doc.close();
+        
+        if (mounted) {
+          setState(() {
+            pageConfigs[index].pageCount = count;
+          });
+        }
       }
     } catch (e) {
-      // If error, keep default pageCount = 1
+      debugPrint("PDF Load Error: $e");
     }
   }
 
@@ -95,30 +92,28 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => FilePickerSheet(
-        onPickedFiles: (pickedFiles) async {
-          for (final f in pickedFiles) {
-            if (f.path.toLowerCase().endsWith('.pdf')) {
-              // ✅ PDF: Keep as ONE item, store pageCount
-              final pdfBytes = await f.readAsBytes();
-              final doc = await PdfDocument.openData(pdfBytes);
-              final count = doc.pagesCount;
-              doc.close();
-
-              setState(() {
-                files.add(f);
-                bytes.add(null);
-                pageIndices.add(0); // Not used for PDFs
-                pageConfigs.add(PagePrintConfig(pageCount: count));
-              });
-            } else {
-              // ✅ Image: One item per file
-              setState(() {
-                files.add(f);
-                bytes.add(null);
-                pageIndices.add(0);
-                pageConfigs.add(PagePrintConfig());
-              });
+        onPickedFiles: (newPicked) async {
+          for (final f in newPicked) {
+            final isPdf = f.name.toLowerCase().endsWith('.pdf');
+            int count = 1;
+            
+            if (isPdf) {
+              try {
+                final data = f.bytes ?? (f.file != null ? await f.file!.readAsBytes() : null);
+                if (data != null) {
+                  final doc = await PdfDocument.openData(data);
+                  count = doc.pagesCount;
+                  doc.close();
+                }
+              } catch (e) {
+                debugPrint("PDF Load Error: $e");
+              }
             }
+
+            setState(() {
+              pickedFiles.add(f);
+              pageConfigs.add(PagePrintConfig(pageCount: count));
+            });
           }
         },
       ),
@@ -127,16 +122,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Safety check for empty list or invalid index
     if (pageConfigs.isEmpty) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
     
-    // ✅ Ensure index is valid
     if (_currentPageIndex >= pageConfigs.length) {
       _currentPageIndex = pageConfigs.length - 1;
     }
@@ -150,29 +141,17 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
-      resizeToAvoidBottomInset: true, // ✅ Prevents keyboard overflow
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
-        title: Text(
-          'Print options',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 18 / textScale.clamp(0.8, 1.3), // ✅ Responsive font
-          ),
-        ),
+        title: const Text('Print options', style: TextStyle(color: Colors.black, fontSize: 18)),
         actions: [
           TextButton.icon(
             onPressed: _addMoreFiles,
             icon: const Icon(Icons.add, color: Colors.green, size: 20),
-            label: Text(
-              'Add files',
-              style: TextStyle(
-                color: Colors.green,
-                fontSize: 14 / textScale.clamp(0.8, 1.3), // ✅ Responsive font
-              ),
-            ),
+            label: const Text('Add files', style: TextStyle(color: Colors.green, fontSize: 14)),
           ),
         ],
       ),
@@ -180,40 +159,33 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // ✅ Detect keyboard
             final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
             final isKeyboardOpen = keyboardHeight > 0;
-            
-            // ✅ Adjust preview height based on keyboard
-            final previewHeight = isKeyboardOpen
-                ? constraints.maxHeight * 0.25 // Smaller when keyboard is open
-                : constraints.maxHeight * 0.45; // Normal size
+            final previewHeight = isKeyboardOpen ? constraints.maxHeight * 0.25 : constraints.maxHeight * 0.45;
 
             return Column(
               children: [
                 /// ---------------- PREVIEW ----------------
-                if (!isKeyboardOpen) // ✅ Hide preview when keyboard is open
+                if (!isKeyboardOpen)
                   SizedBox(
                     height: previewHeight,
                     child: PrintPreviewCarousel(
-                      files: files,
-                      bytes: bytes,
+                      fileNames: pickedFiles.map((e) => e.name).toList(),
+                      files: pickedFiles.map((e) => e.file).toList(),
+                      bytes: pickedFiles.map((e) => e.bytes).toList(),
                       isPortraitList: pageConfigs.map((e) => e.isPortrait).toList(),
                       isColorList: pageConfigs.map((e) => e.isColor).toList(),
+                      fitToA4List: pageConfigs.map((e) => e.fitToA4).toList(),
                       isDoubleSide: isDoubleSide,
-                      onPageChanged: (i) =>
-                          setState(() => _currentPageIndex = i),
+                      onPageChanged: (i) => setState(() => _currentPageIndex = i),
                       onEdit: (index) {
                         _currentPageIndex = index;
                         _editCurrentPage();
                       },
                       onRemove: (index) {
                         setState(() {
-                          files.removeAt(index);
-                          bytes.removeAt(index);
-                          pageIndices.removeAt(index);
+                          pickedFiles.removeAt(index);
                           pageConfigs.removeAt(index);
-
                           if (pageConfigs.isEmpty) {
                             Navigator.pop(context);
                           } else if (_currentPageIndex >= pageConfigs.length) {
@@ -227,7 +199,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 /// ---------------- OPTIONS ----------------
                 Expanded(
                   child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(), // ✅ Smooth iOS-style scrolling
+                    physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
@@ -238,32 +210,20 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                               Flexible(
                                 child: Text(
                                   'Page ${_currentPageIndex + 1} copies',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16 / textScale.clamp(0.8, 1.3),
-                                  ),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               Row(
                                 children: [
                                   _circle(Icons.remove, () {
-                                    if (current.copies > 1) {
-                                      setState(() => current.copies--);
-                                    }
+                                    if (current.copies > 1) setState(() => current.copies--);
                                   }),
                                   Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 12),
-                                    child: Text(
-                                      '${current.copies}',
-                                      style: TextStyle(
-                                        fontSize: 16 / textScale.clamp(0.8, 1.3),
-                                      ),
-                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    child: Text('${current.copies}', style: const TextStyle(fontSize: 16)),
                                   ),
-                                  _circle(Icons.add,
-                                      () => setState(() => current.copies++)),
+                                  _circle(Icons.add, () => setState(() => current.copies++)),
                                 ],
                               ),
                             ],
@@ -275,11 +235,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                         _section(
                           child: Row(
                             children: [
-                              _option('Color', current.isColor,
-                                  () => setState(() => current.isColor = true)),
+                              _option('Color', current.isColor, () => setState(() => current.isColor = true)),
                               const SizedBox(width: 12),
-                              _option('B & W', !current.isColor,
-                                  () => setState(() => current.isColor = false)),
+                              _option('B & W', !current.isColor, () => setState(() => current.isColor = false)),
                             ],
                           ),
                         ),
@@ -289,11 +247,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                         _section(
                           child: Row(
                             children: [
-                              _option('Portrait', current.isPortrait,
-                                  () => setState(() => current.isPortrait = true)),
+                              _option('Portrait', current.isPortrait, () => setState(() => current.isPortrait = true)),
                               const SizedBox(width: 12),
-                              _option('Landscape', !current.isPortrait,
-                                  () => setState(() => current.isPortrait = false)),
+                              _option('Landscape', !current.isPortrait, () => setState(() => current.isPortrait = false)),
                             ],
                           ),
                         ),
@@ -303,16 +259,31 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                           _section(
                             child: Row(
                               children: [
-                                _option('One side', !isDoubleSide,
-                                    () => setState(() => isDoubleSide = false)),
+                                _option('One side', !isDoubleSide, () => setState(() => isDoubleSide = false)),
                                 const SizedBox(width: 12),
-                                _option('Both sides', isDoubleSide,
-                                    () => setState(() => isDoubleSide = true)),
+                                _option('Both sides', isDoubleSide, () => setState(() => isDoubleSide = true)),
                               ],
                             ),
                           ),
                         ],
-                        SizedBox(height: isKeyboardOpen ? 20 : 80), // ✅ Less padding when keyboard is open
+                        
+                        const SizedBox(height: 12),
+                        
+                        _section(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Scale to A4 Full Content', style: TextStyle(fontWeight: FontWeight.bold)),
+                              Switch(
+                                value: current.fitToA4, 
+                                activeColor: Colors.green,
+                                onChanged: (val) => setState(() => current.fitToA4 = val),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        SizedBox(height: isKeyboardOpen ? 20 : 80),
                       ],
                     ),
                   ),
@@ -326,12 +297,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       /// ---------------- BOTTOM BAR ----------------
       bottomNavigationBar: SafeArea(
         child: Container(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            12,
-            16,
-            16 + MediaQuery.of(context).viewInsets.bottom, // ✅ Keyboard padding
-          ),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(top: BorderSide(color: Colors.black12)),
@@ -346,42 +312,22 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   final unitPrice = p.isColor ? 10 : 3;
                   final price = unitPrice * p.pageCount * p.copies;
                   final formula = p.pageCount > 1
-                      ? 'Page ${i + 1} × ${p.pageCount} pages × ${p.copies} copies = ₹$price'
-                      : 'Page ${i + 1} × ${p.copies} = ₹$price';
+                      ? 'Item ${i + 1} (${p.pageCount} pages) × ${p.copies} copies = ₹$price'
+                      : 'Item ${i + 1} × ${p.copies} = ₹$price';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      formula,
-                      style: TextStyle(
-                        fontSize: 13 / textScale.clamp(0.8, 1.3),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 2,
-                    ),
+                    child: Text(formula, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
                   );
                 }),
                 const Divider(),
               ],
 
               GestureDetector(
-                onTap: () =>
-                    setState(() => _showPriceDetails = !_showPriceDetails),
+                onTap: () => setState(() => _showPriceDetails = !_showPriceDetails),
                 child: Row(
                   children: [
-                    Text(
-                      'Price details',
-                      style: TextStyle(
-                        fontSize: 13 / textScale.clamp(0.8, 1.3),
-                        color: Colors.grey,
-                      ),
-                    ),
-                    Icon(
-                      _showPriceDetails
-                          ? Icons.keyboard_arrow_down
-                          : Icons.keyboard_arrow_up,
-                      size: 18,
-                      color: Colors.grey,
-                    ),
+                    const Text('Price details', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                    Icon(_showPriceDetails ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up, size: 18, color: Colors.grey),
                   ],
                 ),
               ),
@@ -391,73 +337,51 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '₹$totalPrice',
-                    style: TextStyle(
-                      fontSize: 20 / textScale.clamp(0.8, 1.3),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text('₹$totalPrice', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 28, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: () async {
-                      final isPaid =
-                          await paymentService.performPayment(context);
+                      final isPaid = await paymentService.performPayment(context);
                       if (!isPaid || !context.mounted) return;
 
                       final printSettings = {
                         "doubleSide": isDoubleSide,
                         "files": List.generate(pageConfigs.length, (i) {
                           final c = pageConfigs[i];
-                          final file = files[i];
-                          final isPdf = file != null && file.path.toLowerCase().endsWith('.pdf');
-                          
+                          final model = pickedFiles[i];
                           return {
-                            "fileIndex": i,
-                            "pageNumber": pageIndices[i],
-                            "pageCount": c.pageCount, // ✅ Total pages (for PDFs)
-                            "isPdf": isPdf, // ✅ Backend knows if it's PDF
+                            "fileName": model.name,
+                            "pageCount": c.pageCount,
                             "color": c.isColor ? "COLOR" : "BW",
-                            "orientation":
-                                c.isPortrait ? "PORTRAIT" : "LANDSCAPE",
+                            "orientation": c.isPortrait ? "PORTRAIT" : "LANDSCAPE",
                             "copies": c.copies,
+                            "fitToA4": c.fitToA4,
                           };
                         }),
                       };
 
-                      // Calculate local values as fallback for PaymentProcessingPage
                       int localTotalPages = 0;
-                      for (var pc in pageConfigs) {
-                        localTotalPages += pc.pageCount * pc.copies;
-                      }
+                      for (var pc in pageConfigs) localTotalPages += pc.pageCount * pc.copies;
                       final finalTotalPages = isDoubleSide ? (localTotalPages + 1) ~/ 2 : localTotalPages;
-                      final finalTotalPrice = totalPrice.toDouble();
 
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => PaymentProcessingPage(
-                            selectedFiles: files,
-                            selectedBytes: bytes,
+                            selectedFiles: pickedFiles.map((e) => e.file).toList(),
+                            selectedBytes: pickedFiles.map((e) => e.bytes).toList(),
                             printSettings: printSettings,
                             expectedPages: finalTotalPages,
-                            expectedPrice: finalTotalPrice,
+                            expectedPrice: totalPrice.toDouble(),
                           ),
                         ),
                       );
                     },
-                    child: Text(
-                      'Payment',
-                      style: TextStyle(
-                        fontSize: 16 / textScale.clamp(0.8, 1.3),
-                      ),
-                    ),
+                    child: const Text('Payment', style: TextStyle(fontSize: 16)),
                   ),
                 ],
               ),
@@ -468,71 +392,63 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     );
   }
 
-  /// ---------------- IMAGE EDIT ----------------
   Future<void> _editCurrentPage() async {
-    final original = files[_currentPageIndex];
-    if (original == null) return;
+    final model = pickedFiles[_currentPageIndex];
+    if (model.name.toLowerCase().endsWith('.pdf')) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot edit PDF files.')));
+       return;
+    }
 
-    // ❌ Cannot edit PDFs
-    if (original.path.toLowerCase().endsWith('.pdf')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot edit PDF files. Only images can be edited.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (isDoubleSide) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Disable double side to edit pages')));
       return;
     }
 
-    if (kIsWeb || isDoubleSide) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Disable double side to edit pages')),
-      );
+    final String sourcePath = kIsWeb ? model.path : (model.file?.path ?? model.path);
+    
+    if (sourcePath.isEmpty && kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot edit this image source on web.')));
       return;
     }
 
     final cropped = await ImageCropper().cropImage(
-      sourcePath: original.path,
+      sourcePath: sourcePath,
+      // image_cropper works on web if configured properly in index.html, 
+      // but let's assume it works for now or the user handles it.
       uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: 'Edit Page',
-          toolbarColor: Colors.green,
-          toolbarWidgetColor: Colors.white,
-        ),
-        IOSUiSettings(title: 'Edit Page'),
+        AndroidUiSettings(toolbarTitle: 'Edit', toolbarColor: Colors.green, toolbarWidgetColor: Colors.white),
+        IOSUiSettings(title: 'Edit'),
+        WebUiSettings(context: context),
       ],
     );
 
     if (cropped == null) return;
 
+    final bytes = await cropped.readAsBytes();
     setState(() {
-      files[_currentPageIndex] = File(cropped.path);
-      bytes[_currentPageIndex] = null;
+      pickedFiles[_currentPageIndex] = FileModel(
+        id: model.id,
+        name: model.name,
+        path: kIsWeb ? '' : cropped.path,
+        file: kIsWeb ? null : File(cropped.path),
+        bytes: bytes,
+        addedAt: model.addedAt,
+      );
     });
   }
 
-  /// ---------------- UI HELPERS ----------------
   Widget _section({required Widget child}) => Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
         child: child,
       );
 
   Widget _circle(IconData icon, VoidCallback onTap) => InkWell(
         onTap: onTap,
-        child: CircleAvatar(
-          radius: 14,
-          backgroundColor: Colors.green,
-          child: Icon(icon, size: 16, color: Colors.white),
-        ),
+        child: CircleAvatar(radius: 14, backgroundColor: Colors.green, child: Icon(icon, size: 16, color: Colors.white)),
       );
 
   Widget _option(String label, bool selected, VoidCallback onTap) {
-    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -540,38 +456,28 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: selected ? Colors.green : Colors.black12),
-            color: selected
-                ? Colors.green.withOpacity(0.15)
-                : Colors.white,
+            border: Border.all(color: selected ? Colors.green : Colors.black12),
+            color: selected ? Colors.green.withOpacity(0.15) : Colors.white,
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14 / textScale.clamp(0.8, 1.3),
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
+          child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14)),
         ),
       ),
     );
   }
 }
 
-/// ---------------- PAGE CONFIG ----------------
 class PagePrintConfig {
   bool isPortrait;
   bool isColor;
   int copies;
-  int pageCount; // ✅ For PDFs: actual page count, for images: 1
+  int pageCount;
+  bool fitToA4;
 
   PagePrintConfig({
     this.isPortrait = true,
     this.isColor = true,
     this.copies = 1,
-    this.pageCount = 1, // Default: 1 page (for images)
+    this.pageCount = 1,
+    this.fitToA4 = true,
   });
 }

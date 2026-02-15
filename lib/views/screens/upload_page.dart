@@ -169,13 +169,9 @@ class _UploadPageState extends State<UploadPage> {
 
 Future<void> _handlePickedFiles(List<FileModel> picked) async {
   setState(() => _isLoading = true);
-  _files.clear(); _bytes.clear(); _pageIndices.clear();
-
-  for (final f in picked) {
-    _files.add(f.file);
-    _bytes.add(f.bytes);
-    _pageIndices.add(0);
-  }
+  
+  // Minimal delay to ensure UI shows loading
+  await Future.delayed(const Duration(milliseconds: 300));
 
   setState(() => _isLoading = false);
   if (!mounted) return;
@@ -184,9 +180,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
     context,
     MaterialPageRoute(
       builder: (_) => PrintOptionsPage(
-        files: _files,
-        bytes: _bytes,
-        pageIndices: _pageIndices,
+        pickedFiles: picked,
       ),
     ),
   );
@@ -261,14 +255,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
                     ),
                   ),
                   
-                  if (kIsWeb)
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: _pickFromFiles,
-                        icon: const Icon(Icons.upload_file_rounded),
-                        label: const Text('Prefer uploading local files? Click here'),
-                      ),
-                    ),
+                  const SizedBox(height: 20),
 
                   const SizedBox(height: 48),
 

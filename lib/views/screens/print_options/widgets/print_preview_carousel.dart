@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
 class PrintPreviewCarousel extends StatelessWidget {
+  final List<String> fileNames;
   final List<File?> files;
   final List<Uint8List?> bytes;
   final List<bool> isPortraitList;
   final List<bool> isColorList;
+  final List<bool> fitToA4List;
   final bool isDoubleSide;
   final Function(int) onEdit;
   final Function(int) onRemove;
@@ -15,10 +17,12 @@ class PrintPreviewCarousel extends StatelessWidget {
 
   const PrintPreviewCarousel({
     super.key,
+    required this.fileNames,
     required this.files,
     required this.bytes,
     required this.isPortraitList,
     required this.isColorList,
+    required this.fitToA4List,
     required this.isDoubleSide,
     required this.onEdit,
     required this.onRemove,
@@ -28,18 +32,21 @@ class PrintPreviewCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PageView.builder(
-      itemCount: files.length,
+      itemCount: fileNames.length,
       onPageChanged: onPageChanged,
       itemBuilder: (_, index) {
+        final name = fileNames[index];
         final portrait = isPortraitList[index];
         final color = isColorList[index];
+        final fitToA4 = fitToA4List[index];
         final a4Ratio = portrait ? 210 / 297 : 297 / 210;
+        
         final file = files[index];
+        final byteData = bytes[index];
+        
         Widget image;
 
-        if (file != null && file.path.toLowerCase().endsWith('.pdf')) {
-          // ✅ Simple PDF preview: icon + filename + page count
-          final filename = path.basename(file.path);
+        if (name.toLowerCase().endsWith('.pdf')) {
           image = Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -49,26 +56,37 @@ class PrintPreviewCarousel extends StatelessWidget {
                 color: color ? Colors.red : Colors.grey,
               ),
               const SizedBox(height: 12),
-              Text(
-                filename,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: color ? Colors.black87 : Colors.grey,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: color ? Colors.black87 : Colors.grey,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           );
         } else {
-          // ✅ Image files: show actual image
-          image = kIsWeb
-              ? Image.memory(bytes[index]!, fit: BoxFit.contain)
-              : Image.file(file!, fit: BoxFit.contain);
+          // IMAGE PREVIEW
+          final boxFit = fitToA4 ? BoxFit.cover : BoxFit.contain;
           
-          // 🎨 B&W filter for images only
+          if (kIsWeb) {
+            image = byteData != null 
+              ? Image.memory(byteData, fit: boxFit) 
+              : const Center(child: CircularProgressIndicator());
+          } else {
+            image = file != null 
+              ? Image.file(file, fit: boxFit) 
+              : const Center(child: CircularProgressIndicator());
+          }
+          
+          // B&W filter
           if (!color) {
             image = ColorFiltered(
               colorFilter: const ColorFilter.matrix([
@@ -89,7 +107,7 @@ class PrintPreviewCarousel extends StatelessWidget {
               /// 🟢 LEFT ACTION ZONE (EDIT)
               SizedBox(
                 width: 44,
-                child: !isDoubleSide && file != null && !file.path.toLowerCase().endsWith('.pdf')
+                child: !isDoubleSide && !name.toLowerCase().endsWith('.pdf')
                     ? IconButton(
                         icon: const Icon(Icons.edit, color: Colors.blue),
                         onPressed: () => onEdit(index),
@@ -97,13 +115,13 @@ class PrintPreviewCarousel extends StatelessWidget {
                     : const SizedBox(),
               ),
 
-              /// 📄 A4 PAPER (PURE – NO BUTTONS)
+              /// 📄 A4 PAPER
               Expanded(
                 child: Center(
                   child: AspectRatio(
                     aspectRatio: a4Ratio,
                     child: Container(
-                      padding: const EdgeInsets.all(14),
+                      clipBehavior: Clip.antiAlias, // Important for BoxFit.cover
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(6),
