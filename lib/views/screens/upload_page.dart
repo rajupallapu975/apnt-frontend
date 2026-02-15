@@ -156,19 +156,15 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   void _openUploadOptions() {
-    if (kIsWeb) {
-      _pickFromCamera(context);
-    } else {
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (_) => _UploadOptionsSheet(
-          onCamera: () { Navigator.pop(context); _pickFromCamera(context); },
-          onGallery: () { Navigator.pop(context); _pickFromGallery(); },
-          onFiles: () { Navigator.pop(context); _pickFromFiles(); },
-        ),
-      );
-    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _UploadOptionsSheet(
+        onCamera: () { Navigator.pop(context); _pickFromCamera(context); },
+        onGallery: () { Navigator.pop(context); _pickFromGallery(); },
+        onFiles: () { Navigator.pop(context); _pickFromFiles(); },
+      ),
+    );
   }
 
 Future<void> _handlePickedFiles(List<FileModel> picked) async {
@@ -248,10 +244,10 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
                       constraints: const BoxConstraints(maxWidth: 400),
                       height: 56,
                       child: ElevatedButton.icon(
-                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 28),
-                        label: Text(
-                          kIsWeb ? 'SCAN DOCUMENT' : 'CREATE ORDER',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                        icon: const Icon(Icons.cloud_upload_rounded, size: 28),
+                        label: const Text(
+                          'UPLOAD FILES',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                         ),
                         onPressed: _openUploadOptions,
                         style: ElevatedButton.styleFrom(
@@ -699,29 +695,38 @@ class _UploadOptionsSheet extends StatelessWidget {
           const SizedBox(height: 24),
           const Row(
             children: [
-              Text('Create New Order', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+              Text('Upload Files', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
               Spacer(),
             ],
           ),
           const SizedBox(height: 8),
-          const Text('Choose a source to start your print order.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const Text('Select a preferred method to provide your documents.', style: TextStyle(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 32),
-          Row(
-            children: [
-              Expanded(child: _buildMobileFeature(icon: Icons.camera_enhance_rounded, label: 'Camera', onTap: onCamera, color: Colors.pink)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildMobileFeature(icon: Icons.photo_library_rounded, label: 'Gallery', onTap: onGallery, color: Colors.orange)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildMobileFeature(icon: Icons.grid_view_rounded, label: 'Picker', onTap: onFiles, color: Colors.purple)),
-            ],
-          ),
+          if (kIsWeb)
+            Row(
+              children: [
+                Expanded(child: _buildFeature(icon: Icons.camera_alt_rounded, label: 'Camera Scanner', onTap: onCamera, color: Colors.blue)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildFeature(icon: Icons.upload_file_rounded, label: 'Media Picker', onTap: onFiles, color: Colors.indigo)),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(child: _buildFeature(icon: Icons.camera_enhance_rounded, label: 'Camera', onTap: onCamera, color: Colors.pink)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildFeature(icon: Icons.photo_library_rounded, label: 'Gallery', onTap: onGallery, color: Colors.orange)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildFeature(icon: Icons.grid_view_rounded, label: 'Files', onTap: onFiles, color: Colors.purple)),
+              ],
+            ),
           const SizedBox(height: 32),
         ],
       ),
     );
   }
 
-  Widget _buildMobileFeature({required IconData icon, required String label, required VoidCallback onTap, required Color color}) {
+  Widget _buildFeature({required IconData icon, required String label, required VoidCallback onTap, required Color color}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
