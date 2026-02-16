@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../../models/file_model.dart';
+import 'package:path/path.dart' as path;
+import '../../../../utils/file_validator.dart';
 
 class FilePickerSheet extends StatelessWidget {
   final Function(List<FileModel>) onPickedFiles;
@@ -20,6 +22,16 @@ class FilePickerSheet extends StatelessWidget {
         if (image == null) return;
 
         final bytes = await image.readAsBytes();
+        
+        if (!FileValidator.isValidFile(image.name)) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Format not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.')),
+            );
+          }
+          return;
+        }
+
         onPickedFiles([
           FileModel(
             id: DateTime.now().toString(),
@@ -41,39 +53,72 @@ class FilePickerSheet extends StatelessWidget {
       if (images.isEmpty) return;
 
       final List<FileModel> picked = [];
+      final List<String> invalidExtensions = [];
+
       for (final img in images) {
-        picked.add(FileModel(
-          id: DateTime.now().toString(),
-          name: img.name,
-          path: kIsWeb ? '' : img.path,
-          file: kIsWeb ? null : File(img.path),
-          bytes: await img.readAsBytes(),
-          addedAt: DateTime.now(),
-        ));
+        if (FileValidator.isValidFile(img.name)) {
+          picked.add(FileModel(
+            id: DateTime.now().toString(),
+            name: img.name,
+            path: kIsWeb ? '' : img.path,
+            file: kIsWeb ? null : File(img.path),
+            bytes: await img.readAsBytes(),
+            addedAt: DateTime.now(),
+          ));
+        } else {
+          invalidExtensions.add(path.extension(img.name));
+        }
       }
 
-      onPickedFiles(picked);
-      if (context.mounted) Navigator.pop(context);
+      if (invalidExtensions.isNotEmpty && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Format mismatch: ${invalidExtensions.toSet().join(", ")} not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.')),
+        );
+      }
+
+      if (picked.isNotEmpty) {
+        onPickedFiles(picked);
+        if (context.mounted) Navigator.pop(context);
+      }
     }
 
     Future<void> pickFiles() async {
       final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'bmp', 'tiff'],
         allowMultiple: true,
         withData: true, // Always fetch data for web & consistency
       );
       if (result == null) return;
 
-      final List<FileModel> picked = result.files.map((f) => FileModel(
-        id: DateTime.now().toString(),
-        name: f.name,
-        path: f.path ?? '',
-        file: f.path == null ? null : File(f.path!),
-        bytes: f.bytes,
-        addedAt: DateTime.now(),
-      )).toList();
+      final List<FileModel> picked = [];
+      final List<String> invalidExtensions = [];
 
-      onPickedFiles(picked);
-      if (context.mounted) Navigator.pop(context);
+      for (final f in result.files) {
+        if (FileValidator.isValidFile(f.name)) {
+          picked.add(FileModel(
+            id: DateTime.now().toString(),
+            name: f.name,
+            path: f.path ?? '',
+            file: f.path == null ? null : File(f.path!),
+            bytes: f.bytes,
+            addedAt: DateTime.now(),
+          ));
+        } else {
+          invalidExtensions.add(path.extension(f.name));
+        }
+      }
+
+      if (invalidExtensions.isNotEmpty && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Format mismatch: ${invalidExtensions.toSet().join(", ")} not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.')),
+        );
+      }
+
+      if (picked.isNotEmpty) {
+        onPickedFiles(picked);
+        if (context.mounted) Navigator.pop(context);
+      }
     }
 
     return SafeArea(

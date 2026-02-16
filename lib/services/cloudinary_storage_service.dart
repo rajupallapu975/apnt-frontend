@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:path/path.dart' as path;
 
 import '../config/cloudinary_config.dart';
+import '../utils/file_validator.dart';
 
 class CloudinaryStorageService {
   /// Single endpoint for all file types
@@ -26,6 +27,11 @@ class CloudinaryStorageService {
       case '.jpg':
       case '.jpeg':
         return MediaType('image', 'jpeg');
+      case '.bmp':
+        return MediaType('image', 'bmp');
+      case '.tiff':
+      case '.tif':
+        return MediaType('image', 'tiff');
       default:
         return MediaType('application', 'octet-stream');
     }
@@ -38,6 +44,17 @@ class CloudinaryStorageService {
   }) async {
     final List<String> uploadedUrls = [];
     final Map<String, String> uploadedHashes = {};
+
+    // Validate extensions before starting uploads
+    for (int i = 0; i < files.length; i++) {
+        final originalName = files[i] != null 
+            ? path.basename(files[i]!.path) 
+            : 'file_${i + 1}'; // Fallback for bytes only
+        
+        if (!FileValidator.isValidFile(originalName) && !originalName.startsWith('file_')) {
+             throw Exception('Format ${path.extension(originalName)} not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.');
+        }
+    }
 
     try {
       print('🚀 Cloudinary upload started');

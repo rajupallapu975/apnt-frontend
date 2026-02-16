@@ -13,6 +13,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as path;
+import '../../utils/file_validator.dart';
 
 
 
@@ -109,6 +111,8 @@ class _UploadPageState extends State<UploadPage> {
 
   Future<void> _pickFromFiles() async {
     final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'bmp', 'tiff'],
       allowMultiple: true,
       withData: kIsWeb,
     );
@@ -168,6 +172,27 @@ class _UploadPageState extends State<UploadPage> {
   }
 
 Future<void> _handlePickedFiles(List<FileModel> picked) async {
+  final invalidFiles = picked.where((f) => !FileValidator.isValidFile(f.name)).toList();
+
+  if (invalidFiles.isNotEmpty) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Format mismatch: ${invalidFiles.map((f) => path.extension(f.name)).toSet().join(", ")} not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.',
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    // Filter out invalid files
+    picked.removeWhere((f) => !FileValidator.isValidFile(f.name));
+  }
+
+  if (picked.isEmpty) return;
+
   setState(() => _isLoading = true);
   
   // Minimal delay to ensure UI shows loading
