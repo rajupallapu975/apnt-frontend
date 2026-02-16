@@ -58,9 +58,13 @@ class CloudinaryStorageService {
 
         if (fileBytes == null) continue;
 
+        // 🔥 FIX: Create a fresh copy of bytes to avoid "detached ArrayBuffer" issue on web
+        // This happens because the original buffer might be detached after first use or during async ops.
+        final Uint8List bytesToUse = Uint8List.fromList(fileBytes);
+
         // 🔥 Generate MD5 hash for duplicate detection
         final String hash =
-            md5.convert(fileBytes).toString();
+            md5.convert(bytesToUse).toString();
 
         // 🔁 Skip upload if duplicate file detected
         if (uploadedHashes.containsKey(hash)) {
@@ -95,7 +99,7 @@ class CloudinaryStorageService {
         request.files.add(
           http.MultipartFile.fromBytes(
             'file',
-            fileBytes,
+            bytesToUse,
             filename: filename,
             contentType: _getMediaType(filename),
           ),
