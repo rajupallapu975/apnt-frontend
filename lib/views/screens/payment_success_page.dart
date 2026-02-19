@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class PaymentSuccessPage extends StatelessWidget {
   final String orderId;
@@ -20,16 +21,16 @@ class PaymentSuccessPage extends StatelessWidget {
           children: [
             const Icon(Icons.check_circle, color: Colors.green, size: 80),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               "Payment Successful!",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Text("Order ID: $orderId"),
             const SizedBox(height: 8),
             Text(
               "Pickup Code: $pickupCode",
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),

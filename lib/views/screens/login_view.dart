@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/google_slider_button.dart';
@@ -39,9 +40,9 @@ class LoginView extends StatelessWidget {
               children: [
                 const Spacer(flex: 2),
 
-                // 🔷 Icon
+                // 🔷 Logo
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
@@ -54,21 +55,22 @@ class LoginView extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.cloud_upload_outlined,
-                    size: 64,
-                    color: Color(0xFF6366F1),
+                  child: Image.asset(
+                    'assets/image.png',
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.contain,
                   ),
                 ),
 
                 const SizedBox(height: 48),
 
-                const Text(
-                  'Media Manager',
-                  style: TextStyle(
+                Text(
+                  'ThinkInk',
+                  style: GoogleFonts.inter(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
+                    color: const Color(0xFF1F2937),
                     letterSpacing: -1,
                   ),
                 ),
@@ -76,7 +78,7 @@ class LoginView extends StatelessWidget {
                 const SizedBox(height: 12),
 
                 const Text(
-                  'Your universal cloud storage solution',
+                  'Precision printing, perfectly handled',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,

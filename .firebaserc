@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "psfc-43b5a"
-  }
+    "default": "psfc-43b5a",
+    "test": "think-ink"
+  },
+  "targets": {},
+  "etags": {}
 }

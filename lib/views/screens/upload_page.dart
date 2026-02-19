@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
+import 'package:google_fonts/google_fonts.dart';
 import '../../utils/file_validator.dart';
 
 
@@ -216,7 +217,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Upload Files'),
+        title: const Text('ThinkInk'),
         elevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
@@ -231,7 +232,7 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
             tooltip: 'Profile',
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage())),
           ),
-        ],
+          ],
       ),
       body: Stack(
         children: [
@@ -338,9 +339,9 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
                 child: Icon(Icons.computer_rounded, color: Colors.blue.shade800),
               ),
               const SizedBox(width: 16),
-              const Text(
+              Text(
                 'Website Workspace',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -381,9 +382,9 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
                 child: Icon(Icons.smartphone_rounded, color: Colors.indigo.shade800),
               ),
               const SizedBox(width: 16),
-              const Text(
+              Text(
                 'Mobile Companion',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -415,9 +416,9 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Active Deliveries',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
                 TextButton.icon(
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
@@ -452,9 +453,9 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Expired Prints',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent),
                 ),
                 TextButton(
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
