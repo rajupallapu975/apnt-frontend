@@ -68,7 +68,10 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       }
       
       if (data != null) {
-        final doc = await PdfDocument.openData(data);
+        // 🔥 CRITICAL: PdfDocument.openData can detach the underlying buffer on Web.
+        // We must pass a COPY so the original 'data' (model.bytes) remains valid.
+        final pdfCopy = Uint8List.fromList(data);
+        final doc = await PdfDocument.openData(pdfCopy);
         final count = doc.pagesCount;
         doc.close();
         
@@ -99,11 +102,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             if (isPdf) {
               try {
                 final data = f.bytes ?? (f.file != null ? await f.file!.readAsBytes() : null);
-                if (data != null) {
-                  final doc = await PdfDocument.openData(data);
-                  count = doc.pagesCount;
-                  doc.close();
-                }
+                  if (data != null) {
+                    final pdfCopy = Uint8List.fromList(data);
+                    final doc = await PdfDocument.openData(pdfCopy);
+                    count = doc.pagesCount;
+                    doc.close();
+                  }
               } catch (e) {
                 debugPrint("PDF Load Error: $e");
               }
@@ -314,6 +318,14 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: () async {
+                      // ✨ Files are already "locked" in UploadPage.
+                      // We just collect them into a clean list for the processing page.
+                      final List<Uint8List?> finalizedBytes = [];
+                      for (final file in pickedFiles) {
+                        finalizedBytes.add(file.bytes);
+                      }
+
+                      if (!context.mounted) return;
                       final isPaid = await paymentService.performPayment(context);
                       if (!isPaid || !context.mounted) return;
 
@@ -340,7 +352,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                         MaterialPageRoute(
                           builder: (_) => PaymentProcessingPage(
                             selectedFiles: pickedFiles.map((e) => e.file).toList(),
-                            selectedBytes: pickedFiles.map((e) => e.bytes).toList(),
+                            selectedBytes: finalizedBytes, // Use pre-cloned bytes
+                            filenames: pickedFiles.map((e) => e.name).toList(), // 🔥 ADD THIS
                             printSettings: printSettings,
                             expectedPages: localTotalPages,
                             expectedPrice: totalPrice.toDouble(),
@@ -387,14 +400,16 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
     if (cropped == null) return;
 
-    final bytes = await cropped.readAsBytes();
+    final rawBytes = await cropped.readAsBytes();
+    final clonedBytes = Uint8List.fromList(rawBytes); // 🔥 CLONE IMMEDIATELY
+
     setState(() {
       pickedFiles[_currentPageIndex] = FileModel(
         id: model.id,
         name: model.name,
         path: kIsWeb ? '' : cropped.path,
         file: kIsWeb ? null : File(cropped.path),
-        bytes: bytes,
+        bytes: clonedBytes,
         addedAt: model.addedAt,
       );
     });

@@ -18,6 +18,8 @@ class PrintOrderModel {
   final int totalPages;
   final double totalPrice;
   final List<String> fileUrls;
+  final List<String> publicIds; // Cloudinary IDs for deletion
+  final List<String> localFilePaths; // Local paths for reprinting
 
   PrintOrderModel({
     required this.orderId,
@@ -30,6 +32,8 @@ class PrintOrderModel {
     required this.totalPages,
     required this.totalPrice,
     required this.fileUrls,
+    this.publicIds = const [],
+    this.localFilePaths = const [],
   });
 
   // Check if order is expired
@@ -58,6 +62,8 @@ class PrintOrderModel {
       totalPages: data['totalPages'] ?? 0,
       totalPrice: (data['totalPrice'] ?? 0).toDouble(),
       fileUrls: List<String>.from(data['fileUrls'] ?? []),
+      publicIds: List<String>.from(data['publicIds'] ?? []),
+      localFilePaths: List<String>.from(data['localFilePaths'] ?? []),
     );
   }
 
@@ -76,6 +82,8 @@ class PrintOrderModel {
       totalPages: data['totalPages'] ?? 0,
       totalPrice: (data['totalPrice'] ?? 0).toDouble(),
       fileUrls: List<String>.from(data['fileUrls'] ?? []),
+      publicIds: List<String>.from(data['publicIds'] ?? []),
+      localFilePaths: List<String>.from(data['localFilePaths'] ?? []),
     );
   }
 
@@ -90,6 +98,8 @@ class PrintOrderModel {
       'totalPages': totalPages,
       'totalPrice': totalPrice,
       'fileUrls': fileUrls,
+      'publicIds': publicIds,
+      'localFilePaths': localFilePaths,
     };
   }
 
@@ -105,6 +115,8 @@ class PrintOrderModel {
       'totalPages': totalPages,
       'totalPrice': totalPrice,
       'fileUrls': fileUrls,
+      'publicIds': publicIds,
+      'localFilePaths': localFilePaths,
     };
   }
 
@@ -132,6 +144,8 @@ class PrintOrderModel {
       totalPages: totalPages ?? this.totalPages,
       totalPrice: totalPrice ?? this.totalPrice,
       fileUrls: fileUrls ?? this.fileUrls,
+      publicIds: publicIds ?? this.publicIds,
+      localFilePaths: localFilePaths ?? this.localFilePaths,
     );
   }
 }

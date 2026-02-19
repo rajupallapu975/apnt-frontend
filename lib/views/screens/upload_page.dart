@@ -60,13 +60,16 @@ class _UploadPageState extends State<UploadPage> {
       );
 
       if (result != null && result['bytes'] != null) {
+        // 🔥 WEB FIX: Clone bytes immediately to prevent detachment
+        final Uint8List clonedBytes = Uint8List.fromList(result['bytes']);
+        
         _handlePickedFiles([
           FileModel(
             id: DateTime.now().toString(),
             name: result['name'] ?? 'web_scan.jpg',
             path: '',
             file: null,
-            bytes: result['bytes'],
+            bytes: clonedBytes,
             addedAt: DateTime.now(),
           ),
         ]);
@@ -98,12 +101,18 @@ class _UploadPageState extends State<UploadPage> {
 
     final List<FileModel> picked = [];
     for (final img in images) {
+      Uint8List? bytes;
+      if (kIsWeb) {
+        final raw = await img.readAsBytes();
+        bytes = Uint8List.fromList(raw); // 🔥 CLONE IMMEDIATELY
+      }
+      
       picked.add(FileModel(
         id: DateTime.now().toString(),
         name: img.name,
         path: img.path,
         file: kIsWeb ? null : File(img.path),
-        bytes: kIsWeb ? await img.readAsBytes() : null,
+        bytes: bytes,
         addedAt: DateTime.now(),
       ));
     }
@@ -120,14 +129,22 @@ class _UploadPageState extends State<UploadPage> {
 
     if (result == null) return;
 
-    final List<FileModel> picked = result.files.map((f) => FileModel(
-      id: DateTime.now().toString(),
-      name: f.name,
-      path: f.path ?? '',
-      file: f.path == null ? null : File(f.path!),
-      bytes: f.bytes,
-      addedAt: DateTime.now(),
-    )).toList();
+    final List<FileModel> picked = [];
+    for (final f in result.files) {
+      Uint8List? clonedBytes;
+      if (f.bytes != null) {
+        clonedBytes = Uint8List.fromList(f.bytes!); // 🔥 CLONE IMMEDIATELY
+      }
+
+      picked.add(FileModel(
+        id: DateTime.now().toString(),
+        name: f.name,
+        path: f.path ?? '',
+        file: f.path == null ? null : File(f.path!),
+        bytes: clonedBytes,
+        addedAt: DateTime.now(),
+      ));
+    }
 
     _handlePickedFiles(picked);
   }
@@ -643,39 +660,61 @@ Future<void> _handlePickedFiles(List<FileModel> picked) async {
     );
   }
 
-Future<void> _reprintOrder(PrintOrderModel order) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Request Reprint?'),
-      content: Text('Re-opening order for ${order.totalPages} pages.\nA new payment of ₹${order.totalPrice.toStringAsFixed(2)} is required.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Proceed to Pay', style: TextStyle(color: Colors.white)),
-        ),
-      ],
-    ),
-  );
-
-  if (confirmed != true) return;
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => PaymentProcessingPage(
-        selectedFiles: [],
-        selectedBytes: [],
-        printSettings: order.printSettings,
-        expectedPages: order.totalPages,
-        expectedPrice: order.totalPrice,
+  Future<void> _reprintOrder(PrintOrderModel order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Request Reprint?'),
+        content: Text('Re-opening order for ${order.totalPages} pages.\nA new pickup code will be generated.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: const Text('Proceed to Pay', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
-    ),
-  );
-}
+    );
+
+    if (confirmed != true) return;
+
+    // Load local files if they exist
+    final List<File?> reprintFiles = [];
+    if (order.localFilePaths.isNotEmpty) {
+      for (final filePath in order.localFilePaths) {
+        final file = File(filePath);
+        if (await file.exists()) {
+          reprintFiles.add(file);
+        }
+      }
+    }
+
+    if (reprintFiles.isEmpty && order.localFilePaths.isNotEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find local files. Please upload them again.')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentProcessingPage(
+          selectedFiles: reprintFiles,
+          selectedBytes: const [],
+          filenames: reprintFiles.map((f) => path.basename(f!.path)).toList(),
+          printSettings: order.printSettings,
+          expectedPages: order.totalPages,
+          expectedPrice: order.totalPrice,
+        ),
+      ),
+    );
+  }
 }
 
 /// =======================================================

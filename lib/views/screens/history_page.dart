@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/print_order_model.dart';
 import '../../services/firestore_service.dart';
+import 'package:path/path.dart' as path;
 import 'payment_processing_page.dart';
 
 class HistoryPage extends StatefulWidget {
@@ -216,26 +218,23 @@ class _HistoryPageState extends State<HistoryPage>
   // REPRINT FLOW (Backend Controlled)
   // =================================================
 
-  Future<void> _reprintOrder(
-      PrintOrderModel order) async {
-
+  Future<void> _reprintOrder(PrintOrderModel order) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reprint Order'),
         content: Text(
           'Pages: ${order.totalPages}\n'
-          'Price: ₹${order.totalPrice.toStringAsFixed(2)}',
+          'Price: ₹${order.totalPrice.toStringAsFixed(2)}\n\n'
+          'A new pickup code will be generated after payment.',
         ),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () =>
-                Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(context, true),
             child: const Text('Proceed'),
           ),
         ],
@@ -244,15 +243,34 @@ class _HistoryPageState extends State<HistoryPage>
 
     if (confirmed != true) return;
 
+    // Load local files if they exist
+    final List<File?> reprintFiles = [];
+    if (order.localFilePaths.isNotEmpty) {
+      for (final path in order.localFilePaths) {
+        final file = File(path);
+        if (await file.exists()) {
+          reprintFiles.add(file);
+        }
+      }
+    }
+
+    if (reprintFiles.isEmpty && order.localFilePaths.isNotEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not find local files. Please upload them again.')),
+      );
+      return;
+    }
+
     if (!mounted) return;
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            PaymentProcessingPage(
-          selectedFiles: const [],
-          selectedBytes: const [],
+        builder: (_) => PaymentProcessingPage(
+          selectedFiles: reprintFiles,
+          selectedBytes: const [], // Will be re-read from files
+          filenames: reprintFiles.map((f) => path.basename(f!.path)).toList(), // 🔥 ADD THIS
           printSettings: order.printSettings,
           expectedPages: order.totalPages,
           expectedPrice: order.totalPrice,

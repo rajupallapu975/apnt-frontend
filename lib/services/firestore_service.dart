@@ -23,11 +23,15 @@ class FirestoreService {
   Future<void> attachFilesToOrder({
     required String orderId,
     required List<String> fileUrls,
+    required List<String> publicIds,
+    required List<String> localFilePaths,
   }) async {
     try {
       await _ordersCollection.doc(orderId).update({
         'fileUrls': fileUrls,
-        'status': 'ACTIVE', // ensure active after upload
+        'publicIds': publicIds,
+        'localFilePaths': localFilePaths,
+        'status': 'ACTIVE',
       });
     } on FirebaseException catch (e) {
       throw FirestoreException(

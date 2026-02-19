@@ -21,24 +21,16 @@ class FilePickerSheet extends StatelessWidget {
         final image = await picker.pickImage(source: ImageSource.camera);
         if (image == null) return;
 
-        final bytes = await image.readAsBytes();
+        final rawBytes = await image.readAsBytes();
+        final clonedBytes = Uint8List.fromList(rawBytes); // 🔥 CLONE IMMEDIATELY
         
-        if (!FileValidator.isValidFile(image.name)) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Format not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.')),
-            );
-          }
-          return;
-        }
-
         onPickedFiles([
           FileModel(
             id: DateTime.now().toString(),
             name: image.name,
             path: kIsWeb ? '' : image.path,
             file: kIsWeb ? null : File(image.path),
-            bytes: bytes,
+            bytes: clonedBytes,
             addedAt: DateTime.now(),
           )
         ]);
@@ -57,12 +49,15 @@ class FilePickerSheet extends StatelessWidget {
 
       for (final img in images) {
         if (FileValidator.isValidFile(img.name)) {
+          final raw = await img.readAsBytes();
+          final cloned = Uint8List.fromList(raw); // 🔥 CLONE IMMEDIATELY
+          
           picked.add(FileModel(
             id: DateTime.now().toString(),
             name: img.name,
             path: kIsWeb ? '' : img.path,
             file: kIsWeb ? null : File(img.path),
-            bytes: await img.readAsBytes(),
+            bytes: cloned,
             addedAt: DateTime.now(),
           ));
         } else {
@@ -96,12 +91,17 @@ class FilePickerSheet extends StatelessWidget {
 
       for (final f in result.files) {
         if (FileValidator.isValidFile(f.name)) {
+          Uint8List? clonedBytes;
+          if (f.bytes != null) {
+            clonedBytes = Uint8List.fromList(f.bytes!); // 🔥 CLONE IMMEDIATELY
+          }
+
           picked.add(FileModel(
             id: DateTime.now().toString(),
             name: f.name,
             path: f.path ?? '',
             file: f.path == null ? null : File(f.path!),
-            bytes: f.bytes,
+            bytes: clonedBytes,
             addedAt: DateTime.now(),
           ));
         } else {

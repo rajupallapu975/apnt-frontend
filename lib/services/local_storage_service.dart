@@ -1,9 +1,38 @@
+import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import '../models/print_order_model.dart';
 
 class LocalStorageService {
   static const String _keyOrders = 'local_orders';
+
+  /// Save bytes to local file system for reprinting
+  Future<String> saveFileLocally(String fileName, List<int> bytes) async {
+    if (kIsWeb) {
+      // Browsers don't allow arbitrary file system writing like this.
+      // We rely on browser cache or re-selection for reprints on Web.
+      return 'web_stored'; 
+    }
+    
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final apntDir = Directory('${directory.path}/reprints');
+      if (!await apntDir.exists()) {
+        await apntDir.create(recursive: true);
+      }
+      
+      final localPath = '${apntDir.path}/$fileName';
+      final file = File(localPath);
+      await file.writeAsBytes(bytes);
+      return localPath;
+    } catch (e) {
+      print('❌ Failed to save file locally: $e');
+      return 'error_saving';
+    }
+  }
 
   /// Save an order locally for reprint history
   Future<void> saveOrderLocally(PrintOrderModel order) async {
@@ -15,7 +44,6 @@ class LocalStorageService {
       ordersList = jsonDecode(ordersJson);
     }
 
-    // Convert order to map and check if it already exists by orderId
     final orderMap = order.toJson();
     
     final existingIndex = ordersList.indexWhere((o) => o['orderId'] == order.orderId);
@@ -25,7 +53,6 @@ class LocalStorageService {
       ordersList.insert(0, orderMap); // Newest first
     }
 
-    // Keep only last 50 orders to save space
     if (ordersList.length > 50) {
       ordersList = ordersList.sublist(0, 50);
     }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
@@ -106,9 +108,12 @@ class _WebCameraOverlayState extends State<WebCameraOverlay> {
                     onTap: () async {
                       try {
                         final image = await _controller!.takePicture();
-                        final bytes = await image.readAsBytes();
+                        final rawBytes = await image.readAsBytes();
+                        // 🔥 WEB FIX: Clone immediately to prevent detachment
+                        final clonedBytes = Uint8List.fromList(rawBytes);
+                        
                         if (mounted) {
-                          Navigator.pop(context, {'bytes': bytes, 'name': image.name});
+                          Navigator.pop(context, {'bytes': clonedBytes, 'name': image.name});
                         }
                       } catch (e) {
                         debugPrint("Capture Error: $e");
