@@ -47,21 +47,23 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 💡 HOLDING SIGN-IN: Directly bypass and go to UploadPage
+    return const UploadPage();
+    
+    /* 
     final authVM = context.watch<AuthViewModel>();
 
-    // While checking auth state
     if (authVM.isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // Logged in → Upload page
     if (authVM.isAuthenticated) {
       return const UploadPage();
     }
 
-    // Not logged in → Login page
     return const LoginView();
+    */
   }
 }

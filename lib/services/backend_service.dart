@@ -32,10 +32,7 @@ class BackendService {
       Map<String, dynamic> printSettings) async {
 
     final user = _auth.currentUser;
-
-    if (user == null) {
-      throw Exception("User not logged in");
-    }
+    final String uid = user?.uid ?? "guest_user";
 
     final response = await http.post(
       Uri.parse(BackendConfig.createOrderUrl),
@@ -44,7 +41,7 @@ class BackendService {
       },
       body: jsonEncode({
         "printSettings": printSettings,
-        "userId": user.uid,   // ✅ SEND USER ID
+        "userId": uid,   // ✅ SEND USER ID OR GUEST
       }),
     );
 
@@ -96,7 +93,7 @@ class BackendService {
     required int totalPages,
   }) async {
     final user = _auth.currentUser;
-    if (user == null) throw Exception("User not logged in");
+    final String uid = user?.uid ?? "guest_user";
 
     final response = await http.post(
       Uri.parse(BackendConfig.verifyPaymentUrl),
@@ -106,7 +103,7 @@ class BackendService {
         "razorpay_payment_id": razorpayPaymentId,
         "razorpay_signature": razorpaySignature,
         "printSettings": printSettings,
-        "userId": user.uid,
+        "userId": uid,
         "amount": amount,
         "totalPages": totalPages,
       }),
