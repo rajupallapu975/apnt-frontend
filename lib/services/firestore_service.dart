@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../models/print_order_model.dart';
 import '../utils/app_exceptions.dart';
 import 'local_storage_service.dart';
@@ -149,10 +150,10 @@ class FirestoreService {
       await LocalStorageService()
           .saveOrderLocally(order);
 
-      print(
+      debugPrint(
           '✅ Order ${order.orderId} archived locally');
     } catch (e) {
-      print('❌ Error archiving order: $e');
+      debugPrint('❌ Error archiving order: $e');
     }
   }
 

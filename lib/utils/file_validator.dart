@@ -3,6 +3,8 @@ import 'package:path/path.dart' as path;
 class FileValidator {
   static const List<String> allowedExtensions = [
     '.pdf',
+    '.doc',
+    '.docx',
     '.jpg',
     '.jpeg',
     '.png',

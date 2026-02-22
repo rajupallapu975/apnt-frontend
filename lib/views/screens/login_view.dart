@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/google_slider_button.dart';
+import '../../utils/app_colors.dart';
 
 class LoginView extends StatelessWidget {
   const LoginView({super.key});
@@ -11,116 +12,145 @@ class LoginView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authViewModel = context.watch<AuthViewModel>();
-
-    // 🔑 Key to control slider reset
     final sliderKey = GlobalKey<GoogleSliderButtonState>();
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: const [0.0, 0.4, 1.0],
-            colors: [
-              const Color(0xFF6366F1).withOpacity(0.08),
-              Colors.white,
-              const Color(0xFF6366F1).withOpacity(0.05),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(flex: 2),
+      body: Stack(
+        children: [
+          // 🎭 Animated Abstract Background
+          Positioned(
+            top: -150,
+            right: -100,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primaryBlue.withOpacity(0.08),
+                    AppColors.primaryBlue.withOpacity(0),
+                  ],
+                ),
+              ),
+            ),
+          ).animate().fadeIn(duration: 1500.ms).scale(begin: const Offset(0.5, 0.5)),
 
-                // 🔷 Logo
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            const Color(0xFF6366F1).withOpacity(0.1),
-                        blurRadius: 32,
-                        offset: const Offset(0, 16),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Spacer(flex: 3),
+
+                  // 🔷 Brand Logo with Premium Breath Animation
+                  Hero(
+                    tag: 'app_logo',
+                    child: Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        shape: BoxShape.circle,
+                        boxShadow: AppColors.mediumShadow,
                       ),
-                    ],
-                  ),
-                  child: Image.asset(
-                    'assets/image.png',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-
-                const SizedBox(height: 48),
-
-                Text(
-                  'ThinkInk',
-                  style: GoogleFonts.inter(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1F2937),
-                    letterSpacing: -1,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                const Text(
-                  'Precision printing, perfectly handled',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-
-                const Spacer(flex: 1),
-
-                /// 🔐 AUTH AREA
-                if (authViewModel.isLoading)
-                  const CircularProgressIndicator(
-                    color: Color(0xFF6366F1),
+                      child: Image.asset(
+                        'assets/image.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   )
-                else
-                  GoogleSliderButton(
-                    key: sliderKey,
-                    onAction: () async {
-                      final success = await authViewModel.signIn();
+                  .animate()
+                  .fadeIn(duration: 800.ms)
+                  .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack)
+                  .shimmer(delay: 1000.ms, duration: 2000.ms, color: AppColors.primaryBlue.withOpacity(0.1)),
 
-                      // 🔁 Reset slider if sign-in failed
-                      if (!success) {
-                        sliderKey.currentState?.reset();
-                      }
-                    },
-                  ),
+                  const SizedBox(height: 48),
 
-                const SizedBox(height: 24),
+                  // 🖋️ Typography Hierarchy
+                  Text(
+                    'THINK INK',
+                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      letterSpacing: -2,
+                    ),
+                  )
+                  .animate()
+                  .fadeIn(delay: 400.ms, duration: 600.ms)
+                  .slideY(begin: 0.2, end: 0),
 
-                const Text(
-                  'Verified security with Google Auth',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF9CA3AF),
-                  ),
-                ),
+                  const SizedBox(height: 12),
 
-                const Spacer(flex: 2),
-              ],
+                  Text(
+                    'Precision printing, perfectly handled.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  )
+                  .animate()
+                  .fadeIn(delay: 600.ms, duration: 600.ms)
+                  .slideY(begin: 0.2, end: 0),
+
+                  const Spacer(flex: 2),
+
+                  /// 🔐 AUTH SECTION
+                  if (authViewModel.isLoading)
+                    const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                      ),
+                    ).animate().scale()
+                  else
+                    Column(
+                      children: [
+                        GoogleSliderButton(
+                          key: sliderKey,
+                          onAction: () async {
+                            final success = await authViewModel.signIn();
+                            if (!success) {
+                              sliderKey.currentState?.reset();
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Sign in failed. Please try again.'),
+                                    backgroundColor: AppColors.error,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.textTertiary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Secure Google Authentication',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textTertiary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                    .animate()
+                    .fadeIn(delay: 800.ms, duration: 800.ms)
+                    .slideY(begin: 0.1, end: 0),
+
+                  const Spacer(flex: 3),
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

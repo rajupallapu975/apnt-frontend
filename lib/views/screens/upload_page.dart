@@ -1,23 +1,18 @@
-import 'dart:io';
-
-import 'package:apnt/models/file_model.dart';
-import 'package:apnt/models/print_order_model.dart';
-import 'package:apnt/services/firestore_service.dart';
-import 'package:apnt/views/profile_page.dart';
-import 'package:apnt/views/screens/history_page.dart';
-import 'package:apnt/views/screens/payment_processing_page.dart';
-import 'package:apnt/views/screens/print_options/print_options_page.dart';
-import 'package:apnt/views/screens/widgets/web_camera_overlay.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
-import 'package:path/path.dart' as path;
+import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../utils/file_validator.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../viewmodels/upload_viewmodel.dart';
+import '../../utils/app_colors.dart';
+import '../../widgets/common/modern_card.dart';
 
+import '../../models/print_order_model.dart';
+import '../../models/file_model.dart';
+import '../../repositories/order_repository.dart';
+import 'print_options/print_options_page.dart';
+import 'history_page.dart';
+import '../profile_page.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -27,706 +22,542 @@ class UploadPage extends StatefulWidget {
 }
 
 class _UploadPageState extends State<UploadPage> {
-  bool _isLoading = false;
-  final FirestoreService _firestoreService = FirestoreService();
-
-  final List<File?> _files = [];
-  final List<Uint8List?> _bytes = [];
-  final List<int> _pageIndices = []; // Track page index for PDFs
-
-  @override
-  void initState() {
-    super.initState();
-    if (kIsWeb) {
-      // Optional: Log web detection
-      debugPrint("Web platform detected. Adjusting UI for monitor/laptop.");
-    }
-  }
+  final OrderRepository _orderRepo = OrderRepository();
 
 
-
-  final ImagePicker _picker = ImagePicker();
-
-  Future<void> _pickFromCamera(BuildContext context) async {
-    if (kIsWeb) {
-      final result = await showModalBottomSheet<Map<String, dynamic>>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const FractionallySizedBox(
-          heightFactor: 0.85,
-          child: WebCameraOverlay(),
-        ),
-      );
-
-      if (result != null && result['bytes'] != null) {
-        // 🔥 WEB FIX: Clone bytes immediately to prevent detachment
-        final Uint8List clonedBytes = Uint8List.fromList(result['bytes']);
-        
-        _handlePickedFiles([
-          FileModel(
-            id: DateTime.now().toString(),
-            name: result['name'] ?? 'web_scan.jpg',
-            path: '',
-            file: null,
-            bytes: clonedBytes,
-            addedAt: DateTime.now(),
-          ),
-        ]);
-        return;
-      }
-      return;
-    }
-
-    try {
-      final image = await _picker.pickImage(source: ImageSource.camera);
-      if (image == null) return;
-      _handlePickedFiles([
-        FileModel(
-          id: DateTime.now().toString(),
-          name: image.name,
-          path: image.path,
-          file: File(image.path),
-          addedAt: DateTime.now(),
-        ),
-      ]);
-    } catch (e) {
-      _showNoCameraAlert();
-    }
-  }
-
-  Future<void> _pickFromGallery() async {
-    final images = await _picker.pickMultiImage();
-    if (images.isEmpty) return;
-
-    final List<FileModel> picked = [];
-    for (final img in images) {
-      Uint8List? bytes;
-      if (kIsWeb) {
-        final raw = await img.readAsBytes();
-        bytes = Uint8List.fromList(raw); // 🔥 CLONE IMMEDIATELY
-      }
-      
-      picked.add(FileModel(
-        id: DateTime.now().toString(),
-        name: img.name,
-        path: img.path,
-        file: kIsWeb ? null : File(img.path),
-        bytes: bytes,
-        addedAt: DateTime.now(),
-      ));
-    }
-    _handlePickedFiles(picked);
-  }
-
-  Future<void> _pickFromFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'bmp', 'tiff'],
-      allowMultiple: true,
-      withData: kIsWeb,
-    );
-
-    if (result == null) return;
-
-    final List<FileModel> picked = [];
-    for (final f in result.files) {
-      Uint8List? clonedBytes;
-      if (f.bytes != null) {
-        clonedBytes = Uint8List.fromList(f.bytes!); // 🔥 CLONE IMMEDIATELY
-      }
-
-      picked.add(FileModel(
-        id: DateTime.now().toString(),
-        name: f.name,
-        path: f.path ?? '',
-        file: f.path == null ? null : File(f.path!),
-        bytes: clonedBytes,
-        addedAt: DateTime.now(),
-      ));
-    }
-
-    _handlePickedFiles(picked);
-  }
-
-  void _showNoCameraAlert() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.no_photography_rounded, color: Colors.red),
-            SizedBox(width: 10),
-            Text('No Camera Found'),
-          ],
-        ),
-        content: const Text('We could not detect a camera on your device. Would you like to upload files from your local storage instead?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _pickFromFiles();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800),
-            child: const Text('Upload Files', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openUploadOptions() {
+  void _showUploadSheet(UploadViewModel uploadVM) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _UploadOptionsSheet(
-        onCamera: () { Navigator.pop(context); _pickFromCamera(context); },
-        onGallery: () { Navigator.pop(context); _pickFromGallery(); },
-        onFiles: () { Navigator.pop(context); _pickFromFiles(); },
-      ),
-    );
-  }
-
-Future<void> _handlePickedFiles(List<FileModel> picked) async {
-  final invalidFiles = picked.where((f) => !FileValidator.isValidFile(f.name)).toList();
-
-  if (invalidFiles.isNotEmpty) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Format mismatch: ${invalidFiles.map((f) => path.extension(f.name)).toSet().join(", ")} not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.',
-            style: const TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-    // Filter out invalid files
-    picked.removeWhere((f) => !FileValidator.isValidFile(f.name));
-  }
-
-  if (picked.isEmpty) return;
-
-  setState(() => _isLoading = true);
-  
-  // Minimal delay to ensure UI shows loading
-  await Future.delayed(const Duration(milliseconds: 300));
-
-  setState(() => _isLoading = false);
-  if (!mounted) return;
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => PrintOptionsPage(
-        pickedFiles: picked,
-      ),
-    ),
-  );
-}
-
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('ThinkInk'),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black87,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            tooltip: 'Order History',
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline_rounded),
-            tooltip: 'Profile',
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage())),
-          ),
-          ],
-      ),
-      body: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.blue.shade50, Colors.white],
-              ),
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  /// 🔹 PLATFORM INDICATOR & WELCOME
-                  if (kIsWeb)
-                    _buildWebHero()
-                  else
-                    _buildMobileHero(),
-
-                  const SizedBox(height: 32),
-
-                  /// 🔹 MAIN ACTION BUTTON
-                  Center(
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.cloud_upload_rounded, size: 28),
-                        label: const Text(
-                          'UPLOAD FILES',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                        ),
-                        onPressed: _openUploadOptions,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade800,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 8,
-                          shadowColor: Colors.blue.withOpacity(0.4),
-                        ),
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 20),
-
-                  const SizedBox(height: 48),
-
-                  /// 🔹 ACTIVE PRINTS SECTION
-                  _buildActiveOrdersSection(),
-
-                  const SizedBox(height: 32),
-
-                  /// 🔹 EXPIRED PRINTS SECTION
-                  _buildExpiredOrdersSection(),
-                ],
-              ),
-            ),
-          ),
-
-          /// 🔄 LOADING OVERLAY
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: Card(
-                  elevation: 8,
-                  shape: CircleBorder(),
-                  child: Padding(
-                    padding: EdgeInsets.all(12.0),
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebHero() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.computer_rounded, color: Colors.blue.shade800),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                'Website Workspace',
-                style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Running on Monitor/Laptop. Optimized for webcam scanning and direct file uploads.',
-            style: TextStyle(color: Colors.grey, fontSize: 14, height: 1.5),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '• Use Camera for instant document scanning\n• Drag & Drop files from your computer',
-            style: TextStyle(color: Colors.blue.shade900, fontSize: 13, fontWeight: FontWeight.w500),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileHero() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.indigo.shade100, borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.smartphone_rounded, color: Colors.indigo.shade800),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                'Mobile Companion',
-                style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Full features enabled: Quick Camera, Media Gallery, and File Picker for all your documents.',
-            style: TextStyle(color: Colors.grey, fontSize: 14, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build Active Orders Section
-  Widget _buildActiveOrdersSection() {
-    return StreamBuilder<List<PrintOrderModel>>(
-      stream: _firestoreService.getActiveOrders(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-
-        final orders = snapshot.data ?? [];
-        if (orders.isEmpty) return const SizedBox.shrink();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Active Deliveries',
-                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                ),
-                TextButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                  label: const Text('View All'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...orders.take(3).map((order) => _buildOrderCard(order, isActive: true)),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Build Expired Orders Section
-  Widget _buildExpiredOrdersSection() {
-    return FutureBuilder<List<PrintOrderModel>>(
-      future: _firestoreService.getArchivedOrders(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-
-        final orders = snapshot.data ?? [];
-        if (orders.isEmpty) return const SizedBox.shrink();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Expired Prints',
-                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
-                  child: const Text('Access Archive'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...orders.take(3).map((order) => _buildOrderCard(order, isExpired: true)),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Build Order Card
-  Widget _buildOrderCard(PrintOrderModel order, {bool isActive = false, bool isExpired = false}) {
-    final dateFormat = DateFormat('MMM dd, hh:mm a');
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: isExpired ? Colors.red.shade100 : Colors.blue.shade100, width: 1.5),
-      ),
-      child: InkWell(
-        onTap: () => _showOrderDetails(order),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ORDER #${order.orderId.length >= 8 ? order.orderId.substring(0, 8).toUpperCase() : order.orderId.toUpperCase()}',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.grey[800], letterSpacing: 1),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(dateFormat.format(order.createdAt), style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isExpired ? Colors.red.shade50 : Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isExpired ? Colors.red.shade100 : Colors.green.shade100),
-                    ),
-                    child: Text(
-                      isExpired ? 'EXPIRED' : 'ACTIVE',
-                      style: TextStyle(color: isExpired ? Colors.red : Colors.green, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isExpired ? Colors.grey.shade50 : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Pickup Token', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(
-                      order.pickupCode,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: isExpired ? Colors.grey[400] : Colors.blue.shade900,
-                        letterSpacing: 3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (isExpired)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.replay_rounded, size: 18),
-                    onPressed: () => _reprintOrder(order),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.blue,
-                      side: const BorderSide(color: Colors.blue),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    label: const Text('Reprint & Update Token', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                )
-              else
-                Row(
-                  children: [
-                    Icon(Icons.description_outlined, size: 14, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text('${order.totalPages} pages', style: TextStyle(fontSize: 13, color: Colors.grey[700], fontWeight: FontWeight.w500)),
-                    const Spacer(),
-                    Text('₹${order.totalPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black87)),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showOrderDetails(PrintOrderModel order) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 5,
-                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text('Scan Details', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-                const Divider(height: 48),
-                _detailRow('Reference ID', order.orderId),
-                _detailRow('Pickup Token', order.pickupCode),
-                _detailRow('Volume', '${order.totalPages} pages'),
-                _detailRow('Grand Total', '₹${order.totalPrice.toStringAsFixed(2)}'),
-                _detailRow('Issued At', DateFormat('MMM dd, yyyy • hh:mm a').format(order.createdAt)),
-                _detailRow('Expiration', DateFormat('MMM dd, yyyy • hh:mm a').format(order.expiresAt)),
-                const Spacer(),
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black87,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: const Text('CLOSE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          );
+      builder: (_) => _UploadSourceSheet(
+        onCamera: () async {
+          Navigator.pop(context);
+          await uploadVM.pickFromCamera();
+          if (!context.mounted) return;
+          if (uploadVM.files.isEmpty) return;
+          final files = List<FileModel>.from(uploadVM.files);
+          uploadVM.clearPickedFiles();
+          Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
+        },
+        onGallery: () async {
+          Navigator.pop(context);
+          await uploadVM.pickFromGallery();
+          if (!context.mounted) return;
+          if (uploadVM.files.isEmpty) return;
+          final files = List<FileModel>.from(uploadVM.files);
+          uploadVM.clearPickedFiles();
+          Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
+        },
+        onFiles: () async {
+          Navigator.pop(context);
+          await uploadVM.pickFromFiles();
+          if (!context.mounted) return;
+          if (uploadVM.files.isEmpty) return;
+          final files = List<FileModel>.from(uploadVM.files);
+          uploadVM.clearPickedFiles();
+          Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
         },
       ),
     );
   }
 
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+  @override
+  Widget build(BuildContext context) {
+    final uploadVM = context.watch<UploadViewModel>();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'THINK INK',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: 1, fontSize: 18),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_outline_rounded),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage())),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+
+      body: uploadVM.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: () async => setState(() {}),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeroSection(uploadVM),
+                    const SizedBox(height: 32),
+                    _buildActiveOrdersHeader(),
+                    const SizedBox(height: 16),
+                    _buildOrdersList(),
+
+                    // ─── Pending File Tray ───────────────────────────────────
+                    if (uploadVM.pendingFiles.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      _buildPendingTray(uploadVM),
+                    ],
+
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  // ─── Documents Hero Card ─────────────────────────────────────────────────────
+  Widget _buildHeroSection(UploadViewModel uploadVM) {
+    const bulletColor = AppColors.primaryBlue;
+    final bulletStyle = GoogleFonts.inter(
+      fontSize: 15,
+      fontWeight: FontWeight.w500,
+      color: AppColors.textSecondary,
+      height: 1.5,
+    );
+
+    return ModernCard(
+      padding: const EdgeInsets.all(28),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w500)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          // ── Left: Text Content ──
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Documents',
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF2D3142),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _bullet(bulletStyle, bulletColor, 'Price starting at ₹3/page'),
+                const SizedBox(height: 6),
+                _bullet(bulletStyle, bulletColor, 'Paper quality: 70 GSM'),
+                const SizedBox(height: 6),
+                _bullet(bulletStyle, bulletColor, 'Single side prints'),
+                const SizedBox(height: 18),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: () => _showUploadSheet(uploadVM),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                    child: Text(
+                      'Upload Files',
+                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 20),
+          // ── Right: Document Fan Illustration ──
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 130,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Back card
+                  Transform.rotate(
+                    angle: 0.2,
+                    child: _illustrationCard(Icons.image_rounded, AppColors.success.withOpacity(0.7), 'JPG'),
+                  ),
+                  // Middle card
+                  Transform.rotate(
+                    angle: -0.1,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 20),
+                      child: _illustrationCard(Icons.article_rounded, AppColors.primaryBlue.withOpacity(0.8), 'DOC'),
+                    ),
+                  ),
+                  // Front card
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, top: 8),
+                    child: _illustrationCard(Icons.picture_as_pdf_rounded, AppColors.error.withOpacity(0.85), 'PDF'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn().slideY(begin: -0.05, end: 0, duration: 400.ms);
+  }
+
+  Widget _bullet(TextStyle style, Color iconColor, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Icon(Icons.stars_rounded, size: 14, color: AppColors.textSecondary.withOpacity(0.6)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: style.copyWith(
+              fontSize: 14,
+              color: const Color(0xFF4F5B7D),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _illustrationCard(IconData icon, Color color, String label) {
+    return Container(
+      width: 80,
+      height: 113, // 80 / 113.1 = 0.707 (A4 Ratio)
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            // Top colored header
+            Container(height: 35, color: color),
+            // Title placeholder
+            Positioned(
+              top: 10,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+            // Body lines
+            Positioned(
+              top: 45,
+              left: 10,
+              right: 10,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: List.generate(
+                  5,
+                  (i) => Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    height: 4,
+                    width: i == 4 ? 40 : double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  // ─── Active Orders Header ────────────────────────────────────────────────────
+  Widget _buildActiveOrdersHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'ACTIVE PRINTS',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(letterSpacing: 1.5, color: AppColors.textSecondary),
+        ),
+        TextButton(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
+          child: const Text('VIEW ALL'),
+        ),
+      ],
+    ).animate().fadeIn(delay: 300.ms);
+  }
+
+  // ─── Orders Stream ───────────────────────────────────────────────────────────
+  Widget _buildOrdersList() {
+    return StreamBuilder<List<PrintOrderModel>>(
+      stream: _orderRepo.getActiveOrders(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.inbox_outlined, size: 40, color: AppColors.textTertiary),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No active orders',
+                    style: GoogleFonts.inter(color: AppColors.textTertiary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: snapshot.data!.length,
+          itemBuilder: (context, index) => _buildOrderCard(snapshot.data![index])
+              .animate()
+              .fadeIn(delay: (index * 80).ms)
+              .slideY(begin: 0.1, end: 0),
+        );
+      },
+    );
+  }
+
+  // ─── Order Card (Unique Code + Name only) ────────────────────────────────────
+  Widget _buildOrderCard(PrintOrderModel order) {
+    final shortName = 'Order #${order.orderId.substring(0, 6).toUpperCase()}';
+
+    return ModernCard(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          // ── Code accent bar ──
+          Container(
+            width: 4,
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // ── Name column ──
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'NAME',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textTertiary,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  shortName,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ── Unique Code column ──
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'UNIQUE CODE',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textTertiary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                order.pickupCode,
+                style: GoogleFonts.inter(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primaryBlue,
+                  letterSpacing: 3,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _reprintOrder(PrintOrderModel order) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Request Reprint?'),
-        content: Text('Re-opening order for ${order.totalPages} pages.\nA new pickup code will be generated.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: const Text('Proceed to Pay', style: TextStyle(color: Colors.white)),
+  // ─── Blinkit-style Pending Tray ──────────────────────────────────────────────
+  Widget _buildPendingTray(UploadViewModel uploadVM) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'PENDING UPLOAD',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textSecondary,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${uploadVM.pendingFiles.length}',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.warning),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 96,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: uploadVM.pendingFiles.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final file = uploadVM.pendingFiles[i];
+              return _PendingFileChip(
+                file: file,
+                onRemove: () => uploadVM.removeFile(file.id),
+                onTap: () {
+                  // Re-open just this file in PrintOptionsPage
+                  final files = List<FileModel>.from(uploadVM.pendingFiles);
+                  uploadVM.clearPickedFiles();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)),
+                  );
+                },
+              ).animate().fadeIn(delay: (i * 60).ms).scale(begin: const Offset(0.9, 0.9));
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+}
 
-    if (confirmed != true) return;
+// ─── Pending File Chip (Blinkit-style) ──────────────────────────────────────
+class _PendingFileChip extends StatelessWidget {
+  final FileModel file;
+  final VoidCallback onRemove;
+  final VoidCallback onTap;
 
-    // Load local files if they exist
-    final List<File?> reprintFiles = [];
-    if (order.localFilePaths.isNotEmpty) {
-      for (final filePath in order.localFilePaths) {
-        final file = File(filePath);
-        if (await file.exists()) {
-          reprintFiles.add(file);
-        }
-      }
-    }
+  const _PendingFileChip({
+    required this.file,
+    required this.onRemove,
+    required this.onTap,
+  });
 
-    if (reprintFiles.isEmpty && order.localFilePaths.isNotEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not find local files. Please upload them again.')),
-      );
-      return;
-    }
+  bool get _isPdf => file.name.toLowerCase().endsWith('.pdf');
 
-    if (!mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentProcessingPage(
-          selectedFiles: reprintFiles,
-          selectedBytes: const [],
-          filenames: reprintFiles.map((f) => path.basename(f!.path)).toList(),
-          printSettings: order.printSettings,
-          expectedPages: order.totalPages,
-          expectedPrice: order.totalPrice,
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // ── Progress ring ──
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                    backgroundColor: AppColors.primaryBlue.withOpacity(0.1),
+                  ),
+                ),
+                Icon(
+                  _isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                  size: 20,
+                  color: _isPdf ? AppColors.error : AppColors.primaryBlue,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text(
+                file.name.length > 10 ? '${file.name.substring(0, 8)}…' : file.name,
+                style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// =======================================================
-/// 🔽 REFINED BOTTOM SHEET FOR WEBSITE & MOBILE
-/// =======================================================
-
-class _UploadOptionsSheet extends StatelessWidget {
+// ─── Upload Source Bottom Sheet ──────────────────────────────────────────────
+class _UploadSourceSheet extends StatelessWidget {
   final VoidCallback onCamera;
   final VoidCallback onGallery;
   final VoidCallback onFiles;
 
-  const _UploadOptionsSheet({
+  const _UploadSourceSheet({
     required this.onCamera,
     required this.onGallery,
     required this.onFiles,
@@ -735,70 +566,64 @@ class _UploadOptionsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: AppColors.mediumShadow,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10))),
-          const SizedBox(height: 24),
-          const Row(
-            children: [
-              Text('Upload Files', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-              Spacer(),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text('Select a preferred method to provide your documents.', style: TextStyle(color: Colors.grey, fontSize: 13)),
-          const SizedBox(height: 32),
-          if (kIsWeb)
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 28),
+            Text(
+              'SELECT SOURCE',
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 28),
             Row(
               children: [
-                Expanded(child: _buildFeature(icon: Icons.camera_alt_rounded, label: 'Camera Scanner', onTap: onCamera, color: Colors.blue)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildFeature(icon: Icons.upload_file_rounded, label: 'Media Picker', onTap: onFiles, color: Colors.indigo)),
-              ],
-            )
-          else
-            Row(
-              children: [
-                Expanded(child: _buildFeature(icon: Icons.camera_enhance_rounded, label: 'Camera', onTap: onCamera, color: Colors.pink)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildFeature(icon: Icons.photo_library_rounded, label: 'Gallery', onTap: onGallery, color: Colors.orange)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildFeature(icon: Icons.grid_view_rounded, label: 'Files', onTap: onFiles, color: Colors.purple)),
+                _sourceOption(context, icon: Icons.camera_alt_rounded, label: 'Camera', onTap: onCamera),
+                const SizedBox(width: 14),
+                _sourceOption(context, icon: Icons.photo_library_rounded, label: 'Gallery', onTap: onGallery),
+                const SizedBox(width: 14),
+                _sourceOption(context, icon: Icons.folder_rounded, label: 'Files', onTap: onFiles),
               ],
             ),
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeature({required IconData icon, required String label, required VoidCallback onTap, required Color color}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.15)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 12),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
+
+  Widget _sourceOption(BuildContext context, {required IconData icon, required String label, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 22),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: AppColors.primaryBlue, size: 30),
+              const SizedBox(height: 10),
+              Text(
+                label.toUpperCase(),
+                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.textSecondary, letterSpacing: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
-
-

@@ -2,11 +2,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/upload_viewmodel.dart';
 import 'views/screens/login_view.dart';
 import 'views/screens/upload_page.dart';
+import 'utils/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,31 +32,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Define the base text theme using Manrope
-    final baseTextTheme = GoogleFonts.manropeTextTheme();
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ThinkInk',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-        ),
-        fontFamily: GoogleFonts.manrope().fontFamily,
-        textTheme: baseTextTheme.copyWith(
-          // Use Inter for titles/headlines
-          displayLarge: GoogleFonts.inter(textStyle: baseTextTheme.displayLarge, fontWeight: FontWeight.bold),
-          displayMedium: GoogleFonts.inter(textStyle: baseTextTheme.displayMedium, fontWeight: FontWeight.bold),
-          displaySmall: GoogleFonts.inter(textStyle: baseTextTheme.displaySmall, fontWeight: FontWeight.bold),
-          headlineLarge: GoogleFonts.inter(textStyle: baseTextTheme.headlineLarge, fontWeight: FontWeight.bold),
-          headlineMedium: GoogleFonts.inter(textStyle: baseTextTheme.headlineMedium, fontWeight: FontWeight.bold),
-          headlineSmall: GoogleFonts.inter(textStyle: baseTextTheme.headlineSmall, fontWeight: FontWeight.bold),
-          titleLarge: GoogleFonts.inter(textStyle: baseTextTheme.titleLarge, fontWeight: FontWeight.bold),
-          titleMedium: GoogleFonts.inter(textStyle: baseTextTheme.titleMedium, fontWeight: FontWeight.bold),
-          titleSmall: GoogleFonts.inter(textStyle: baseTextTheme.titleSmall, fontWeight: FontWeight.bold),
-        ),
-      ),
+      theme: AppTheme.lightTheme,
       home: const AuthWrapper(),
     );
   }

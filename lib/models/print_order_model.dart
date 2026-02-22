@@ -144,8 +144,8 @@ class PrintOrderModel {
       totalPages: totalPages ?? this.totalPages,
       totalPrice: totalPrice ?? this.totalPrice,
       fileUrls: fileUrls ?? this.fileUrls,
-      publicIds: publicIds ?? this.publicIds,
-      localFilePaths: localFilePaths ?? this.localFilePaths,
+      publicIds: publicIds,
+      localFilePaths: localFilePaths,
     );
   }
 }

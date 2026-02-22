@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import '../models/print_order_model.dart';
 
 class LocalStorageService {
@@ -29,7 +28,7 @@ class LocalStorageService {
       await file.writeAsBytes(bytes);
       return localPath;
     } catch (e) {
-      print('❌ Failed to save file locally: $e');
+      debugPrint('❌ Failed to save file locally: $e');
       return 'error_saving';
     }
   }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../utils/app_colors.dart';
+import '../widgets/common/primary_button.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -11,12 +15,16 @@ class ProfilePage extends StatelessWidget {
     final user = authVM.user;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('My Profile', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        title: Text(
+          'ACCOUNT',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16),
+        ),
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.primaryBlack,
         elevation: 0,
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -24,104 +32,105 @@ class ProfilePage extends StatelessWidget {
             /// 👤 USER HEADER
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-                boxShadow: [
-                  BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5)),
-                ],
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.blue.shade100,
-                    backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
-                    child: user?.photoURL == null ? const Icon(Icons.person, size: 50, color: Colors.blue) : null,
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primaryBlue.withOpacity(0.1), width: 8),
+                        ),
+                        child: CircleAvatar(
+                          radius: 60,
+                          backgroundColor: AppColors.greyLight,
+                          backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+                          child: user?.photoURL == null ? const Icon(Icons.person, size: 60, color: AppColors.primaryBlue) : null,
+                        ),
+                      ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(color: AppColors.primaryBlue, shape: BoxShape.circle),
+                        child: const Icon(Icons.edit_rounded, color: Colors.white, size: 16),
+                      ).animate().fadeIn(delay: 400.ms).scale(),
+                    ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   Text(
                     user?.displayName ?? 'Welcome User',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
+                    style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.primaryBlack),
+                  ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
+                  const SizedBox(height: 4),
                   Text(
                     user?.email ?? 'Not signed in',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
+                    style: GoogleFonts.manrope(fontSize: 14, color: AppColors.greyDark, fontWeight: FontWeight.w500),
+                  ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2, end: 0),
                 ],
               ),
             ),
 
-            const SizedBox(height: 32),
-
             /// ⚙️ SETTINGS LIST
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
                   _profileItem(
                     icon: Icons.history_rounded,
                     title: 'Order Tracking',
                     subtitle: 'Check your active and past prints',
-                    color: Colors.blue,
-                    onTap: () => Navigator.pop(context), // Already handled by history tab usually
-                  ),
+                    color: AppColors.primaryBlue,
+                    onTap: () => Navigator.pop(context),
+                  ).animate().fadeIn(delay: 400.ms).slideX(begin: 0.1, end: 0),
                   const SizedBox(height: 16),
                   _profileItem(
                     icon: Icons.security_rounded,
                     title: 'Privacy & Security',
                     subtitle: 'Manage your data and account info',
-                    color: Colors.green,
+                    color: AppColors.primaryBlack,
                     onTap: () {},
-                  ),
+                  ).animate().fadeIn(delay: 500.ms).slideX(begin: 0.1, end: 0),
                   const SizedBox(height: 16),
                   _profileItem(
                     icon: Icons.help_outline_rounded,
                     title: 'Support Center',
                     subtitle: 'Get help with your print orders',
-                    color: Colors.orange,
+                    color: AppColors.greyDark,
                     onTap: () {},
-                  ),
-                  const SizedBox(height: 48),
+                  ).animate().fadeIn(delay: 600.ms).slideX(begin: 0.1, end: 0),
+                  const SizedBox(height: 56),
 
                   /// 🚪 LOGOUT BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.logout_rounded, color: Colors.red),
-                      label: const Text(
-                        'LOGOUT',
-                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, letterSpacing: 1),
-                      ),
-                      onPressed: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Confirm Logout'),
-                            content: const Text('Are you sure you want to sign out?'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Logout', style: TextStyle(color: Colors.red))),
-                            ],
-                          ),
-                        );
+                  PrimaryButton(
+                    label: 'LOGOUT',
+                    icon: Icons.logout_rounded,
+                    backgroundColor: AppColors.error,
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          title: const Text('Confirm Logout'),
+                          content: const Text('Are you sure you want to sign out?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+                              child: const Text('Logout'),
+                            ),
+                          ],
+                        ),
+                      );
 
-                        if (confirmed == true) {
-                          await authVM.signOut();
-                          if (context.mounted) Navigator.pop(context);
-                        }
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                    ),
-                  ),
+                      if (confirmed == true) {
+                        await authVM.signOut();
+                        if (context.mounted) Navigator.pop(context);
+                      }
+                    },
+                  ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.3, end: 0),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -140,21 +149,19 @@ class ProfilePage extends StatelessWidget {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
-          ],
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.greyLight.withOpacity(0.5)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(width: 16),
@@ -162,13 +169,13 @@ class ProfilePage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(title, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primaryBlack)),
                   const SizedBox(height: 4),
-                  Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text(subtitle, style: GoogleFonts.manrope(fontSize: 12, color: AppColors.greyDark, fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
+            Icon(Icons.arrow_forward_ios_rounded, color: AppColors.greyLight, size: 14),
           ],
         ),
       ),

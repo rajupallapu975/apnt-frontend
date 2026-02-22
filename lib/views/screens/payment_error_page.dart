@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+
+import '../../utils/app_colors.dart';
+import '../../widgets/common/primary_button.dart';
 
 class PaymentErrorPage extends StatelessWidget {
   final String message;
@@ -15,35 +19,59 @@ class PaymentErrorPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Something went wrong")),
-      body: Center(
+      body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 40),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 72),
+              const Spacer(),
+              
+              // ❌ Error Icon with Shake Animation
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 64),
+              ).animate().shake(duration: 500.ms),
+
+              const SizedBox(height: 40),
+
+              Text(
+                'SOMETHING WENT WRONG',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 24),
+              ).animate().fadeIn(delay: 200.ms),
+
               const SizedBox(height: 16),
+
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: onRetry,
-                    child: const Text("Retry"),
-                  ),
-                  const SizedBox(width: 12),
-                  OutlinedButton(
-                    onPressed: onGoBack,
-                    child: const Text("Go Back"),
-                  ),
-                ],
-              )
+                style: Theme.of(context).textTheme.bodyMedium,
+              ).animate().fadeIn(delay: 400.ms),
+
+              const Spacer(),
+
+              PrimaryButton(
+                label: 'RETRY PROCESSING',
+                onPressed: onRetry,
+              ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
+
+              const SizedBox(height: 16),
+
+              SizedBox(
+                width: double.infinity,
+                height: 60,
+                child: OutlinedButton(
+                  onPressed: onGoBack,
+                  child: const Text('GO BACK'),
+                ),
+              ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),
+
+              const SizedBox(height: 48),
             ],
           ),
         ),

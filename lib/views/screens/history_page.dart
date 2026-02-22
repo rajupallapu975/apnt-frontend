@@ -1,9 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:path/path.dart' as path;
+
 import '../../models/print_order_model.dart';
 import '../../services/firestore_service.dart';
-import 'package:path/path.dart' as path;
+import '../../utils/app_colors.dart';
+import '../../widgets/common/modern_card.dart';
+import '../../widgets/common/status_badge.dart';
+import '../../widgets/common/primary_button.dart';
 import 'payment_processing_page.dart';
 
 class HistoryPage extends StatefulWidget {
@@ -13,12 +20,9 @@ class HistoryPage extends StatefulWidget {
   State<HistoryPage> createState() => _HistoryPageState();
 }
 
-class _HistoryPageState extends State<HistoryPage>
-    with SingleTickerProviderStateMixin {
-
+class _HistoryPageState extends State<HistoryPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final FirestoreService _firestoreService =
-      FirestoreService();
+  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void initState() {
@@ -32,209 +36,175 @@ class _HistoryPageState extends State<HistoryPage>
     super.dispose();
   }
 
-  // =================================================
-  // UI
-  // =================================================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order History'),
+        title: const Text('HISTORY'),
+        centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
+          labelColor: AppColors.primaryBlue,
+          unselectedLabelColor: AppColors.textTertiary,
+          indicatorColor: AppColors.primaryBlue,
+          indicatorWeight: 3,
+          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1),
           tabs: const [
-            Tab(
-              text: 'Active',
-              icon: Icon(Icons.local_printshop),
-            ),
-            Tab(
-              text: 'History',
-              icon: Icon(Icons.history),
-            ),
+            Tab(text: 'ACTIVE'),
+            Tab(text: 'ALL PRINTS'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildOrdersStream(
-              _firestoreService.getActiveOrders(),
-              isActiveTab: true),
-          _buildOrdersStream(
-              _firestoreService.getUserOrders()),
+          _buildOrdersStream(_firestoreService.getActiveOrders(), isActive: true),
+          _buildOrdersStream(_firestoreService.getUserOrders()),
         ],
       ),
     );
   }
 
-  // =================================================
-  // REUSABLE ORDER STREAM BUILDER
-  // =================================================
-
-  Widget _buildOrdersStream(
-    Stream<List<PrintOrderModel>> stream, {
-    bool isActiveTab = false,
-  }) {
+  Widget _buildOrdersStream(Stream<List<PrintOrderModel>> stream, {bool isActive = false}) {
     return StreamBuilder<List<PrintOrderModel>>(
       stream: stream,
       builder: (context, snapshot) {
-
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
         }
 
         final orders = snapshot.data ?? [];
-
         if (orders.isEmpty) {
           return _buildEmptyState(
-            icon: Icons.inbox,
-            message: isActiveTab
-                ? 'No active orders'
-                : 'No orders found',
-            subtitle:
-                'Your print orders will appear here',
+            icon: isActive ? Icons.print_rounded : Icons.history_rounded,
+            message: isActive ? 'NO ACTIVE PRINTS' : 'NO HISTORY FOUND',
+            subtitle: isActive ? 'Your pending prints will appear here.' : 'Start your first print to see it in history.',
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           itemCount: orders.length,
           itemBuilder: (context, index) {
-            return _buildOrderCard(
-              orders[index],
-              isActive: isActiveTab,
-            );
+            return _buildOrderCard(orders[index], isActive: isActive).animate().fadeIn(delay: (index * 100).ms).slideY(begin: 0.1, end: 0);
           },
         );
       },
     );
   }
 
-  // =================================================
-  // ORDER CARD
-  // =================================================
+  Widget _buildOrderCard(PrintOrderModel order, {bool isActive = false}) {
+    final dateFormat = DateFormat('MMM dd • hh:mm a');
 
-  Widget _buildOrderCard(
-    PrintOrderModel order, {
-    bool isActive = false,
-  }) {
-    final dateFormat =
-        DateFormat('MMM dd, yyyy • hh:mm a');
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-
-            // ID + Date
-            Text(
-              'ID: ${order.orderId.substring(0, 8)}',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              dateFormat.format(order.createdAt),
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Pickup Code
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? Colors.blue.withOpacity(0.1)
-                    : Colors.grey.withOpacity(0.1),
-                borderRadius:
-                    BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+    return ModernCard(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "PICKUP CODE",
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight:
-                            FontWeight.w600),
+                  Text(
+                    order.orderId.substring(0, 8).toUpperCase(),
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 13),
                   ),
                   Text(
-                    order.pickupCode ?? '----',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
-                    ),
+                    dateFormat.format(order.createdAt),
+                    style: GoogleFonts.manrope(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // Pages + Price
-            Text(
-              '${order.totalPages} pages • ₹${order.totalPrice.toStringAsFixed(2)}',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w500),
-            ),
-
-            // Reprint Button (only if not active)
-            if (!isActive) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () =>
-                      _reprintOrder(order),
-                  child: const Text("Reprint"),
-                ),
+              StatusBadge(
+                label: order.status.name.toUpperCase(),
+                type: order.status == OrderStatus.active ? StatusType.active : StatusType.success,
               ),
             ],
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border.withOpacity(0.5)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('PICKUP CODE', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.textSecondary)),
+                Text(
+                  order.pickupCode,
+                  style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.primaryBlue, letterSpacing: 2),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _infoTile(Icons.description_outlined, '${order.totalPages} Pages'),
+              const Spacer(),
+              Text('₹${order.totalPrice.toStringAsFixed(2)}', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
+            ],
+          ),
+          if (!isActive) ...[
+            const SizedBox(height: 20),
+            PrimaryButton(
+              label: 'REPRINT',
+              height: 48,
+              onPressed: () => _reprintOrder(order),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  // =================================================
-  // REPRINT FLOW (Backend Controlled)
-  // =================================================
+  Widget _infoTile(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: AppColors.textTertiary),
+        const SizedBox(width: 6),
+        Text(text, style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState({required IconData icon, required String message, required String subtitle}) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: AppColors.greyLight.withOpacity(0.3), shape: BoxShape.circle),
+            child: Icon(icon, size: 48, color: AppColors.textTertiary),
+          ),
+          const SizedBox(height: 24),
+          Text(message, style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          Text(subtitle, style: GoogleFonts.manrope(color: AppColors.textSecondary, fontSize: 14)),
+        ],
+      ),
+    ).animate().fadeIn();
+  }
 
   Future<void> _reprintOrder(PrintOrderModel order) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reprint Order'),
-        content: Text(
-          'Pages: ${order.totalPages}\n'
-          'Price: ₹${order.totalPrice.toStringAsFixed(2)}\n\n'
-          'A new pickup code will be generated after payment.',
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Reprint Documents'),
+        content: Text('Estimated Total: ₹${order.totalPrice.toStringAsFixed(2)}\n\nA fresh pickup code will be generated.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue, foregroundColor: Colors.white),
             child: const Text('Proceed'),
           ),
         ],
@@ -243,76 +213,32 @@ class _HistoryPageState extends State<HistoryPage>
 
     if (confirmed != true) return;
 
-    // Load local files if they exist
     final List<File?> reprintFiles = [];
     if (order.localFilePaths.isNotEmpty) {
       for (final path in order.localFilePaths) {
         final file = File(path);
-        if (await file.exists()) {
-          reprintFiles.add(file);
-        }
+        if (await file.exists()) reprintFiles.add(file);
       }
     }
 
-    if (reprintFiles.isEmpty && order.localFilePaths.isNotEmpty) {
+    if (reprintFiles.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not find local files. Please upload them again.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Local source files not found.')));
       return;
     }
 
     if (!mounted) return;
-
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PaymentProcessingPage(
           selectedFiles: reprintFiles,
-          selectedBytes: const [], // Will be re-read from files
-          filenames: reprintFiles.map((f) => path.basename(f!.path)).toList(), // 🔥 ADD THIS
+          selectedBytes: const [],
+          filenames: reprintFiles.map((f) => path.basename(f!.path)).toList(),
           printSettings: order.printSettings,
           expectedPages: order.totalPages,
           expectedPrice: order.totalPrice,
         ),
-      ),
-    );
-  }
-
-  // =================================================
-  // EMPTY STATE
-  // =================================================
-
-  Widget _buildEmptyState({
-    required IconData icon,
-    required String message,
-    required String subtitle,
-  }) {
-    return Center(
-      child: Column(
-        mainAxisAlignment:
-            MainAxisAlignment.center,
-        children: [
-          Icon(icon,
-              size: 70,
-              color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: Colors.grey,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }

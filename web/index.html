@@ -32,8 +32,24 @@
 
   <title>ThinkInk</title>
   <link rel="manifest" href="manifest.json">
-  <meta name="google-signin-client_id"
-    content="52763236709-ppdk4s7l1tsavhlo98ppqcmu84hf0n04.apps.googleusercontent.com">
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    window.openRazorpayWebCheckout = function (options, successCallback, errorCallback) {
+      var rzpOptions = JSON.parse(options);
+
+      rzpOptions.handler = function (response) {
+        successCallback(response.razorpay_payment_id, response.razorpay_order_id, response.razorpay_signature);
+      };
+
+      var rzp = new Razorpay(rzpOptions);
+
+      rzp.on('payment.failed', function (response) {
+        errorCallback(response.error.description);
+      });
+
+      rzp.open();
+    }
+  </script>
 </head>
 
 <body>

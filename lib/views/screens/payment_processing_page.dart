@@ -1,24 +1,24 @@
-// ============================================================================
-// PAYMENT PROCESSING PAGE (UPDATED - BACKEND CONTROLLED)
-// ============================================================================
-
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-
-import 'package:apnt/services/firestore_service.dart';
-import 'package:apnt/services/cloudinary_storage_service.dart';
-import 'package:apnt/services/backend_service.dart';
-import 'package:apnt/services/local_storage_service.dart';
-import 'package:apnt/models/print_order_model.dart';
-import 'package:path/path.dart' as path;
-import 'package:apnt/views/screens/payment_error_page.dart';
+import 'package:apnt/config/backend_config.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../../utils/razorpay_handler.dart';
+
+import '../../services/firestore_service.dart';
+import '../../services/cloudinary_storage_service.dart';
+import '../../services/backend_service.dart';
+import '../../services/local_storage_service.dart';
+import '../../utils/app_colors.dart';
 import 'payment_success_page.dart';
+import 'payment_error_page.dart';
 
 class PaymentProcessingPage extends StatefulWidget {
   final List<File?> selectedFiles;
   final List<Uint8List?> selectedBytes;
-  final List<String> filenames; // 🔥 REQUIRED: Pass names from FileModel
+  final List<String> filenames;
   final Map<String, dynamic> printSettings;
   final int expectedPages;
   final double expectedPrice;
@@ -40,182 +40,224 @@ class PaymentProcessingPage extends StatefulWidget {
 
 class _PaymentProcessingPageState
     extends State<PaymentProcessingPage> {
-  String _status = "Preparing files...";
+  String _status = "Initializing...";
+  double _progress = 0.1;
+  RazorpayHandler? _paymentHandler;
 
   @override
   void initState() {
     super.initState();
-    _startProcessing();
+    // Use addPostFrameCallback to ensure the UI is ready but call processing immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startProcessing());
   }
 
-  // ==========================================================================
-  // MAIN PROCESSING WORKFLOW
-  // ==========================================================================
   Future<void> _startProcessing() async {
-    setState(() => _status = "Locking memory...");
     try {
-      // STEP 1: VALIDATE FILES
-      final hasFiles =
-          widget.selectedFiles.any((f) => f != null);
-      final hasBytes =
-          widget.selectedBytes.any((b) => b != null);
+      final backend = BackendService();
 
-      if (!hasFiles && !hasBytes) {
-        throw Exception("No valid files selected");
-      }
+      setState(() {
+        _status = "Contacting Server...";
+        _progress = 0.15;
+      });
 
-      // STEP 1: CREATE ORDER VIA BACKEND (Generates 6-digit code & saves to Firebase)
-      setState(() => _status = "Generating 6-digit code...");
-      print('📡 Finalizing order and generating pickup code...');
-      final backendResult = await BackendService()
-          .createOrder(widget.printSettings);
+      debugPrint("📡 Connecting to: ${BackendConfig.createRazorpayOrderUrl}");
+      debugPrint("💰 Amount: ${widget.expectedPrice}");
+      
+      // 1️⃣ Create Razorpay order
+      final razorpayData = await backend
+          .createRazorpayOrder(widget.expectedPrice)
+          .timeout(const Duration(seconds: 12), onTimeout: () {
+        throw TimeoutException("Check your internet or laptop's connection.");
+      });
 
-      final String orderId = backendResult.orderId;
-      final String pickupCode = backendResult.pickupCode;
+      debugPrint("✅ Razorpay Order Response: $razorpayData");
 
-      print('✅ Order Created: $orderId');
-      print('🔑 Pickup Code: $pickupCode');
+      debugPrint("✅ Razorpay Order Created: ${razorpayData['razorpayOrderId']}");
 
-      // STEP 2: UPLOAD FILES TO CLOUDINARY (Using the generated Pickup Code)
-      setState(() => _status = "Uploading files to cloud...");
-      print('📤 Uploading files...');
+      _paymentHandler ??= RazorpayHandler();
 
-      final cloudinaryResult = await CloudinaryStorageService().uploadFiles(
-        pickupCode: pickupCode,
-        files: widget.selectedFiles,
-        bytes: widget.selectedBytes,
-        filenames: widget.filenames, // Use the real names from UploadPage
-      );
+      debugPrint("📦 Opening Razorpay gateway with options...");
+      var options = {
+        'key': razorpayData['key'].toString(),
+        'amount': razorpayData['amount'],
+        'currency': 'INR',
+        'name': 'Think Ink',
+        'description': 'Document Printing Payment',
+        'order_id': razorpayData['razorpayOrderId'],
+        'prefill': {
+          'contact': '',
+          'email': ''
+        },
+        'external': {
+          'wallets': ['paytm']
+        }
+      };
 
-      final uploadedUrls = cloudinaryResult['urls']!;
-      final publicIds = cloudinaryResult['publicIds']!;
+      _paymentHandler!.openCheckout(
+        options: options,
+        onSuccess: (paymentId, orderId, signature) async {
+          debugPrint("💳 Razorpay Payment Success: $paymentId");
+          try {
+            setState(() {
+              _status = "Verifying payment...";
+              _progress = 0.4;
+            });
 
-      if (uploadedUrls.isEmpty) {
-        throw Exception("File upload failed - no URLs returned");
-      }
+            // 2️⃣ Verify Payment
+            final verifyResult = await backend.verifyPayment(
+              razorpayOrderId: orderId,
+              razorpayPaymentId: paymentId,
+              razorpaySignature: signature,
+              printSettings: widget.printSettings,
+              amount: widget.expectedPrice,
+              totalPages: widget.expectedPages,
+            );
 
-      print('✅ Files uploaded successfully');
+            final finalOrderId = verifyResult['orderId'];
+            final finalPickupCode = verifyResult['pickupCode'];
 
-      // STEP 3: SAVE FILES LOCALLY FOR REPRINTING
-      setState(() => _status = "Saving files locally...");
-      print('💾 Saving files locally...');
-      final List<String> localPaths = [];
-      final storage = LocalStorageService();
+            setState(() {
+              _status = "Uploading files...";
+              _progress = 0.6;
+            });
 
-      for (int i = 0; i < widget.selectedFiles.length; i++) {
-        final File? file = widget.selectedFiles[i];
-        final Uint8List? fileBytes = widget.selectedBytes[i];
+            // 3️⃣ Upload Files
+            final cloudinaryResult =
+                await CloudinaryStorageService().uploadFiles(
+              pickupCode: finalPickupCode,
+              files: widget.selectedFiles,
+              bytes: widget.selectedBytes,
+              filenames: widget.filenames,
+            );
 
-        if (file == null && fileBytes == null) continue;
+            await FirestoreService().attachFilesToOrder(
+              orderId: finalOrderId,
+              fileUrls: cloudinaryResult['urls']!,
+              publicIds: cloudinaryResult['publicIds']!,
+              localFilePaths: [],
+            );
 
-        final bytes = fileBytes ?? await file!.readAsBytes();
-        final String nameToUse = (widget.filenames.length > i) 
-            ? widget.filenames[i] 
-            : 'file_${i + 1}_$orderId';
+            // Optional local storage
+            final storage = LocalStorageService();
+            final freshOrder =
+                await FirestoreService().getOrder(finalOrderId);
+            if (freshOrder != null) {
+              await storage.saveOrderLocally(freshOrder);
+            }
 
-        final localPath = await storage.saveFileLocally(nameToUse, bytes);
-        localPaths.add(localPath);
-      }
+            if (!mounted) return;
 
-      // STEP 4: ATTACH CLOUD DATA TO FIRESTORE ORDER
-      setState(() => _status = "Finalizing order...");
-      await FirestoreService().attachFilesToOrder(
-        orderId: orderId,
-        fileUrls: uploadedUrls,
-        publicIds: publicIds,
-        localFilePaths: localPaths,
-      );
-
-      // STEP 5: ARCHIVE LOCALLY
-      final freshOrder = await FirestoreService().getOrder(orderId);
-      if (freshOrder != null) {
-        await storage.saveOrderLocally(freshOrder);
-      }
-
-      print('✅ Files attached to order');
-
-      // STEP 5: NAVIGATE TO SUCCESS PAGE
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PaymentSuccessPage(
-            orderId: orderId,
-            pickupCode: pickupCode,
-          ),
-        ),
-      );
-
-    } catch (e, stackTrace) {
-      print("❌ ORDER PROCESSING ERROR: $e");
-      print(stackTrace);
-
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PaymentErrorPage(
-            message: e.toString(),
-            onRetry: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PaymentProcessingPage(
-                    selectedFiles: widget.selectedFiles,
-                    selectedBytes: widget.selectedBytes,
-                    filenames: widget.filenames,
-                    printSettings: widget.printSettings,
-                    expectedPages: widget.expectedPages,
-                    expectedPrice:
-                        widget.expectedPrice,
-                  ),
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PaymentSuccessPage(
+                  orderId: finalOrderId,
+                  pickupCode: finalPickupCode,
                 ),
-              );
-            },
-            onGoBack: () =>
-                Navigator.pop(context),
-          ),
-        ),
+              ),
+            );
+          } catch (e) {
+            debugPrint("❌ Verification/Upload Error: $e");
+            _goToError(e.toString());
+          }
+        },
+        onFailure: (error) {
+          debugPrint("❌ Razorpay Payment Error: $error");
+          _goToError(error);
+        },
       );
+    } catch (e) {
+      _goToError(e.toString());
     }
   }
 
-  // ==========================================================================
-  // UI
-  // ==========================================================================
+  void _goToError(String message) {
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentErrorPage(
+          message: message,
+          onRetry: () => Navigator.pop(context),
+          onGoBack: () => Navigator.pop(context),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _paymentHandler?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Processing Order"),
-          automaticallyImplyLeading: false,
-        ),
-        body: Center(
+        body: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 40),
           child: Column(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 25),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: CircularProgressIndicator(
+                      value: _progress,
+                      strokeWidth: 8,
+                      backgroundColor: AppColors.primaryBlue
+                          .withOpacity(0.1),
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryBlue),
+                    ),
+                  ).animate(onPlay: (c) => c.repeat())
+                    .rotate(duration: 3.seconds),
+                  const Icon(Icons.print_rounded,
+                      size: 40,
+                      color: AppColors.primaryBlue),
+                ],
+              ),
+              const SizedBox(height: 56),
               Text(
-                _status,
+                _status.toUpperCase(),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primaryBlack,
+                  letterSpacing: 2,
                 ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                "This may take a moment based on your connection",
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-              ),
+              ).animate(key: ValueKey(_status))
+                .fadeIn()
+                .slideY(begin: 0.1, end: 0),
+              const SizedBox(height: 16),
+              Text(
+                "Securing your documents for high-precision output. Do not close the application.",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.manrope(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ).animate().fadeIn(delay: 400.ms),
+              const SizedBox(height: 80),
+              Text(
+                'POWERED BY THINK INK CORE',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textTertiary,
+                  letterSpacing: 1.5,
+                ),
+              ).animate().fadeIn(delay: 800.ms),
             ],
           ),
         ),

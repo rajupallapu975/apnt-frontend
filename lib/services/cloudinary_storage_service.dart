@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -9,12 +8,8 @@ import 'package:http_parser/http_parser.dart';
 import 'package:path/path.dart' as path;
 
 import '../config/cloudinary_config.dart';
-import '../utils/file_validator.dart';
 
 class CloudinaryStorageService {
-  /// Single endpoint for all file types
-  String get _uploadUrl =>
-      'https://api.cloudinary.com/v1_1/${CloudinaryConfig.cloudName}/auto/upload';
 
   /// Detect correct MediaType
   MediaType _getMediaType(String filename) {
@@ -65,6 +60,7 @@ class CloudinaryStorageService {
     final List<String> uploadedUrls = [];
     final List<String> publicIds = [];
     final Map<String, Map<String, String>> uploadedCache = {};
+    int totalUploadedBytes = 0;
 
     try {
       for (int i = 0; i < lockedBytes.length; i++) {
@@ -88,13 +84,16 @@ class CloudinaryStorageService {
         final String basePublicId = '${pickupCode}_${i + 1}';
         final String fullPublicId = 'orders/$pickupCode/$basePublicId';
 
-        // 🚀 EXPERT CHANGE: Use 'image' for PDFs so they are viewable in the dashboard.
-        // Use 'auto' for everything else.
+        // 🚀 Resource type routing:
+        // - PDF → 'image' (viewable in dashboard)
+        // - DOC/DOCX → 'raw' (office documents)
+        // - everything else → 'auto'
         final bool isPdf = extension == '.pdf';
-        final String resourceType = isPdf ? 'image' : 'auto';
+        final bool isDoc = extension == '.doc' || extension == '.docx';
+        final String resourceType = isPdf ? 'image' : (isDoc ? 'raw' : 'auto');
         final String uploadUrl = 'https://api.cloudinary.com/v1_1/${CloudinaryConfig.cloudName}/$resourceType/upload';
 
-        print('📤 Uploading $originalName as $resourceType to $fullPublicId...');
+        debugPrint('📤 Uploading $originalName as $resourceType to $fullPublicId...');
         
         final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
         request.fields['upload_preset'] = CloudinaryConfig.uploadPreset;
@@ -104,7 +103,7 @@ class CloudinaryStorageService {
           http.MultipartFile.fromBytes(
             'file',
             bytesToUse,
-            filename: '${basePublicId}$extension',
+            filename: '$basePublicId$extension',
             contentType: _getMediaType(originalName),
           ),
         );
@@ -124,8 +123,9 @@ class CloudinaryStorageService {
           uploadedCache[hash] = {'url': secureUrl, 'publicId': pId};
           uploadedUrls.add(secureUrl);
           publicIds.add(pId);
+          totalUploadedBytes += (data['bytes'] as num?)?.toInt() ?? bytesToUse.length;
 
-          print('✅ Uploaded: $secureUrl');
+          debugPrint('✅ Uploaded: $secureUrl');
         } else {
           throw Exception('Cloudinary upload failed: ${response.body}');
         }
@@ -134,9 +134,10 @@ class CloudinaryStorageService {
       return {
         'urls': uploadedUrls,
         'publicIds': publicIds,
+        'totalBytes': ['$totalUploadedBytes'],
       };
     } catch (e) {
-      print('❌ ERROR IN UPLOAD_FILES: $e');
+      debugPrint('❌ ERROR IN UPLOAD_FILES: $e');
       throw Exception('Cloudinary upload failed: $e');
     }
   }
