@@ -14,6 +14,7 @@ import '../../services/local_storage_service.dart';
 import '../../utils/app_colors.dart';
 import 'payment_success_page.dart';
 import 'payment_error_page.dart';
+import 'upload_page.dart';
 
 class PaymentProcessingPage extends StatefulWidget {
   final List<File?> selectedFiles;
@@ -88,8 +89,24 @@ class _PaymentProcessingPageState
           'contact': '',
           'email': ''
         },
-        'external': {
-          'wallets': ['paytm']
+        'method': 'upi', // Force UPI
+        'config': {
+          'display': {
+            'blocks': {
+              'upi': {
+                'name': 'Pay with UPI / QR',
+                'instruments': [
+                  {
+                    'method': 'upi',
+                  }
+                ]
+              }
+            },
+            'sequence': ['block.upi'],
+            'preferences': {
+              'show_default_blocks': false
+            }
+          }
         }
       };
 
@@ -174,13 +191,41 @@ class _PaymentProcessingPageState
   void _goToError(String message) {
     if (!mounted) return;
 
+    // Filter message for common cancel strings
+    String displayMessage = message;
+    if (message.toLowerCase().contains("cancel")) {
+      displayMessage = "Payment was cancelled.";
+    }
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => PaymentErrorPage(
-          message: message,
-          onRetry: () => Navigator.pop(context),
-          onGoBack: () => Navigator.pop(context),
+          message: displayMessage,
+          onRetry: () {
+            // Push a fresh processing page to retry the flow
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PaymentProcessingPage(
+                  selectedFiles: widget.selectedFiles,
+                  selectedBytes: widget.selectedBytes,
+                  filenames: widget.filenames,
+                  printSettings: widget.printSettings,
+                  expectedPages: widget.expectedPages,
+                  expectedPrice: widget.expectedPrice,
+                ),
+              ),
+            );
+          },
+          onGoBack: () {
+            // Go to Home Page (UploadPage) and clear navigation stack
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const UploadPage()),
+              (route) => false,
+            );
+          },
         ),
       ),
     );
@@ -213,7 +258,7 @@ class _PaymentProcessingPageState
                       value: _progress,
                       strokeWidth: 8,
                       backgroundColor: AppColors.primaryBlue
-                          .withOpacity(0.1),
+                          .withValues(alpha: 0.1),
                       valueColor:
                           const AlwaysStoppedAnimation<Color>(
                               AppColors.primaryBlue),

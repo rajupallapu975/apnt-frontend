@@ -56,7 +56,7 @@ class PaymentErrorPage extends StatelessWidget {
               const Spacer(),
 
               PrimaryButton(
-                label: 'RETRY PROCESSING',
+                label: 'RETRY',
                 onPressed: onRetry,
               ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
 
@@ -67,7 +67,7 @@ class PaymentErrorPage extends StatelessWidget {
                 height: 60,
                 child: OutlinedButton(
                   onPressed: onGoBack,
-                  child: const Text('GO BACK'),
+                  child: const Text('CANCEL'),
                 ),
               ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),
 

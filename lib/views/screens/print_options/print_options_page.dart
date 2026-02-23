@@ -636,7 +636,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             height: 52,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.print_rounded, size: 18),
-              label: Text('Proceed to Payment',
+              label: Text('Payment',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15)),
               onPressed: () => _handlePayment(),
               style: ElevatedButton.styleFrom(
@@ -714,7 +714,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   height: 56,
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.print_rounded, size: 20),
-                    label: Text('Proceed to Payment',
+                    label: Text('Payment',
                         style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15)),
                     onPressed: () => _handlePayment(),
                     style: ElevatedButton.styleFrom(
