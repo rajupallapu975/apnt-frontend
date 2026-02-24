@@ -77,11 +77,11 @@ class PrintPreviewCarousel extends StatelessWidget {
               // IMAGE PREVIEW
               if (kIsWeb) {
                 previewWidget = byteData != null 
-                  ? Image.memory(byteData, fit: BoxFit.contain) 
+                  ? Image.memory(byteData, fit: BoxFit.contain, filterQuality: FilterQuality.high) 
                   : const Center(child: CircularProgressIndicator());
               } else {
                 previewWidget = file != null 
-                  ? Image.file(file, fit: BoxFit.contain) 
+                  ? Image.file(file, fit: BoxFit.contain, filterQuality: FilterQuality.high) 
                   : const Center(child: CircularProgressIndicator());
               }
               
@@ -107,26 +107,39 @@ class PrintPreviewCarousel extends StatelessWidget {
                   child: Stack(
                     children: [
                       // 📄 A4 PAPER (Invariant Background)
-                      Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border.withOpacity(0.5)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
+                        // 📄 A4 PAPER (Invariant Background)
+                        Container(
+                          width: double.infinity,
+                          height: double.infinity,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4), // Sharper corners for paper look
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08), 
+                              width: 1,
                             ),
-                          ],
-                        ),
-                        child: Center(
+                            boxShadow: [
+                              // Layered shadows for physical depth
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 1,
+                                offset: const Offset(0, 1),
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 20,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                          ),
                           child: previewWidget,
                         ),
-                      ),
 
                       // 🟣 EDIT OVERLAY (Centered Bottom)
                       if (!name.toLowerCase().endsWith('.pdf'))
@@ -140,11 +153,11 @@ class PrintPreviewCarousel extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.9),
+                                  color: Colors.white.withValues(alpha: 0.9),
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
+                                      color: Colors.black.withValues(alpha: 0.1),
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
                                     ),
@@ -207,7 +220,7 @@ class PrintPreviewCarousel extends StatelessWidget {
   Widget _navButton(IconData icon, VoidCallback onTap) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.9),
+        color: AppColors.surface.withValues(alpha: 0.9),
         shape: BoxShape.circle,
         boxShadow: AppColors.softShadow,
       ),

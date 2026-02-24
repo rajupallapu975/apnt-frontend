@@ -37,6 +37,7 @@ class _UploadPageState extends State<UploadPage> {
           if (uploadVM.files.isEmpty) return;
           final files = List<FileModel>.from(uploadVM.files);
           uploadVM.clearPickedFiles();
+          if (!context.mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
         },
         onGallery: () async {
@@ -46,6 +47,7 @@ class _UploadPageState extends State<UploadPage> {
           if (uploadVM.files.isEmpty) return;
           final files = List<FileModel>.from(uploadVM.files);
           uploadVM.clearPickedFiles();
+          if (!context.mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
         },
         onFiles: () async {
@@ -55,6 +57,7 @@ class _UploadPageState extends State<UploadPage> {
           if (uploadVM.files.isEmpty) return;
           final files = List<FileModel>.from(uploadVM.files);
           uploadVM.clearPickedFiles();
+          if (!context.mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
         },
       ),
@@ -183,20 +186,20 @@ class _UploadPageState extends State<UploadPage> {
                   // Back card
                   Transform.rotate(
                     angle: 0.2,
-                    child: _illustrationCard(Icons.image_rounded, AppColors.success.withOpacity(0.7), 'JPG'),
+                    child: _illustrationCard(Icons.image_rounded, AppColors.success.withValues(alpha: 0.7), 'JPG'),
                   ),
                   // Middle card
                   Transform.rotate(
                     angle: -0.1,
                     child: Padding(
                       padding: const EdgeInsets.only(right: 20),
-                      child: _illustrationCard(Icons.article_rounded, AppColors.primaryBlue.withOpacity(0.8), 'DOC'),
+                      child: _illustrationCard(Icons.article_rounded, AppColors.primaryBlue.withValues(alpha: 0.8), 'DOC'),
                     ),
                   ),
                   // Front card
                   Padding(
                     padding: const EdgeInsets.only(left: 8, top: 8),
-                    child: _illustrationCard(Icons.picture_as_pdf_rounded, AppColors.error.withOpacity(0.85), 'PDF'),
+                    child: _illustrationCard(Icons.picture_as_pdf_rounded, AppColors.error.withValues(alpha: 0.85), 'PDF'),
                   ),
                 ],
               ),
@@ -213,7 +216,7 @@ class _UploadPageState extends State<UploadPage> {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: Icon(Icons.stars_rounded, size: 14, color: AppColors.textSecondary.withOpacity(0.6)),
+          child: Icon(Icons.stars_rounded, size: 14, color: AppColors.textSecondary.withValues(alpha: 0.6)),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -237,10 +240,10 @@ class _UploadPageState extends State<UploadPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -283,7 +286,7 @@ class _UploadPageState extends State<UploadPage> {
                     height: 4,
                     width: i == 4 ? 40 : double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -445,7 +448,7 @@ class _UploadPageState extends State<UploadPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.12),
+                color: AppColors.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -461,7 +464,7 @@ class _UploadPageState extends State<UploadPage> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: uploadVM.pendingFiles.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
             itemBuilder: (context, i) {
               final file = uploadVM.pendingFiles[i];
               return _PendingFileChip(
@@ -523,7 +526,7 @@ class _PendingFileChip extends StatelessWidget {
                   child: CircularProgressIndicator(
                     strokeWidth: 3,
                     valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-                    backgroundColor: AppColors.primaryBlue.withOpacity(0.1),
+                    backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
                   ),
                 ),
                 Icon(

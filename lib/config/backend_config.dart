@@ -22,20 +22,7 @@ class BackendConfig {
     }
   }
 
-  // static String get baseUrl {
-  //   if (kIsWeb) {
-  //     return "http://localhost:5000";
-  //   }
-    
-  //   // For mobile (Android/iOS)
-  //   if (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS) {
-  //     // 💡 If using Android Emulator, use 10.0.2.2 instead.
-  //     // 💡 If using Physical Device, use your laptop's IP (10.14.211.155).
-  //     return "http://10.14.211.155:5000";
-  //   }
-    
-  //   return "http://localhost:5000";
-  // }
+  
 
   /// Create Order endpoint
   static String get createOrderUrl => "$baseUrl/create-order";
@@ -43,6 +30,7 @@ class BackendConfig {
   /// Razorpay endpoints
   static String get createRazorpayOrderUrl => "$baseUrl/create-razorpay-order";
   static String get verifyPaymentUrl => "$baseUrl/verify-payment";
+  static String get refundPaymentUrl => "$baseUrl/refund-payment";
 
   /// Upload Files endpoint
   static String get uploadFilesUrl => "$baseUrl/upload-files";

@@ -12,6 +12,7 @@ import '../../../models/file_model.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/common/modern_card.dart';
 import 'widgets/print_preview_carousel.dart';
+import '../../../services/image_processing_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config model
@@ -49,6 +50,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
   late List<FileModel> pickedFiles;
   late List<PagePrintConfig> pageConfigs;
+  bool _isLoading = false;
 
   PagePrintConfig get _current => pageConfigs[_currentPageIndex];
 
@@ -712,17 +714,29 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 flex: 2,
                 child: SizedBox(
                   height: 56,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.print_rounded, size: 20),
-                    label: Text('Payment',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15)),
-                    onPressed: () => _handlePayment(),
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : () => _handlePayment(),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2E7D32),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
+                    child: _isLoading 
+                      ? const SizedBox(
+                          width: 24, 
+                          height: 24, 
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.print_rounded, size: 20),
+                            const SizedBox(width: 8),
+                            Text('Payment',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15)),
+                          ],
+                        ),
                   ),
                 ),
               ),
@@ -1120,40 +1134,88 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       );
 
   // ── Logic ──────────────────────────────────────────────────────────────────
-  Future<void> _handlePayment() async {
-    final finalizedBytes = pickedFiles.map((e) => e.bytes).toList();
-    if (!context.mounted) return;
+    Future<void> _handlePayment() async {
+    // ⚔️ EXPERT FIX: Pre-read all bytes before entering payment phase
+    // This prevents "lost file handles" when the app goes background for UPI selection
+    setState(() => _isLoading = true);
+    
+    try {
+      // ⚡ TACTICAL OPTIMIZATION & IMAGE PROCESSING
+      // Process images to A4 and read all bytes in parallel
+      final List<Uint8List?> finalizedBytes = await Future.wait(
+        List.generate(pickedFiles.length, (i) async {
+          final model = pickedFiles[i];
+          final cfg = pageConfigs[i];
+          
+          Uint8List? originalBytes;
+          if (model.bytes != null) {
+            originalBytes = model.bytes;
+          } else if (model.file != null) {
+            originalBytes = await model.file!.readAsBytes();
+          }
 
-    int totalPg = 0;
-    for (var pc in pageConfigs) {
-      totalPg += pc.pageCount * pc.copies;
-    }
+          if (originalBytes == null) return null;
 
-    final printSettings = {
-      'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
-      'files': List.generate(pageConfigs.length, (i) => {
-            'fileName': pickedFiles[i].name,
-            'pageCount': pageConfigs[i].pageCount,
-            'color': pageConfigs[i].isColor ? 'COLOR' : 'BW',
-            'orientation': pageConfigs[i].isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
-            'copies': pageConfigs[i].copies,
-            'doubleSided': pageConfigs[i].isDoubleSided,
-          }),
-    };
+          // If it's an image, process it to A4 format with white margins
+          final bool isPdf = model.name.toLowerCase().endsWith('.pdf');
+          if (!isPdf) {
+            try {
+              return await ImageProcessingService.processImageToA4(
+                imageBytes: originalBytes,
+                isPortrait: cfg.isPortrait,
+              );
+            } catch (e) {
+              debugPrint("⚠️ Image processing failed for ${model.name}, using original: $e");
+              return originalBytes;
+            }
+          }
+          
+          return originalBytes;
+        }),
+      );
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentProcessingPage(
-          selectedFiles: pickedFiles.map((e) => e.file).toList(),
-          selectedBytes: finalizedBytes,
-          filenames: pickedFiles.map((e) => e.name).toList(),
-          printSettings: printSettings,
-          expectedPages: totalPg,
-          expectedPrice: _totalPrice.toDouble(),
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      int totalPg = 0;
+      for (var pc in pageConfigs) {
+        totalPg += pc.pageCount * pc.copies;
+      }
+
+      final printSettings = {
+        'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
+        'files': List.generate(pageConfigs.length, (i) => {
+              'fileName': pickedFiles[i].name,
+              'pageCount': pageConfigs[i].pageCount,
+              'color': pageConfigs[i].isColor ? 'COLOR' : 'BW',
+              'orientation': pageConfigs[i].isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
+              'copies': pageConfigs[i].copies,
+              'doubleSided': pageConfigs[i].isDoubleSided,
+              'url': '', // 🛡️ SAFEGUARD: Ensure field is not undefined for Firestore
+              'publicId': '',
+            }),
+      };
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentProcessingPage(
+            selectedFiles: pickedFiles.map((e) => e.file).toList(),
+            selectedBytes: finalizedBytes,
+            filenames: pickedFiles.map((e) => e.name).toList(),
+            printSettings: printSettings,
+            expectedPages: totalPg,
+            expectedPrice: _totalPrice.toDouble(),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+      debugPrint("❌ Error reading files for payment: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to prepare files: $e')),
+      );
+    }
   }
 
   void _removeFile(int index) {
@@ -1202,7 +1264,11 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             CropAspectRatioPreset.ratio16x9,
           ],
         ),
-        WebUiSettings(context: context),
+        WebUiSettings(
+          context: context,
+          presentStyle: WebPresentStyle.dialog,
+          size: const CropperSize(width: 500, height: 500),
+        ),
       ],
     );
     if (cropped == null) return;

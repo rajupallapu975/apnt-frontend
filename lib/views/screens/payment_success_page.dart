@@ -34,7 +34,7 @@ class PaymentSuccessPage extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.1),
+                    color: AppColors.success.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.check_rounded, color: AppColors.success, size: 64),
@@ -69,7 +69,7 @@ class PaymentSuccessPage extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                           letterSpacing: 2,
                         ),
                       ),
@@ -94,7 +94,7 @@ class PaymentSuccessPage extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Row(
@@ -117,9 +117,9 @@ class PaymentSuccessPage extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withOpacity(0.05),
+                    color: AppColors.primaryBlue.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.primaryBlue.withOpacity(0.1)),
+                    border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.1)),
                   ),
                   child: Row(
                     children: [

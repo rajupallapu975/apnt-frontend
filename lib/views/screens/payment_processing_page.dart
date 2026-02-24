@@ -15,6 +15,8 @@ import '../../utils/app_colors.dart';
 import 'payment_success_page.dart';
 import 'payment_error_page.dart';
 import 'upload_page.dart';
+import 'widgets/payment_summary_sheet.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PaymentProcessingPage extends StatefulWidget {
   final List<File?> selectedFiles;
@@ -41,65 +43,101 @@ class PaymentProcessingPage extends StatefulWidget {
 
 class _PaymentProcessingPageState
     extends State<PaymentProcessingPage> {
-  String _status = "Initializing...";
+  String _status = "Preparing Summary...";
   double _progress = 0.1;
   RazorpayHandler? _paymentHandler;
+  
+  // ⚡ TACTICAL OPTIMIZATION: Start order creation immediately in background
+  late Future<Map<String, dynamic>> _orderFuture;
 
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to ensure the UI is ready but call processing immediately
+    _orderFuture = BackendService().createRazorpayOrder(widget.expectedPrice);
+    
+    // Start the flow immediately
     WidgetsBinding.instance.addPostFrameCallback((_) => _startProcessing());
   }
 
   Future<void> _startProcessing() async {
     try {
-      final backend = BackendService();
-
-      setState(() {
-        _status = "Contacting Server...";
-        _progress = 0.15;
-      });
-
-      debugPrint("📡 Connecting to: ${BackendConfig.createRazorpayOrderUrl}");
-      debugPrint("💰 Amount: ${widget.expectedPrice}");
+      // 1️⃣ IMMEDIATELY show Professional Payment Summary Bottom Sheet
+      // This happens while the server call is running in the background.
+      if (!mounted) return;
       
-      // 1️⃣ Create Razorpay order
-      final razorpayData = await backend
-          .createRazorpayOrder(widget.expectedPrice)
-          .timeout(const Duration(seconds: 12), onTimeout: () {
-        throw TimeoutException("Check your internet or laptop's connection.");
+      final bool? proceed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.5),
+        builder: (context) => PaymentSummarySheet(
+          totalPages: widget.expectedPages,
+          totalPrice: widget.expectedPrice,
+          printSettings: widget.printSettings,
+          onProceed: () => Navigator.pop(context, true),
+        ),
+      );
+
+      if (proceed != true) {
+        debugPrint("👋 User cancelled payment summary sheet.");
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      // 2️⃣ Wait for server order to complete if it hasn't already
+      setState(() {
+        _status = "Finalizing Order Details...";
+        _progress = 0.2;
       });
 
-      debugPrint("✅ Razorpay Order Response: $razorpayData");
+      debugPrint("📡 Waiting for background order creation...");
+      final razorpayData = await _orderFuture.timeout(
+        const Duration(seconds: 40),
+        onTimeout: () => throw TimeoutException("The server is taking too long to respond. Please check your connection and try again.")
+      );
 
-      debugPrint("✅ Razorpay Order Created: ${razorpayData['razorpayOrderId']}");
+      debugPrint("✅ Razorpay Order Ready: ${razorpayData['razorpayOrderId']}");
 
       _paymentHandler ??= RazorpayHandler();
 
-      debugPrint("📦 Opening Razorpay gateway with options...");
+      debugPrint("📦 Opening Razorpay gateway...");
+      final user = FirebaseAuth.instance.currentUser;
+      final userEmail = user?.email ?? 'customer@thinkink.com';
+      
+      const String defaultPhone = '8888888888';
+      String? rawPhone = user?.phoneNumber;
+      String userPhone = (rawPhone != null && rawPhone.isNotEmpty) 
+          ? rawPhone.replaceAll(RegExp(r'[^0-9]'), '') 
+          : defaultPhone;
+
+      if (userPhone.length > 10) {
+        userPhone = userPhone.substring(userPhone.length - 10);
+      }
+      if (userPhone.length != 10) userPhone = defaultPhone;
+
       var options = {
         'key': razorpayData['key'].toString(),
         'amount': razorpayData['amount'],
         'currency': 'INR',
         'name': 'Think Ink',
-        'description': 'Document Printing Payment',
+        'description': 'Payment',
         'order_id': razorpayData['razorpayOrderId'],
         'prefill': {
-          'contact': '',
-          'email': ''
+          'name': user?.displayName ?? 'Valued Customer',
+          'contact': userPhone,
+          'email': userEmail, 
         },
-        'method': 'upi', // Force UPI
+        'readonly': {
+          'contact': true,
+          'email': true
+        },
         'config': {
           'display': {
+            'hide': ['branding'],
             'blocks': {
               'upi': {
-                'name': 'Pay with UPI / QR',
-                'instruments': [
-                  {
-                    'method': 'upi',
-                  }
-                ]
+                'name': 'UPI Payment / QR',
+                'instruments': [{'method': 'upi'}]
               }
             },
             'sequence': ['block.upi'],
@@ -107,7 +145,21 @@ class _PaymentProcessingPageState
               'show_default_blocks': false
             }
           }
-        }
+        },
+        'method': {
+          'upi': true,
+          'netbanking': false,
+          'card': false,
+          'wallet': false,
+          'paylater': false
+        },
+        'modal': {
+          'backdropClose': false,
+          'escape': false,
+          'handleback': false
+        },
+        'retry': {'enabled': false},
+        'timeout': 300
       };
 
       _paymentHandler!.openCheckout(
@@ -120,8 +172,7 @@ class _PaymentProcessingPageState
               _progress = 0.4;
             });
 
-            // 2️⃣ Verify Payment
-            final verifyResult = await backend.verifyPayment(
+            final verifyResult = await BackendService().verifyPayment(
               razorpayOrderId: orderId,
               razorpayPaymentId: paymentId,
               razorpaySignature: signature,
@@ -138,9 +189,7 @@ class _PaymentProcessingPageState
               _progress = 0.6;
             });
 
-            // 3️⃣ Upload Files
-            final cloudinaryResult =
-                await CloudinaryStorageService().uploadFiles(
+            final cloudinaryResult = await CloudinaryStorageService().uploadFiles(
               pickupCode: finalPickupCode,
               files: widget.selectedFiles,
               bytes: widget.selectedBytes,
@@ -154,13 +203,9 @@ class _PaymentProcessingPageState
               localFilePaths: [],
             );
 
-            // Optional local storage
             final storage = LocalStorageService();
-            final freshOrder =
-                await FirestoreService().getOrder(finalOrderId);
-            if (freshOrder != null) {
-              await storage.saveOrderLocally(freshOrder);
-            }
+            final freshOrder = await FirestoreService().getOrder(finalOrderId);
+            if (freshOrder != null) await storage.saveOrderLocally(freshOrder);
 
             if (!mounted) return;
 
@@ -174,13 +219,21 @@ class _PaymentProcessingPageState
               ),
             );
           } catch (e) {
-            debugPrint("❌ Verification/Upload Error: $e");
-            _goToError(e.toString());
+            debugPrint("❌ CRITICAL ERROR IN SUCCESS CALLBACK: $e");
+            await BackendService().refundPayment(
+              razorpayPaymentId: paymentId,
+              amount: widget.expectedPrice,
+            );
+
+            _goToError(
+              "Payment was successful, but we encountered an error setting up your print job ($e). "
+              "A refund has been initiated automatically."
+            );
           }
         },
         onFailure: (error) {
           debugPrint("❌ Razorpay Payment Error: $error");
-          _goToError(error);
+          if (mounted) Navigator.pop(context);
         },
       );
     } catch (e) {
@@ -191,7 +244,6 @@ class _PaymentProcessingPageState
   void _goToError(String message) {
     if (!mounted) return;
 
-    // Filter message for common cancel strings
     String displayMessage = message;
     if (message.toLowerCase().contains("cancel")) {
       displayMessage = "Payment was cancelled.";
@@ -203,7 +255,6 @@ class _PaymentProcessingPageState
         builder: (_) => PaymentErrorPage(
           message: displayMessage,
           onRetry: () {
-            // Push a fresh processing page to retry the flow
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -219,7 +270,6 @@ class _PaymentProcessingPageState
             );
           },
           onGoBack: () {
-            // Go to Home Page (UploadPage) and clear navigation stack
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (_) => const UploadPage()),
@@ -251,23 +301,17 @@ class _PaymentProcessingPageState
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  SizedBox(
+                   SizedBox(
                     width: 120,
                     height: 120,
                     child: CircularProgressIndicator(
                       value: _progress,
                       strokeWidth: 8,
-                      backgroundColor: AppColors.primaryBlue
-                          .withValues(alpha: 0.1),
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(
-                              AppColors.primaryBlue),
+                      backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
                     ),
-                  ).animate(onPlay: (c) => c.repeat())
-                    .rotate(duration: 3.seconds),
-                  const Icon(Icons.print_rounded,
-                      size: 40,
-                      color: AppColors.primaryBlue),
+                  ).animate(onPlay: (c) => c.repeat()).rotate(duration: 3.seconds),
+                  const Icon(Icons.print_rounded, size: 40, color: AppColors.primaryBlue),
                 ],
               ),
               const SizedBox(height: 56),
@@ -280,9 +324,7 @@ class _PaymentProcessingPageState
                   color: AppColors.primaryBlack,
                   letterSpacing: 2,
                 ),
-              ).animate(key: ValueKey(_status))
-                .fadeIn()
-                .slideY(begin: 0.1, end: 0),
+              ).animate(key: ValueKey(_status)).fadeIn().slideY(begin: 0.1, end: 0),
               const SizedBox(height: 16),
               Text(
                 "Securing your documents for high-precision output. Do not close the application.",

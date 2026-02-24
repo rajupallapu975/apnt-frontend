@@ -34,10 +34,10 @@ class FirestoreService {
         'localFilePaths': localFilePaths,
         'status': 'ACTIVE',
       });
-    } on FirebaseException catch (e) {
+    } catch (e) {
       throw FirestoreException(
-        "Failed to attach files: ${e.message}",
-        e,
+        "Failed to attach files: $e",
+        e is Exception ? e : Exception(e.toString()),
       );
     }
   }

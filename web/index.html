@@ -41,10 +41,24 @@
         successCallback(response.razorpay_payment_id, response.razorpay_order_id, response.razorpay_signature);
       };
 
+      rzpOptions.modal = {
+        ondismiss: function () {
+          errorCallback("Payment Cancelled");
+        },
+        escape: true,
+        backdropclose: false
+      };
+
+      rzpOptions.retry = { enabled: false };
+      rzpOptions.timeout = 300;
+
       var rzp = new Razorpay(rzpOptions);
 
       rzp.on('payment.failed', function (response) {
-        errorCallback(response.error.description);
+        // Only trigger error if not a deliberate cancel
+        if (response.error.code !== "USER_CANCELLED") {
+          errorCallback(response.error.description || "Payment Failed");
+        }
       });
 
       rzp.open();

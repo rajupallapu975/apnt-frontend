@@ -28,8 +28,8 @@ class LoginView extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primaryBlue.withOpacity(0.08),
-                    AppColors.primaryBlue.withOpacity(0),
+                    AppColors.primaryBlue.withValues(alpha: 0.08),
+                    AppColors.primaryBlue.withValues(alpha: 0),
                   ],
                 ),
               ),
@@ -65,7 +65,7 @@ class LoginView extends StatelessWidget {
                   .animate()
                   .fadeIn(duration: 800.ms)
                   .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack)
-                  .shimmer(delay: 1000.ms, duration: 2000.ms, color: AppColors.primaryBlue.withOpacity(0.1)),
+                  .shimmer(delay: 1000.ms, duration: 2000.ms, color: AppColors.primaryBlue.withValues(alpha: 0.1)),
 
                   const SizedBox(height: 48),
 
