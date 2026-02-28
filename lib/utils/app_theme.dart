@@ -126,6 +126,14 @@ class AppTheme {
           letterSpacing: -0.5,
         ),
       ),
+
+      // 🎭 Smooth Transitions
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
     );
   }
 }

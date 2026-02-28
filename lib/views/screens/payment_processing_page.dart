@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:apnt/config/backend_config.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -15,7 +14,8 @@ import '../../utils/app_colors.dart';
 import 'payment_success_page.dart';
 import 'payment_error_page.dart';
 import 'upload_page.dart';
-import 'widgets/payment_summary_sheet.dart';
+import 'upload_page.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 
 class PaymentProcessingPage extends StatefulWidget {
@@ -26,6 +26,9 @@ class PaymentProcessingPage extends StatefulWidget {
   final int expectedPages;
   final double expectedPrice;
 
+  final List<String>? initialFileUrls;
+  final List<String>? initialPublicIds;
+
   const PaymentProcessingPage({
     super.key,
     required this.selectedFiles,
@@ -34,6 +37,8 @@ class PaymentProcessingPage extends StatefulWidget {
     required this.printSettings,
     this.expectedPages = 0,
     this.expectedPrice = 0.0,
+    this.initialFileUrls,
+    this.initialPublicIds,
   });
 
   @override
@@ -43,6 +48,7 @@ class PaymentProcessingPage extends StatefulWidget {
 
 class _PaymentProcessingPageState
     extends State<PaymentProcessingPage> {
+  bool _isConfirming = true;
   String _status = "Preparing Summary...";
   double _progress = 0.1;
   RazorpayHandler? _paymentHandler;
@@ -54,46 +60,23 @@ class _PaymentProcessingPageState
   void initState() {
     super.initState();
     _orderFuture = BackendService().createRazorpayOrder(widget.expectedPrice);
-    
-    // Start the flow immediately
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startProcessing());
   }
 
   Future<void> _startProcessing() async {
+    setState(() {
+      _isConfirming = false;
+      _status = "FAST TRACKING PAYMENT...";
+      _progress = 0.25;
+    });
+
     try {
-      // 1️⃣ IMMEDIATELY show Professional Payment Summary Bottom Sheet
-      // This happens while the server call is running in the background.
-      if (!mounted) return;
-      
-      final bool? proceed = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        barrierColor: Colors.black.withValues(alpha: 0.5),
-        builder: (context) => PaymentSummarySheet(
-          totalPages: widget.expectedPages,
-          totalPrice: widget.expectedPrice,
-          printSettings: widget.printSettings,
-          onProceed: () => Navigator.pop(context, true),
-        ),
-      );
-
-      if (proceed != true) {
-        debugPrint("👋 User cancelled payment summary sheet.");
-        if (mounted) Navigator.pop(context);
-        return;
-      }
-
-      // 2️⃣ Wait for server order to complete if it hasn't already
-      setState(() {
-        _status = "Finalizing Order Details...";
-        _progress = 0.2;
-      });
+      // 1️⃣ Wait for server order to complete (started in initState)
 
       debugPrint("📡 Waiting for background order creation...");
+      // Re-added timeout to handle Render cold starts gracefully
       final razorpayData = await _orderFuture.timeout(
-        const Duration(seconds: 40),
-        onTimeout: () => throw TimeoutException("The server is taking too long to respond. Please check your connection and try again.")
+        const Duration(seconds: 50),
+        onTimeout: () => throw TimeoutException("Connection timed out. Please check your internet and retry.")
       );
 
       debugPrint("✅ Razorpay Order Ready: ${razorpayData['razorpayOrderId']}");
@@ -115,43 +98,30 @@ class _PaymentProcessingPageState
       }
       if (userPhone.length != 10) userPhone = defaultPhone;
 
+      final String rzpId = razorpayData['razorpayOrderId'].toString();
+      
       var options = {
         'key': razorpayData['key'].toString(),
         'amount': razorpayData['amount'],
         'currency': 'INR',
         'name': 'Think Ink',
-        'description': 'Payment',
-        'order_id': razorpayData['razorpayOrderId'],
+        'description': 'Print Job #${rzpId.split('_').last.toUpperCase()}',
+        'order_id': rzpId,
+        'method': 'upi',
+        'upi': {
+          'flow': 'intent'
+        },
         'prefill': {
           'name': user?.displayName ?? 'Valued Customer',
           'contact': userPhone,
           'email': userEmail, 
+          'method': 'upi'
         },
         'readonly': {
           'contact': true,
-          'email': true
-        },
-        'config': {
-          'display': {
-            'hide': ['branding'],
-            'blocks': {
-              'upi': {
-                'name': 'UPI Payment / QR',
-                'instruments': [{'method': 'upi'}]
-              }
-            },
-            'sequence': ['block.upi'],
-            'preferences': {
-              'show_default_blocks': false
-            }
-          }
-        },
-        'method': {
-          'upi': true,
-          'netbanking': false,
-          'card': false,
-          'wallet': false,
-          'paylater': false
+          'email': true,
+          'name': true,
+          'method': true
         },
         'modal': {
           'backdropClose': false,
@@ -159,13 +129,18 @@ class _PaymentProcessingPageState
           'handleback': false
         },
         'retry': {'enabled': false},
-        'timeout': 300
+        'timeout': 180 
       };
 
       _paymentHandler!.openCheckout(
         options: options,
         onSuccess: (paymentId, orderId, signature) async {
           debugPrint("💳 Razorpay Payment Success: $paymentId");
+          String? currentOrderId;
+          
+          // We wrap the rest in a Future.microtask or just let it run 
+          // to avoid holding the Razorpay UI for too long if needed, 
+          // but the user wants it to stay while uploading.
           try {
             setState(() {
               _status = "Verifying payment...";
@@ -182,30 +157,61 @@ class _PaymentProcessingPageState
             );
 
             final finalOrderId = verifyResult['orderId'];
+            currentOrderId = finalOrderId;
             final finalPickupCode = verifyResult['pickupCode'];
 
+            List<String> finalFileUrls = widget.initialFileUrls ?? [];
+            List<String> finalPublicIds = widget.initialPublicIds ?? [];
+
+            if (finalFileUrls.isEmpty) {
+              setState(() {
+                _status = "Uploading files...";
+                _progress = 0.6;
+              });
+
+              final cloudinaryResult = await CloudinaryStorageService().uploadFiles(
+                pickupCode: finalPickupCode,
+                files: widget.selectedFiles,
+                bytes: widget.selectedBytes,
+                filenames: widget.filenames,
+              );
+              finalFileUrls = cloudinaryResult['urls']!;
+              finalPublicIds = cloudinaryResult['publicIds']!;
+            } else {
+              setState(() {
+                _status = "Synchronizing files...";
+                _progress = 0.7;
+              });
+            }
+
+            final storage = LocalStorageService();
+            final List<String> savedLocalPaths = [];
+            
             setState(() {
-              _status = "Uploading files...";
-              _progress = 0.6;
+              _status = "Finalizing order...";
             });
 
-            final cloudinaryResult = await CloudinaryStorageService().uploadFiles(
-              pickupCode: finalPickupCode,
-              files: widget.selectedFiles,
-              bytes: widget.selectedBytes,
-              filenames: widget.filenames,
-            );
+            if (widget.selectedBytes.isNotEmpty) {
+              for (int i = 0; i < widget.filenames.length; i++) {
+                final bytes = widget.selectedBytes[i];
+                if (bytes != null) {
+                  final path = await storage.saveFileLocally(widget.filenames[i], bytes);
+                  savedLocalPaths.add(path);
+                }
+              }
+            }
 
             await FirestoreService().attachFilesToOrder(
               orderId: finalOrderId,
-              fileUrls: cloudinaryResult['urls']!,
-              publicIds: cloudinaryResult['publicIds']!,
-              localFilePaths: [],
+              fileUrls: finalFileUrls,
+              publicIds: finalPublicIds,
+              localFilePaths: savedLocalPaths,
             );
 
-            final storage = LocalStorageService();
             final freshOrder = await FirestoreService().getOrder(finalOrderId);
-            if (freshOrder != null) await storage.saveOrderLocally(freshOrder);
+            if (freshOrder != null) {
+              await storage.saveOrderLocally(freshOrder);
+            }
 
             if (!mounted) return;
 
@@ -220,20 +226,27 @@ class _PaymentProcessingPageState
             );
           } catch (e) {
             debugPrint("❌ CRITICAL ERROR IN SUCCESS CALLBACK: $e");
+            
+            if (currentOrderId != null) {
+              try {
+                await FirestoreService().updateOrderStatus(
+                  orderId: currentOrderId,
+                  status: 'CANCELLED',
+                );
+              } catch (_) {}
+            }
+
             await BackendService().refundPayment(
               razorpayPaymentId: paymentId,
               amount: widget.expectedPrice,
             );
 
-            _goToError(
-              "Payment was successful, but we encountered an error setting up your print job ($e). "
-              "A refund has been initiated automatically."
-            );
+            _goToError("Payment successful, but setup failed ($e). Refund initiated.");
           }
         },
         onFailure: (error) {
           debugPrint("❌ Razorpay Payment Error: $error");
-          if (mounted) Navigator.pop(context);
+          _goToError(error);
         },
       );
     } catch (e) {
@@ -241,13 +254,27 @@ class _PaymentProcessingPageState
     }
   }
 
-  void _goToError(String message) {
+  void _goToError(dynamic error) {
     if (!mounted) return;
 
-    String displayMessage = message;
-    if (message.toLowerCase().contains("cancel")) {
-      displayMessage = "Payment was cancelled.";
+    final String message = error.toString().toLowerCase();
+    
+    // 🛡️ Handles "Withdrawal" (User cancellation/dismissal)
+    bool isUserCancel = message.contains("cancel") || 
+                        message.contains("dismiss") || 
+                        message.contains("back") ||
+                        message.contains("pop") ||
+                        message == "undefined" || 
+                        message == "null" ||
+                        message.trim().isEmpty;
+
+    if (isUserCancel) {
+      debugPrint("🛒 User withdrew from payment. Returning to editing...");
+      Navigator.pop(context);
+      return;
     }
+
+    String displayMessage = error.toString();
 
     Navigator.pushReplacement(
       context,
@@ -265,6 +292,8 @@ class _PaymentProcessingPageState
                   printSettings: widget.printSettings,
                   expectedPages: widget.expectedPages,
                   expectedPrice: widget.expectedPrice,
+                  initialFileUrls: widget.initialFileUrls,
+                  initialPublicIds: widget.initialPublicIds,
                 ),
               ),
             );
@@ -281,6 +310,7 @@ class _PaymentProcessingPageState
     );
   }
 
+
   @override
   void dispose() {
     _paymentHandler?.dispose();
@@ -290,63 +320,214 @@ class _PaymentProcessingPageState
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: !_isConfirming && _progress < 0.2, 
       child: Scaffold(
-        body: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        backgroundColor: Colors.white,
+        appBar: _isConfirming ? AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryBlack),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            'CONFIRM ORDER',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.5, color: AppColors.primaryBlack),
+          ),
+          centerTitle: true,
+        ) : null,
+        body: _isConfirming ? _buildSummaryUI() : _buildProcessingUI(),
+      ),
+    );
+  }
+
+  Widget _buildSummaryUI() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 24),
+          Text(
+            "ORDER RECAP",
+            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.textTertiary, letterSpacing: 1.5),
+          ),
+          const SizedBox(height: 16),
+          
+          // 🏷️ Amount Card
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.primaryBlue.withOpacity(0.1)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("TOTAL AMOUNT", style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primaryBlue)),
+                    const SizedBox(height: 4),
+                    Text("₹${widget.expectedPrice.toStringAsFixed(0)}", style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.primaryBlue)),
+                  ],
+                ),
+                Icon(Icons.payments_rounded, color: AppColors.primaryBlue.withOpacity(0.2), size: 48),
+              ],
+            ),
+          ).animate().fadeIn().slideY(begin: 0.1, end: 0),
+          const SizedBox(height: 16),
+
+          // 📄 Details Cards
+          Row(
             children: [
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                   SizedBox(
-                    width: 120,
-                    height: 120,
-                    child: CircularProgressIndicator(
-                      value: _progress,
-                      strokeWidth: 8,
-                      backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-                    ),
-                  ).animate(onPlay: (c) => c.repeat()).rotate(duration: 3.seconds),
-                  const Icon(Icons.print_rounded, size: 40, color: AppColors.primaryBlue),
-                ],
-              ),
-              const SizedBox(height: 56),
-              Text(
-                _status.toUpperCase(),
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primaryBlack,
-                  letterSpacing: 2,
-                ),
-              ).animate(key: ValueKey(_status)).fadeIn().slideY(begin: 0.1, end: 0),
-              const SizedBox(height: 16),
-              Text(
-                "Securing your documents for high-precision output. Do not close the application.",
-                textAlign: TextAlign.center,
-                style: GoogleFonts.manrope(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ).animate().fadeIn(delay: 400.ms),
-              const SizedBox(height: 80),
-              Text(
-                'POWERED BY THINK INK CORE',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textTertiary,
-                  letterSpacing: 1.5,
-                ),
-              ).animate().fadeIn(delay: 800.ms),
+              _summaryMiniCard(Icons.description_outlined, "${widget.expectedPages}", "PAGES"),
+              const SizedBox(width: 16),
+              _summaryMiniCard(Icons.folder_open_rounded, "${widget.filenames.length}", "FILES"),
             ],
           ),
+          
+          // 📂 Documents List
+          const SizedBox(height: 32),
+          Text(
+            "DOCUMENTS",
+            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.textTertiary, letterSpacing: 1.5),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.separated(
+              itemCount: widget.filenames.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final String name = widget.filenames[index];
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.description_outlined, size: 20, color: AppColors.textSecondary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ).animate().fadeIn(delay: 350.ms),
+          
+          // 🚀 Action Button
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: AppColors.border.withOpacity(0.5))),
+            ),
+            child: ElevatedButton(
+              onPressed: _startProcessing,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlack,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 60),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                elevation: 0,
+              ),
+              child: Text(
+                "PROCEED TO PAY ₹${widget.expectedPrice.toStringAsFixed(0)}",
+                style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
+              ),
+            ),
+          ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryMiniCard(IconData icon, String value, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.primaryBlack, size: 24),
+            const SizedBox(height: 12),
+            Text(value, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.primaryBlack)),
+            Text(label, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textTertiary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProcessingUI() {
+    return IgnorePointer(
+      ignoring: _progress > 0.1, 
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                 SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: CircularProgressIndicator(
+                    value: _progress,
+                    strokeWidth: 8,
+                    backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                  ),
+                ).animate(onPlay: (c) => c.repeat()).rotate(duration: 3.seconds),
+                const Icon(Icons.print_rounded, size: 40, color: AppColors.primaryBlue),
+              ],
+            ),
+            const SizedBox(height: 56),
+            Text(
+              _status.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: AppColors.primaryBlack,
+                letterSpacing: 2,
+              ),
+            ).animate(key: ValueKey(_status)).fadeIn().slideY(begin: 0.1, end: 0),
+            const SizedBox(height: 40),
+            const CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primaryBlue,
+            ).animate().fadeIn(delay: 400.ms),
+          
+            Text(
+              'POWERED BY THINK INK CORE',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textTertiary,
+                letterSpacing: 1.5,
+              ),
+            ).animate().fadeIn(delay: 800.ms),
+          ],
         ),
       ),
     );

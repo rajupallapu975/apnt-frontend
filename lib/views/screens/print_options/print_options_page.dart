@@ -147,17 +147,20 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         if (didPop) return;
         if (await _confirmDiscard() && context.mounted) Navigator.pop(context);
       },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildTopBar(isWide),
-              Expanded(
-                child: isWide ? _buildWideBody() : _buildMobileBody(),
-              ),
-              if (!isWide) _buildMobileBottomBar(),
-            ],
+      child: IgnorePointer(
+        ignoring: _isLoading,
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            child: Column(
+              children: [
+                _buildTopBar(isWide),
+                Expanded(
+                  child: isWide ? _buildWideBody() : _buildMobileBody(),
+                ),
+                if (!isWide) _buildMobileBottomBar(),
+              ],
+            ),
           ),
         ),
       ),
@@ -638,8 +641,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             height: 52,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.print_rounded, size: 18),
-              label: Text('Payment',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15)),
+              label: Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
               onPressed: () => _handlePayment(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlack,
@@ -733,8 +736,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                           children: [
                             const Icon(Icons.print_rounded, size: 20),
                             const SizedBox(width: 8),
-                            Text('Payment',
-                                style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15)),
+                            Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
                           ],
                         ),
                   ),
@@ -1184,19 +1187,35 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
       final printSettings = {
         'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
-        'files': List.generate(pageConfigs.length, (i) => {
-              'fileName': pickedFiles[i].name,
-              'pageCount': pageConfigs[i].pageCount,
-              'color': pageConfigs[i].isColor ? 'COLOR' : 'BW',
-              'orientation': pageConfigs[i].isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
-              'copies': pageConfigs[i].copies,
-              'doubleSided': pageConfigs[i].isDoubleSided,
-              'url': '', // 🛡️ SAFEGUARD: Ensure field is not undefined for Firestore
-              'publicId': '',
+        'files': List.generate(pageConfigs.length, (i) {
+              final model = pickedFiles[i];
+              final cfg = pageConfigs[i];
+              final finalB = finalizedBytes[i];
+              
+              int byteCount = finalB?.length ?? 0;
+              if (byteCount == 0) {
+                // Fallback to original if processing failed
+                byteCount = model.bytes?.length ?? 0;
+                if (byteCount == 0 && !kIsWeb && model.file != null) {
+                  try { byteCount = model.file!.lengthSync(); } catch (_) {}
+                }
+              }
+              
+              return {
+                'fileName': model.name,
+                'pageCount': cfg.pageCount,
+                'color': cfg.isColor ? 'COLOR' : 'BW',
+                'orientation': cfg.isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
+                'copies': cfg.copies,
+                'doubleSided': cfg.isDoubleSided,
+                'fileSizeKB': (byteCount / 1024).toStringAsFixed(1),
+                'url': '', 
+                'publicId': '',
+              };
             }),
       };
 
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => PaymentProcessingPage(
@@ -1209,6 +1228,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           ),
         ),
       );
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
       debugPrint("❌ Error reading files for payment: $e");

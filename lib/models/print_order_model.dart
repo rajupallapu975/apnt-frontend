@@ -21,6 +21,8 @@ class PrintOrderModel {
   final List<String> publicIds; // Cloudinary IDs for deletion
   final List<String> localFilePaths; // Local paths for reprinting
 
+  final String? reason;
+
   PrintOrderModel({
     required this.orderId,
     required this.pickupCode,
@@ -34,10 +36,11 @@ class PrintOrderModel {
     required this.fileUrls,
     this.publicIds = const [],
     this.localFilePaths = const [],
+    this.reason,
   });
 
   // Check if order is expired
-  bool get isExpired => DateTime.now().isAfter(expiresAt) && status == OrderStatus.active;
+  bool get isExpired => (DateTime.now().isAfter(expiresAt) && status == OrderStatus.active) || status == OrderStatus.expired;
 
   // Check if order is active
   bool get isActive => status == OrderStatus.active && !isExpired;
@@ -55,15 +58,16 @@ class PrintOrderModel {
           ? (data['expiresAt'] as Timestamp).toDate() 
           : DateTime.parse(data['expiresAt'].toString()),
       status: OrderStatus.values.firstWhere(
-        (e) => e.name == data['status'],
+        (e) => e.name == data['status'].toString().toLowerCase(),
         orElse: () => OrderStatus.active,
       ),
       printSettings: data['printSettings'] ?? {},
-      totalPages: data['totalPages'] ?? 0,
-      totalPrice: (data['totalPrice'] ?? 0).toDouble(),
+      totalPages: (data['totalPages'] ?? data['pages'] ?? 0) as int,
+      totalPrice: (data['totalPrice'] ?? data['amount'] ?? 0).toDouble(),
       fileUrls: List<String>.from(data['fileUrls'] ?? []),
       publicIds: List<String>.from(data['publicIds'] ?? []),
       localFilePaths: List<String>.from(data['localFilePaths'] ?? []),
+      reason: data['reason'],
     );
   }
 
@@ -79,12 +83,22 @@ class PrintOrderModel {
         orElse: () => OrderStatus.active,
       ),
       printSettings: data['printSettings'] ?? {},
-      totalPages: data['totalPages'] ?? 0,
-      totalPrice: (data['totalPrice'] ?? 0).toDouble(),
+      totalPages: (data['totalPages'] ?? data['pages'] ?? 0) as int,
+      totalPrice: (data['totalPrice'] ?? data['amount'] ?? 0).toDouble(),
       fileUrls: List<String>.from(data['fileUrls'] ?? []),
       publicIds: List<String>.from(data['publicIds'] ?? []),
       localFilePaths: List<String>.from(data['localFilePaths'] ?? []),
+      reason: data['reason'],
     );
+  }
+
+  double get totalSizeKB {
+    final List<dynamic> files = printSettings['files'] ?? [];
+    double total = 0;
+    for (var f in files) {
+      total += double.tryParse(f['fileSizeKB']?.toString() ?? '0') ?? 0;
+    }
+    return total;
   }
 
   Map<String, dynamic> toFirestore() {
@@ -100,6 +114,7 @@ class PrintOrderModel {
       'fileUrls': fileUrls,
       'publicIds': publicIds,
       'localFilePaths': localFilePaths,
+      if (reason != null) 'reason': reason,
     };
   }
 
@@ -117,6 +132,7 @@ class PrintOrderModel {
       'fileUrls': fileUrls,
       'publicIds': publicIds,
       'localFilePaths': localFilePaths,
+      'reason': reason,
     };
   }
 
@@ -132,6 +148,8 @@ class PrintOrderModel {
     int? totalPages,
     double? totalPrice,
     List<String>? fileUrls,
+    List<String>? localFilePaths,
+    String? reason,
   }) {
     return PrintOrderModel(
       orderId: orderId ?? this.orderId,
@@ -145,7 +163,10 @@ class PrintOrderModel {
       totalPrice: totalPrice ?? this.totalPrice,
       fileUrls: fileUrls ?? this.fileUrls,
       publicIds: publicIds,
-      localFilePaths: localFilePaths,
+      localFilePaths: localFilePaths ?? this.localFilePaths,
+      reason: reason ?? this.reason,
     );
   }
 }
+
+

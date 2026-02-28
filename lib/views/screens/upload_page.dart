@@ -12,6 +12,7 @@ import '../../models/file_model.dart';
 import '../../repositories/order_repository.dart';
 import 'print_options/print_options_page.dart';
 import 'history_page.dart';
+import 'widgets/order_details_sheet.dart';
 import '../profile_page.dart';
 
 class UploadPage extends StatefulWidget {
@@ -322,7 +323,10 @@ class _UploadPageState extends State<UploadPage> {
     return StreamBuilder<List<PrintOrderModel>>(
       stream: _orderRepo.getActiveOrders(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        final activeOrders = snapshot.data!.where((o) => o.isActive).toList();
+
+        if (activeOrders.isEmpty) {
           return Container(
             padding: const EdgeInsets.symmetric(vertical: 32),
             child: Center(
@@ -343,8 +347,8 @@ class _UploadPageState extends State<UploadPage> {
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: snapshot.data!.length,
-          itemBuilder: (context, index) => _buildOrderCard(snapshot.data![index])
+          itemCount: activeOrders.length,
+          itemBuilder: (context, index) => _buildOrderCard(activeOrders[index])
               .animate()
               .fadeIn(delay: (index * 80).ms)
               .slideY(begin: 0.1, end: 0),
@@ -353,32 +357,69 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
+  void _showOrderDetails(PrintOrderModel order) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => OrderDetailsSheet(order: order),
+    );
+  }
+
   // ─── Order Card (Unique Code + Name only) ────────────────────────────────────
   Widget _buildOrderCard(PrintOrderModel order) {
     final shortName = 'Order #${order.orderId.substring(0, 6).toUpperCase()}';
 
-    return ModernCard(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          // ── Code accent bar ──
-          Container(
-            width: 4,
-            height: 52,
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue,
-              borderRadius: BorderRadius.circular(4),
+    return InkWell(
+      onTap: () => _showOrderDetails(order),
+      borderRadius: BorderRadius.circular(16),
+      child: ModernCard(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            // ── Code accent bar ──
+            Container(
+              width: 4,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue,
+                borderRadius: BorderRadius.circular(4),
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          // ── Name column ──
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 16),
+            // ── Name column ──
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'NAME',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textTertiary,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    shortName,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ── Unique Code column ──
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  'NAME',
+                  'UNIQUE CODE',
                   style: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -388,42 +429,18 @@ class _UploadPageState extends State<UploadPage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  shortName,
+                  order.pickupCode,
                   style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryBlue,
+                    letterSpacing: 3,
                   ),
                 ),
               ],
             ),
-          ),
-          // ── Unique Code column ──
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'UNIQUE CODE',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textTertiary,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                order.pickupCode,
-                style: GoogleFonts.inter(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primaryBlue,
-                  letterSpacing: 3,
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
