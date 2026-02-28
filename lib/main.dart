@@ -8,6 +8,8 @@ import 'views/screens/login_view.dart';
 import 'views/screens/upload_page.dart';
 import 'utils/app_theme.dart';
 
+import 'services/notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -16,11 +18,16 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // 🔔 Initialize Notifications
+  final notificationService = NotificationService();
+  await notificationService.init();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => UploadViewModel()),
+        ChangeNotifierProvider.value(value: notificationService),
       ],
       child: const MyApp(),
     ),

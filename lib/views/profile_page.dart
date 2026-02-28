@@ -277,14 +277,18 @@ class _OrdersStatsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Box 1: Past Prints Statistics (LOCAL)
           FutureBuilder<List<PrintOrderModel>>(
             future: localStorage.getLocalOrders(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const SizedBox(height: 100);
               final allOrders = snapshot.data!;
-              // Filter out expired orders
-              final orders = allOrders.where((o) => !o.isExpired).toList();
+              
+              // 📊 PERFECT STATS: Only count confirmed past orders (Successfully Printed)
+              // (Or orders that were paid but might have reached end-of-life)
+              final orders = allOrders.where((o) => 
+                o.status == OrderStatus.completed || 
+                (o.status == OrderStatus.expired && o.totalPages > 0)
+              ).toList();
               
               int totalPages = 0;
               double totalAmount = 0;

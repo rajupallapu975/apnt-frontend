@@ -1189,17 +1189,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
         'files': List.generate(pageConfigs.length, (i) {
               final model = pickedFiles[i];
-              final cfg = pageConfigs[i];
-              final finalB = finalizedBytes[i];
-              
-              int byteCount = finalB?.length ?? 0;
-              if (byteCount == 0) {
-                // Fallback to original if processing failed
-                byteCount = model.bytes?.length ?? 0;
-                if (byteCount == 0 && !kIsWeb && model.file != null) {
-                  try { byteCount = model.file!.lengthSync(); } catch (_) {}
-                }
-              }
+                final cfg = pageConfigs[i];
               
               return {
                 'fileName': model.name,
@@ -1208,7 +1198,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 'orientation': cfg.isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
                 'copies': cfg.copies,
                 'doubleSided': cfg.isDoubleSided,
-                'fileSizeKB': (byteCount / 1024).toStringAsFixed(1),
+                'fileSizeKB': (model.size / 1024).toStringAsFixed(1),
                 'url': '', 
                 'publicId': '',
               };
@@ -1302,6 +1292,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         file: kIsWeb ? null : File(cropped.path),
         bytes: bytes,
         addedAt: model.addedAt,
+        size: bytes.length,
       );
     });
   }
@@ -1323,6 +1314,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         file: f.path == null ? null : File(f.path!),
         bytes: f.bytes,
         addedAt: DateTime.now(),
+        size: f.size,
       );
       final cfg = PagePrintConfig(pageCount: 1);
       setState(() {

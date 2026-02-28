@@ -32,6 +32,7 @@ class FilePickerSheet extends StatelessWidget {
             file: kIsWeb ? null : File(image.path),
             bytes: clonedBytes,
             addedAt: DateTime.now(),
+            size: clonedBytes.length,
           )
         ]);
         if (context.mounted) Navigator.pop(context);
@@ -59,6 +60,7 @@ class FilePickerSheet extends StatelessWidget {
             file: kIsWeb ? null : File(img.path),
             bytes: cloned,
             addedAt: DateTime.now(),
+            size: cloned.length,
           ));
         } else {
           invalidExtensions.add(path.extension(img.name));
@@ -103,6 +105,7 @@ class FilePickerSheet extends StatelessWidget {
             file: f.path == null ? null : File(f.path!),
             bytes: clonedBytes,
             addedAt: DateTime.now(),
+            size: f.size,
           ));
         } else {
           invalidExtensions.add(path.extension(f.name));

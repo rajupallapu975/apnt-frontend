@@ -24,7 +24,13 @@ class UploadViewModel extends ChangeNotifier {
       if (image == null) return;
       
       Uint8List? bytes;
-      if (kIsWeb) bytes = await image.readAsBytes();
+      int size = 0;
+      if (kIsWeb) {
+        bytes = await image.readAsBytes();
+        size = bytes.length;
+      } else {
+        size = await File(image.path).length();
+      }
 
       final fileModel = FileModel(
         id: DateTime.now().toString(),
@@ -33,6 +39,7 @@ class UploadViewModel extends ChangeNotifier {
         file: kIsWeb ? null : File(image.path),
         bytes: bytes,
         addedAt: DateTime.now(),
+        size: size,
       );
       
       _addFileIfValid(fileModel);
@@ -48,8 +55,12 @@ class UploadViewModel extends ChangeNotifier {
 
     for (final img in images) {
       Uint8List? bytes;
+      int size = 0;
       if (kIsWeb) {
         bytes = await img.readAsBytes();
+        size = bytes.length;
+      } else {
+        size = await File(img.path).length();
       }
       
       _addFileIfValid(FileModel(
@@ -59,6 +70,7 @@ class UploadViewModel extends ChangeNotifier {
         file: kIsWeb ? null : File(img.path),
         bytes: bytes,
         addedAt: DateTime.now(),
+        size: size, // Pass the captured size
       ));
     }
   }
@@ -81,6 +93,7 @@ class UploadViewModel extends ChangeNotifier {
         file: f.path == null ? null : File(f.path!),
         bytes: f.bytes,
         addedAt: DateTime.now(),
+        size: f.size,
       ));
     }
   }

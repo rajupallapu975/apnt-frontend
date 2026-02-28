@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:apnt/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -28,6 +29,7 @@ class PaymentProcessingPage extends StatefulWidget {
 
   final List<String>? initialFileUrls;
   final List<String>? initialPublicIds;
+  final bool autoStartPayment;
 
   const PaymentProcessingPage({
     super.key,
@@ -39,6 +41,7 @@ class PaymentProcessingPage extends StatefulWidget {
     this.expectedPrice = 0.0,
     this.initialFileUrls,
     this.initialPublicIds,
+    this.autoStartPayment = false,
   });
 
   @override
@@ -60,6 +63,12 @@ class _PaymentProcessingPageState
   void initState() {
     super.initState();
     _orderFuture = BackendService().createRazorpayOrder(widget.expectedPrice);
+    
+    if (widget.autoStartPayment) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startProcessing();
+      });
+    }
   }
 
   Future<void> _startProcessing() async {
@@ -213,6 +222,12 @@ class _PaymentProcessingPageState
               await storage.saveOrderLocally(freshOrder);
             }
 
+            // 🔔 TRIGGER NOTIFICATION (with background scheduling)
+            NotificationService().notifyOrderCreated(
+              finalPickupCode, 
+              freshOrder?.expiresAt ?? DateTime.now().add(const Duration(hours: 24)),
+            );
+
             if (!mounted) return;
 
             Navigator.pushReplacement(
@@ -294,6 +309,7 @@ class _PaymentProcessingPageState
                   expectedPrice: widget.expectedPrice,
                   initialFileUrls: widget.initialFileUrls,
                   initialPublicIds: widget.initialPublicIds,
+                  autoStartPayment: true,
                 ),
               ),
             );

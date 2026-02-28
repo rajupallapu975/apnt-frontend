@@ -9,6 +9,7 @@ class FileModel {
   final Uint8List? bytes;  // web
   final DateTime addedAt;
   final int? pageCount;    // for PDFs only
+  final int size;          // file size in bytes
 
   FileModel({
     required this.id,
@@ -18,5 +19,6 @@ class FileModel {
     this.bytes,
     required this.addedAt,
     this.pageCount,
+    required this.size,
   });
 }

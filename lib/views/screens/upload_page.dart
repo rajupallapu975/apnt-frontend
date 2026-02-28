@@ -14,6 +14,8 @@ import 'print_options/print_options_page.dart';
 import 'history_page.dart';
 import 'widgets/order_details_sheet.dart';
 import '../profile_page.dart';
+import 'notifications_page.dart';
+import '../../services/notification_service.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -24,6 +26,15 @@ class UploadPage extends StatefulWidget {
 
 class _UploadPageState extends State<UploadPage> {
   final OrderRepository _orderRepo = OrderRepository();
+
+  @override
+  void initState() {
+    super.initState();
+    // 🔔 Prompt for notifications on home entrance
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationService>().requestPermission();
+    });
+  }
 
 
   void _showUploadSheet(UploadViewModel uploadVM) {
@@ -77,11 +88,15 @@ class _UploadPageState extends State<UploadPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.history_rounded),
+            icon: const Icon(Icons.history_rounded, size: 24),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
           ),
           IconButton(
-            icon: const Icon(Icons.person_outline_rounded),
+            icon: const Icon(Icons.notifications_none_rounded, size: 24),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_outline_rounded, size: 24),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage())),
           ),
           const SizedBox(width: 8),
@@ -303,16 +318,21 @@ class _UploadPageState extends State<UploadPage> {
 
   // ─── Active Orders Header ────────────────────────────────────────────────────
   Widget _buildActiveOrdersHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'ACTIVE PRINTS',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(letterSpacing: 1.5, color: AppColors.textSecondary),
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppColors.textTertiary),
         ),
-        TextButton(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
-          child: const Text('VIEW ALL'),
+        const SizedBox(height: 4),
+        Container(
+          width: 32,
+          height: 3,
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ],
     ).animate().fadeIn(delay: 300.ms);

@@ -123,6 +123,15 @@ class PaymentSummarySheet extends StatelessWidget {
                   child: Divider(height: 1),
                 ),
                 _buildSummaryRow(
+                  icon: Icons.data_usage_rounded,
+                  label: 'Storage Footprint',
+                  value: _formatTotalKB(files),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Divider(height: 1),
+                ),
+                _buildSummaryRow(
                   icon: Icons.bolt_rounded,
                   label: 'Payment Method',
                   value: 'UPI / QR Code',
@@ -224,6 +233,15 @@ class PaymentSummarySheet extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatTotalKB(List<dynamic> files) {
+    double totalKB = 0;
+    for (var f in files) {
+      totalKB += double.tryParse(f['fileSizeKB']?.toString() ?? '0') ?? 0;
+    }
+    if (totalKB < 1024) return '${totalKB.toStringAsFixed(1)} KB';
+    return '${(totalKB / 1024).toStringAsFixed(2)} MB';
   }
 
   Widget _buildSummaryRow({
