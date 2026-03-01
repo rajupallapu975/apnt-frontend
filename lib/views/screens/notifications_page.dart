@@ -47,7 +47,32 @@ class _NotificationsPageState extends State<NotificationsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep_outlined, color: AppColors.textTertiary),
-            onPressed: () => context.read<NotificationService>().clearAll(),
+            onPressed: () async {
+              final service = context.read<NotificationService>();
+              final count = service.notifications.length;
+              if (count == 0) return;
+
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  title: const Text('Clear All Notifications'),
+                  content: Text('Are you sure you want to delete all $count notifications?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true && mounted) {
+                service.clearAll();
+              }
+            },
             tooltip: 'Clear All',
           ),
           const SizedBox(width: 8),
@@ -62,7 +87,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_none_rounded, size: 64, color: AppColors.textTertiary.withOpacity(0.3)),
+                  Icon(Icons.notifications_none_rounded, size: 64, color: AppColors.textTertiary.withValues(alpha: 0.3)),
                   const SizedBox(height: 16),
                   Text(
                     'NO NEW NOTIFICATIONS',
@@ -91,8 +116,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: item.isRead 
-                        ? AppColors.border.withOpacity(0.3) 
-                        : AppColors.primaryBlue.withOpacity(0.2),
+                        ? AppColors.border.withValues(alpha: 0.3) 
+                        : AppColors.primaryBlue.withValues(alpha: 0.2),
                     width: item.isRead ? 1 : 1.5,
                   ),
                 ),
@@ -102,7 +127,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: _getIconColor(item.type).withOpacity(0.1),
+                        color: _getIconColor(item.type).withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(

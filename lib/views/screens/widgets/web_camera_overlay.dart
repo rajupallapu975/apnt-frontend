@@ -112,7 +112,7 @@ class _WebCameraOverlayState extends State<WebCameraOverlay> {
                         // 🔥 WEB FIX: Clone immediately to prevent detachment
                         final clonedBytes = Uint8List.fromList(rawBytes);
                         
-                        if (mounted) {
+                        if (mounted && context.mounted) {
                           Navigator.pop(context, {'bytes': clonedBytes, 'name': image.name});
                         }
                       } catch (e) {

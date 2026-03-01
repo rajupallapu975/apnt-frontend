@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
+import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../utils/app_colors.dart';
 
-class PaymentSummarySheet extends StatelessWidget {
+class PaymentSummarySheet extends StatefulWidget {
   final int totalPages;
   final double totalPrice;
   final Map<String, dynamic> printSettings;
-  final VoidCallback onProceed;
+  final Function(String? phoneNumber)? onProceed;
+  final Future<Map<String, dynamic>>? razorpayFuture;
+  final Future<List<Uint8List?>>? processingFuture;
 
   const PaymentSummarySheet({
     super.key,
@@ -15,30 +20,82 @@ class PaymentSummarySheet extends StatelessWidget {
     required this.totalPrice,
     required this.printSettings,
     required this.onProceed,
+    this.razorpayFuture,
+    this.processingFuture,
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Extract summary info
-    final List<dynamic> files = printSettings['files'] ?? [];
-    final bool isDoubleSided = printSettings['doubleSide'] ?? false;
-    
-    // Simple summary text
-    String colorModes = files.any((f) => f['color'] == 'COLOR') ? 'Color' : 'B&W';
-    if (files.any((f) => f['color'] == 'COLOR') && files.any((f) => f['color'] == 'BW')) {
-      colorModes = 'Mixed';
+  State<PaymentSummarySheet> createState() => _PaymentSummarySheetState();
+}
+
+class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
+  final TextEditingController _phoneController = TextEditingController();
+  final bool _isInit = true;
+  bool _needsPhone = false;
+  bool _isProcessing = false;
+  bool _isWaitingForRequest = true; // 🚀 ANIMATION STARTS IMMEDIATELY
+
+  @override
+  void initState() {
+    super.initState();
+    final authVM = context.read<AuthViewModel>();
+    _needsPhone = authVM.phoneNumber == null || authVM.phoneNumber!.isEmpty;
+
+    _waitForPreparations();
+  }
+
+  Future<void> _waitForPreparations() async {
+    try {
+      // 📡 WAIT FOR ALL BACKGROUND TASKS
+      await Future.wait([
+        widget.razorpayFuture ?? Future.value({}),
+        widget.processingFuture ?? Future.value([]),
+      ]);
+      
+      if (mounted) {
+        setState(() {
+          _isWaitingForRequest = false; // 💳 SWITCH TO SUMMARY PAGE
+        });
+      }
+    } catch (e) {
+      debugPrint("❌ Preparation Error: $e");
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to prepare print request: $e'))
+        );
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInit) return const SizedBox(height: 100);
 
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.surface,
+        color: Colors.white,
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(32),
           topRight: Radius.circular(32),
         ),
       ),
       padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
-      child: Column(
+      child: AnimatedSwitcher(
+        duration: 150.ms,
+        child: _isWaitingForRequest ? _buildWaitingUI() : _buildSummaryUI(),
+      ),
+    );
+  }
+
+  Widget _buildSummaryUI() {
+    return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -53,7 +110,7 @@ class PaymentSummarySheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
           // 💳 Header
           Row(
@@ -80,8 +137,8 @@ class PaymentSummarySheet extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Review your order details',
-                    style: GoogleFonts.manrope(
+                    'Review and confirm details',
+                    style: GoogleFonts.inter(
                       fontSize: 13,
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w500,
@@ -92,183 +149,345 @@ class PaymentSummarySheet extends StatelessWidget {
             ],
           ).animate().fadeIn().slideX(begin: -0.1, end: 0),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // 📄 Order Details Box
+          // 📄 Pricing Details
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
             ),
             child: Column(
               children: [
-                _buildSummaryRow(
-                  icon: Icons.description_outlined,
-                  label: 'Total Pages',
-                  value: '$totalPages ${totalPages == 1 ? 'Page' : 'Pages'}',
-                ),
+                _buildSimpleRow('Base Price', '₹3/page'),
+                const SizedBox(height: 12),
+                _buildSimpleRow('Subtotal', '₹${widget.totalPrice.toStringAsFixed(0)}'),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Divider(height: 1),
                 ),
-                _buildSummaryRow(
-                  icon: Icons.tune_rounded,
-                  label: 'Print Settings',
-                  value: '$colorModes • ${isDoubleSided ? 'Double Sided' : 'Single Sided'}',
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Divider(height: 1),
-                ),
-                _buildSummaryRow(
-                  icon: Icons.data_usage_rounded,
-                  label: 'Storage Footprint',
-                  value: _formatTotalKB(files),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Divider(height: 1),
-                ),
-                _buildSummaryRow(
-                  icon: Icons.bolt_rounded,
-                  label: 'Payment Method',
-                  value: 'UPI / QR Code',
-                  valueColor: AppColors.primaryBlue,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total',
+                      style: GoogleFonts.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryBlack,
+                      ),
+                    ),
+                    Text(
+                      '₹${widget.totalPrice.toStringAsFixed(0)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
 
-          const SizedBox(height: 40),
-
-          // 💰 Total Price Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Grand Total',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
+          if (_needsPhone) ...[
+            const SizedBox(height: 24),
+            Text(
+              'CONTACT NUMBER (REQUIRED)',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: AppColors.textTertiary,
+                letterSpacing: 1,
+              ),
+            ).animate().fadeIn(),
+            const SizedBox(height: 12),
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+              ),
+              child: TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.phone_android_rounded, size: 20, color: AppColors.primaryBlue),
+                  hintText: 'Enter 10 digit number',
+                  hintStyle: GoogleFonts.inter(fontSize: 14, color: AppColors.textTertiary),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
               ),
-              Text(
-                '₹${totalPrice.toStringAsFixed(0)}',
-                style: GoogleFonts.inter(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primaryBlack,
-                ),
-              ),
-            ],
-          ).animate().fadeIn(delay: 200.ms),
+            ).animate().fadeIn().slideY(begin: 0.1, end: 0),
+          ],
 
           const SizedBox(height: 32),
 
-          // 🚀 Proceed Button
+          // 🚀 Action Button (Pay ₹X)
           SizedBox(
             width: double.infinity,
-            height: 60,
+            height: 64,
             child: ElevatedButton(
-              onPressed: onProceed,
+              onPressed: _isProcessing ? null : () async {
+                if (_needsPhone && _phoneController.text.length < 10) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a valid 10-digit number'))
+                  );
+                  return;
+                }
+                
+                if (_needsPhone) {
+                  setState(() => _isProcessing = true);
+                  try {
+                    await context.read<AuthViewModel>().updatePhoneNumber(_phoneController.text);
+                  } catch (e) {
+                    debugPrint("⚠️ Phone update skipped/failed: $e");
+                  }
+                }
+                
+                // � PROCEED TO PAYMENT
+                widget.onProceed?.call(_needsPhone ? _phoneController.text : null);
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlack,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                elevation: 0,
+                elevation: 8,
+                shadowColor: AppColors.primaryBlack.withValues(alpha: 0.3),
               ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                   Row(
+              child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.verified_rounded, size: 20),
+                      const Icon(Icons.print_rounded, size: 22),
                       const SizedBox(width: 12),
                       Text(
-                        'PROCEED TO PAY',
+                        'Proceed to Pay ₹${widget.totalPrice.toStringAsFixed(0)}',
                         style: GoogleFonts.inter(
-                          fontSize: 15,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
                         ),
                       ),
                     ],
                   ),
-                  const Positioned(
-                    right: 0,
-                    child: Icon(Icons.arrow_forward_rounded, size: 20),
-                  ),
-                ],
-              ),
             ),
-          ).animate().fadeIn(delay: 300.ms).scale(begin: const Offset(0.95, 0.95)),
+          ).animate().fadeIn(delay: 400.ms).scale(begin: const Offset(0.95, 0.95)),
+          
+          const SizedBox(height: 20),
+          
+          // 🛡️ Security Badges
+          Column(
+            children: [
+              _securityRow(Icons.lock_rounded, 'Secure payment'),
+              const SizedBox(height: 8),
+              _securityRow(Icons.bolt_rounded, 'Instant processing'),
+              const SizedBox(height: 8),
+              _securityRow(Icons.confirmation_num_rounded, 'Pickup code will be generated after payment'),
+            ],
+          ).animate().fadeIn(delay: 500.ms),
+        ],
+    );
+  }
+
+
+  Widget _buildWaitingUI() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 🖨️ PRINTING ANIMATION
+          SizedBox(
+            height: 160,
+            width: double.infinity,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // 📄 Flying Papers (Background Layer)
+                ...List.generate(3, (index) {
+                  return Positioned(
+                    top: 60,
+                    child: Container(
+                      width: 50,
+                      height: 65,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.border, width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(width: 30, height: 3, color: AppColors.border),
+                            const SizedBox(height: 4),
+                            Container(width: 20, height: 3, color: AppColors.border),
+                            const SizedBox(height: 4),
+                            Container(width: 35, height: 3, color: AppColors.border),
+                          ],
+                        ),
+                      ),
+                    )
+                    .animate(onPlay: (controller) => controller.repeat())
+                    .moveY(begin: 0, end: 120, duration: 2.seconds, delay: (index * 600).ms, curve: Curves.easeInOut)
+                    .fadeIn(duration: 400.ms, delay: (index * 600).ms)
+                    .fadeOut(begin: 1, duration: 400.ms, delay: (index * 600 + 1600).ms),
+                  );
+                }),
+
+                // 🖨️ Printer (Foreground Layer)
+                Positioned(
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.print_rounded,
+                      size: 54,
+                      color: AppColors.primaryBlue,
+                    ),
+                  )
+                  .animate(onPlay: (c) => c.repeat())
+                  .shimmer(duration: 2.seconds, color: Colors.white.withValues(alpha: 0.3))
+                  .shake(hz: 2, curve: Curves.easeInOut, rotation: 0.02),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          Text(
+            "PREPARING YOUR PRINT REQUEST...",
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: AppColors.primaryBlack,
+              letterSpacing: 1.5,
+            ),
+          ).animate().fadeIn().slideY(begin: 0.1, end: 0),
           
           const SizedBox(height: 12),
           
-          // 🛡️ Security Note
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlack.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.primaryBlack.withValues(alpha: 0.05)),
+            ),
+            child: Column(
               children: [
-                const Icon(Icons.lock_outline_rounded, size: 12, color: AppColors.textTertiary),
-                const SizedBox(width: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.timer_outlined, size: 14, color: AppColors.primaryBlue),
+                    const SizedBox(width: 8),
+                    Text(
+                      "ORDER VALIDITY",
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryBlue,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
                 Text(
-                  'SECURE 256-BIT ENCRYPTED PAYMENT',
+                  "This print order will automatically expire 12 hours after creation.",
+                  textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textTertiary,
-                    letterSpacing: 0.5,
+                    color: AppColors.primaryBlack.withValues(alpha: 0.8),
+                    height: 1.3,
                   ),
                 ),
               ],
             ),
-          ).animate().fadeIn(delay: 400.ms),
+          ).animate().fadeIn(delay: 300.ms),
+
+          const SizedBox(height: 24),
+          
+          const SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+            ),
+          ).animate().fadeIn(),
         ],
       ),
     );
   }
 
-  String _formatTotalKB(List<dynamic> files) {
-    double totalKB = 0;
-    for (var f in files) {
-      totalKB += double.tryParse(f['fileSizeKB']?.toString() ?? '0') ?? 0;
-    }
-    if (totalKB < 1024) return '${totalKB.toStringAsFixed(1)} KB';
-    return '${(totalKB / 1024).toStringAsFixed(2)} MB';
-  }
-
-  Widget _buildSummaryRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    Color? valueColor,
-  }) {
+  Widget _buildSimpleRow(String label, String value) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Icon(icon, size: 20, color: AppColors.textSecondary),
-        const SizedBox(width: 12),
         Text(
           label,
-          style: GoogleFonts.manrope(
+          style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
           ),
         ),
-        const Spacer(),
         Text(
           value,
           style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w800,
-            color: valueColor ?? AppColors.primaryBlack,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _securityRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: AppColors.success),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],

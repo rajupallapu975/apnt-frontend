@@ -6,7 +6,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/upload_viewmodel.dart';
 import '../../utils/app_colors.dart';
 import '../../widgets/common/modern_card.dart';
-
 import '../../models/print_order_model.dart';
 import '../../models/file_model.dart';
 import '../../repositories/order_repository.dart';
@@ -16,6 +15,9 @@ import 'widgets/order_details_sheet.dart';
 import '../profile_page.dart';
 import 'notifications_page.dart';
 import '../../services/notification_service.dart';
+import '../../services/pwa_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -32,8 +34,64 @@ class _UploadPageState extends State<UploadPage> {
     super.initState();
     // 🔔 Prompt for notifications on home entrance
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<NotificationService>().requestPermission();
+      if (mounted) {
+        context.read<NotificationService>().requestPermission();
+        _checkPWAInstallation();
+      }
     });
+  }
+
+  Future<void> _checkPWAInstallation() async {
+    if (!kIsWeb) return;
+
+    final pwa = PWAService();
+    if (!pwa.canInstall) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final hasPrompted = prefs.getBool('pwa_prompted') ?? false;
+
+    if (!hasPrompted && mounted) {
+      // ⏳ Small delay to not overwhelm on entry
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+
+      final shouldInstall = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          title: Row(
+            children: [
+              const Icon(Icons.install_mobile_rounded, color: AppColors.primaryBlue),
+              const SizedBox(width: 12),
+              Text('INSTALL APP', style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: 1)),
+            ],
+          ),
+          content: const Text('Install ThinkInk on your home screen for a fast, app-like experience and easy access.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('NOT NOW', style: GoogleFonts.inter(color: AppColors.textTertiary, fontWeight: FontWeight.w700)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('INSTALL'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldInstall == true) {
+        await pwa.promptInstall();
+      }
+      
+      // Mark as prompted so we don't ask again this session/re-login
+      await prefs.setBool('pwa_prompted', true);
+    }
   }
 
 
@@ -49,7 +107,7 @@ class _UploadPageState extends State<UploadPage> {
           if (uploadVM.files.isEmpty) return;
           final files = List<FileModel>.from(uploadVM.files);
           uploadVM.clearPickedFiles();
-          if (!context.mounted) return;
+          if (!mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
         },
         onGallery: () async {
@@ -330,7 +388,7 @@ class _UploadPageState extends State<UploadPage> {
           width: 32,
           height: 3,
           decoration: BoxDecoration(
-            color: AppColors.primaryBlue.withOpacity(0.3),
+            color: AppColors.primaryBlue.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(10),
           ),
         ),

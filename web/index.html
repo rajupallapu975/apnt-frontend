@@ -64,6 +64,63 @@
       rzp.open();
     }
   </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+  <style>
+    /* 🎨 Premium Native-Style Cropper Branding */
+    body {
+      --cropper-primary: #007BFF;
+      --cropper-bg: #000000;
+    }
+
+    .cropper-modal {
+      background-color: var(--cropper-bg);
+      opacity: 0.85;
+    }
+
+    .cropper-bg {
+      background-image: none !important;
+      background-color: var(--cropper-bg);
+    }
+
+    .cropper-view-box {
+      outline: 2px solid var(--cropper-primary);
+      outline-color: rgba(0, 123, 255, 0.6);
+    }
+
+    .cropper-line,
+    .cropper-point {
+      background-color: var(--cropper-primary);
+    }
+
+    .cropper-point.point-n,
+    .cropper-point.point-e,
+    .cropper-point.point-s,
+    .cropper-point.point-w {
+      display: none;
+      /* Mobile style corners only */
+    }
+
+    .cropper-point {
+      width: 12px !important;
+      height: 12px !important;
+      border-radius: 2px;
+    }
+
+    /* 📱 Simulate Mobile App Dialog Style */
+    .cropper-container-dialog {
+      background-color: #121212 !important;
+      border-radius: 28px !important;
+      overflow: hidden !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      box-shadow: 0 40px 80px rgba(0, 0, 0, 0.8) !important;
+    }
+
+    /* Customizing the toolbar that image_cropper_web injects */
+    .cropper-wrap-box {
+      background-color: #000;
+    }
+  </style>
 </head>
 
 <body>
@@ -71,11 +128,32 @@
   <script type='module'>
     var { pdfjsLib } = globalThis;
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.mjs';
+  </script>
 
-    var pdfRenderOptions = {
-      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/cmaps/',
-      cMapPacked: true,
-    }
+  <script>
+    // 📱 PWA Installation Logic
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      console.log('✅ PWA Install Prompt Captured');
+    });
+
+    window.isPwaInstallable = function () {
+      return deferredPrompt !== undefined;
+    };
+
+    window.isStandalone = function () {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    };
+
+    window.promptPwaInstall = async function () {
+      if (!deferredPrompt) return false;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      return outcome === 'accepted';
+    };
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

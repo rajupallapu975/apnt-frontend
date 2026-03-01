@@ -6,8 +6,8 @@ import '../../widgets/common/primary_button.dart';
 
 class PaymentErrorPage extends StatelessWidget {
   final String message;
-  final VoidCallback onRetry;
-  final VoidCallback onGoBack;
+  final Function(BuildContext context) onRetry;
+  final Function(BuildContext context) onGoBack;
 
   const PaymentErrorPage({
     super.key,
@@ -31,7 +31,7 @@ class PaymentErrorPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
+                  color: AppColors.error.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 64),
@@ -57,7 +57,7 @@ class PaymentErrorPage extends StatelessWidget {
 
               PrimaryButton(
                 label: 'RETRY',
-                onPressed: onRetry,
+                onPressed: () => onRetry(context),
               ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
 
               const SizedBox(height: 16),
@@ -66,7 +66,7 @@ class PaymentErrorPage extends StatelessWidget {
                 width: double.infinity,
                 height: 60,
                 child: OutlinedButton(
-                  onPressed: onGoBack,
+                  onPressed: () => onGoBack(context),
                   child: const Text('CANCEL'),
                 ),
               ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:pdfx/pdfx.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,10 +9,12 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../payment_processing_page.dart';
+import '../widgets/payment_summary_sheet.dart';
 import '../../../models/file_model.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/common/modern_card.dart';
 import 'widgets/print_preview_carousel.dart';
+import '../../../services/backend_service.dart';
 import '../../../services/image_processing_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,22 +150,49 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         if (didPop) return;
         if (await _confirmDiscard() && context.mounted) Navigator.pop(context);
       },
-      child: IgnorePointer(
-        ignoring: _isLoading,
-        child: Scaffold(
-          backgroundColor: Colors.white,
-          body: SafeArea(
-            child: Column(
-              children: [
-                _buildTopBar(isWide),
-                Expanded(
-                  child: isWide ? _buildWideBody() : _buildMobileBody(),
+      child: Stack(
+        children: [
+          IgnorePointer(
+            ignoring: _isLoading,
+            child: Scaffold(
+              backgroundColor: Colors.white,
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    _buildTopBar(isWide),
+                    Expanded(
+                      child: isWide ? _buildWideBody() : _buildMobileBody(),
+                    ),
+                    if (!isWide) _buildMobileBottomBar(),
+                  ],
                 ),
-                if (!isWide) _buildMobileBottomBar(),
-              ],
+              ),
             ),
           ),
-        ),
+          
+          if (_isLoading)
+            Container(
+              color: Colors.white.withValues(alpha: 0.7),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(color: AppColors.primaryBlue),
+                    const SizedBox(height: 16),
+                    Text(
+                      'PROCESSING DOCUMENTS...',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryBlue,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -177,7 +207,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           // Circle back button
           GestureDetector(
             onTap: () async {
-              if (await _confirmDiscard() && context.mounted) Navigator.pop(context);
+              final confirmed = await _confirmDiscard();
+              if (confirmed && mounted) Navigator.pop(context);
             },
             child: Container(
               width: 40,
@@ -255,7 +286,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   // ── Mobile body ────────────────────────────────────────────────────────────
   Widget _buildMobileBody() {
     final cfg = _current;
-    final divider = Divider(height: 1, thickness: 1, color: AppColors.border.withOpacity(0.4), indent: 24, endIndent: 24);
+    final divider = Divider(height: 1, thickness: 1, color: AppColors.border.withValues(alpha: 0.4), indent: 24, endIndent: 24);
     
     return SingleChildScrollView(
       child: Column(
@@ -401,8 +432,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     color: isPdf
                         ? const Color(0xFFFFF3E0)
                         : isDoc
-                            ? AppColors.primaryBlue.withOpacity(0.1)
-                            : AppColors.success.withOpacity(0.1),
+                            ? AppColors.primaryBlue.withValues(alpha: 0.1)
+                            : AppColors.success.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -567,7 +598,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withOpacity(0.1),
+                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.receipt_long_rounded, size: 16, color: AppColors.primaryBlue),
@@ -584,9 +615,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
             decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withOpacity(0.06),
+              color: AppColors.primaryBlue.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.primaryBlue.withOpacity(0.15)),
+              border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
@@ -639,17 +670,25 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.print_rounded, size: 18),
-              label: Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
-              onPressed: () => _handlePayment(),
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : () => _handlePayment(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlack,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
+              child: _isLoading 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.print_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
+                    ],
+                  ),
             ),
           ),
 
@@ -791,7 +830,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     Text(price,
                         style: GoogleFonts.inter(
                             fontSize: 11,
-                            color: selected ? selColor.withOpacity(0.7) : AppColors.textSecondary)),
+                            color: selected ? selColor.withValues(alpha: 0.7) : AppColors.textSecondary)),
                   ],
                 ),
               ),
@@ -855,7 +894,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: color.withOpacity(0.9),
+          color: color.withValues(alpha: 0.9),
           border: Border.all(color: Colors.white, width: 1.5),
         ),
       );
@@ -898,7 +937,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                       style: GoogleFonts.inter(
                           fontSize: 12,
                           color: selected
-                              ? AppColors.primaryBlue.withOpacity(0.7)
+                              ? AppColors.primaryBlue.withValues(alpha: 0.7)
                               : AppColors.textSecondary)),
                 ],
               ),
@@ -938,7 +977,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: selected ? selColor.withOpacity(0.1) : AppColors.border.withOpacity(0.3),
+                  color: selected ? selColor.withValues(alpha: 0.1) : AppColors.border.withValues(alpha: 0.3),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: selected ? selColor : AppColors.textSecondary, size: 22),
@@ -956,7 +995,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     Text(sublabel,
                         style: GoogleFonts.inter(
                             fontSize: 12,
-                            color: selected ? selColor.withOpacity(0.8) : AppColors.textSecondary,
+                            color: selected ? selColor.withValues(alpha: 0.8) : AppColors.textSecondary,
                             fontWeight: FontWeight.w500)),
                   ],
                 ),
@@ -1013,7 +1052,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1070,7 +1109,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 18),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primaryBlue.withOpacity(0.05) : Colors.white,
+            color: selected ? AppColors.primaryBlue.withValues(alpha: 0.05) : Colors.white,
             border: Border.all(
               color: selected ? AppColors.primaryBlue : AppColors.border,
               width: selected ? 1.5 : 1,
@@ -1089,7 +1128,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 Text(sublabel,
                     style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: selected ? AppColors.primaryBlue.withOpacity(0.7) : AppColors.textSecondary)),
+                        color: selected ? AppColors.primaryBlue.withValues(alpha: 0.7) : AppColors.textSecondary)),
               ],
             ],
           ),
@@ -1137,49 +1176,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       );
 
   // ── Logic ──────────────────────────────────────────────────────────────────
-    Future<void> _handlePayment() async {
-    // ⚔️ EXPERT FIX: Pre-read all bytes before entering payment phase
-    // This prevents "lost file handles" when the app goes background for UPI selection
-    setState(() => _isLoading = true);
-    
+  Future<void> _handlePayment() async {
     try {
-      // ⚡ TACTICAL OPTIMIZATION & IMAGE PROCESSING
-      // Process images to A4 and read all bytes in parallel
-      final List<Uint8List?> finalizedBytes = await Future.wait(
-        List.generate(pickedFiles.length, (i) async {
-          final model = pickedFiles[i];
-          final cfg = pageConfigs[i];
-          
-          Uint8List? originalBytes;
-          if (model.bytes != null) {
-            originalBytes = model.bytes;
-          } else if (model.file != null) {
-            originalBytes = await model.file!.readAsBytes();
-          }
-
-          if (originalBytes == null) return null;
-
-          // If it's an image, process it to A4 format with white margins
-          final bool isPdf = model.name.toLowerCase().endsWith('.pdf');
-          if (!isPdf) {
-            try {
-              return await ImageProcessingService.processImageToA4(
-                imageBytes: originalBytes,
-                isPortrait: cfg.isPortrait,
-              );
-            } catch (e) {
-              debugPrint("⚠️ Image processing failed for ${model.name}, using original: $e");
-              return originalBytes;
-            }
-          }
-          
-          return originalBytes;
-        }),
-      );
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
       int totalPg = 0;
       for (var pc in pageConfigs) {
         totalPg += pc.pageCount * pc.copies;
@@ -1188,43 +1186,96 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       final printSettings = {
         'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
         'files': List.generate(pageConfigs.length, (i) {
-              final model = pickedFiles[i];
-                final cfg = pageConfigs[i];
-              
-              return {
-                'fileName': model.name,
-                'pageCount': cfg.pageCount,
-                'color': cfg.isColor ? 'COLOR' : 'BW',
-                'orientation': cfg.isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
-                'copies': cfg.copies,
-                'doubleSided': cfg.isDoubleSided,
-                'fileSizeKB': (model.size / 1024).toStringAsFixed(1),
-                'url': '', 
-                'publicId': '',
-              };
-            }),
+          final model = pickedFiles[i];
+          final cfg = pageConfigs[i];
+          return {
+            'fileName': model.name,
+            'pageCount': cfg.pageCount,
+            'color': cfg.isColor ? 'COLOR' : 'BW',
+            'orientation': cfg.isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
+            'copies': cfg.copies,
+            'doubleSided': cfg.isDoubleSided,
+            'fileSizeKB': (model.size / 1024).toStringAsFixed(1),
+            'url': '', 
+            'publicId': '',
+          };
+        }),
       };
 
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PaymentProcessingPage(
-            selectedFiles: pickedFiles.map((e) => e.file).toList(),
-            selectedBytes: finalizedBytes,
-            filenames: pickedFiles.map((e) => e.name).toList(),
-            printSettings: printSettings,
-            expectedPages: totalPg,
-            expectedPrice: _totalPrice.toDouble(),
-          ),
+      final razorpayFuture = BackendService().createRazorpayOrder(_totalPrice.toDouble());
+      
+      final processingFuture = Future.wait(
+        List.generate(pickedFiles.length, (i) async {
+          final model = pickedFiles[i];
+          final cfg = pageConfigs[i];
+          Uint8List? originalBytes;
+          if (model.bytes != null) {
+            originalBytes = model.bytes;
+          } else if (model.file != null) {
+            originalBytes = await model.file!.readAsBytes();
+          }
+          if (originalBytes == null) return null;
+
+          if (!model.name.toLowerCase().endsWith('.pdf')) {
+            try {
+              return await ImageProcessingService.processImageToA4(
+                imageBytes: originalBytes,
+                isPortrait: cfg.isPortrait,
+              );
+            } catch (e) {
+              debugPrint("⚠️ Image processing failed: $e");
+              return originalBytes;
+            }
+          }
+          return originalBytes;
+        }),
+      );
+
+      if (!mounted) return;
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => PaymentSummarySheet(
+          totalPages: totalPg,
+          totalPrice: _totalPrice.toDouble(),
+          printSettings: printSettings,
+          razorpayFuture: razorpayFuture,
+          processingFuture: processingFuture,
+          onProceed: (phone) async {
+            try {
+              // Futures are guaranteed ready because PaymentSummarySheet awaits them
+              final razorpayData = await razorpayFuture;
+              final finalizedBytes = await processingFuture;
+
+              if (!mounted) return;
+              Navigator.pop(context); // Close sheet
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PaymentProcessingPage(
+                    selectedFiles: pickedFiles.map((e) => e.file).toList(),
+                    selectedBytes: finalizedBytes,
+                    filenames: pickedFiles.map((e) => e.name).toList(),
+                    printSettings: printSettings,
+                    expectedPages: totalPg,
+                    expectedPrice: _totalPrice.toDouble(),
+                    autoStartPayment: true,
+                    prefillPhone: phone,
+                    preCreatedOrder: razorpayData,
+                  ),
+                ),
+              );
+            } catch (e) {
+              debugPrint("❌ Navigation failed: $e");
+            }
+          },
         ),
       );
-      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      debugPrint("❌ Error reading files for payment: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to prepare files: $e')),
-      );
+      debugPrint("❌ Error opening payment sheet: $e");
     }
   }
 
@@ -1243,8 +1294,10 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   Future<void> _editImage(int index) async {
     final model = pickedFiles[index];
     if (model.name.toLowerCase().endsWith('.pdf')) return;
-    final src = kIsWeb ? model.path : (model.file?.path ?? model.path);
-    if (src.isEmpty && kIsWeb) return;
+    
+    // For Web, 'path' is a Data URI from bytes. On Native, it's a file path.
+    final String src = kIsWeb ? model.path : (model.file?.path ?? model.path);
+    if (src.isEmpty) return;
 
     final cropped = await ImageCropper().cropImage(
       sourcePath: src,
@@ -1276,19 +1329,30 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         ),
         WebUiSettings(
           context: context,
-          presentStyle: WebPresentStyle.dialog,
-          size: const CropperSize(width: 500, height: 500),
+          presentStyle: (kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS))
+              ? WebPresentStyle.page 
+              : WebPresentStyle.dialog,
+          size: const CropperSize(width: 520, height: 520),
+          translations: const WebTranslations(
+            title: 'Edit Image',
+            rotateLeftTooltip: 'Rotate Left',
+            rotateRightTooltip: 'Rotate Right',
+            cropButton: 'DONE',
+            cancelButton: 'CANCEL',
+          ),
         ),
       ],
     );
     if (cropped == null) return;
 
-    final bytes = Uint8List.fromList(await cropped.readAsBytes());
+    final bytes = await cropped.readAsBytes();
+    final String webPath = kIsWeb ? "data:image/png;base64,${base64Encode(bytes)}" : cropped.path;
+
     setState(() {
       pickedFiles[index] = FileModel(
         id: model.id,
         name: model.name,
-        path: kIsWeb ? '' : cropped.path,
+        path: webPath,
         file: kIsWeb ? null : File(cropped.path),
         bytes: bytes,
         addedAt: model.addedAt,
@@ -1307,10 +1371,14 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     if (result == null || result.files.isEmpty) return;
 
     for (final f in result.files) {
+      final String webPath = kIsWeb && f.bytes != null 
+          ? "data:image/png;base64,${base64Encode(f.bytes!)}" 
+          : (f.path ?? '');
+          
       final newFile = FileModel(
         id: '${DateTime.now().millisecondsSinceEpoch}${f.name}',
         name: f.name,
-        path: f.path ?? '',
+        path: webPath,
         file: f.path == null ? null : File(f.path!),
         bytes: f.bytes,
         addedAt: DateTime.now(),

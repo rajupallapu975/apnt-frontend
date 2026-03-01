@@ -5,7 +5,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../utils/app_colors.dart';
 import '../widgets/common/primary_button.dart';
-import '../services/local_storage_service.dart';
 import '../services/firestore_service.dart';
 import '../models/print_order_model.dart';
 
@@ -18,6 +17,61 @@ class ProfilePage extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const _OrdersStatsSheet(),
+    );
+  }
+
+  void _showEditPhoneSheet(BuildContext context, AuthViewModel authVM) {
+    final controller = TextEditingController(text: authVM.phoneNumber);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: EdgeInsets.fromLTRB(24, 32, 24, MediaQuery.of(context).viewInsets.bottom + 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'UPDATE MOBILE NUMBER',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: AppColors.textTertiary,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18),
+              decoration: InputDecoration(
+                hintText: 'Enter 10 digit number',
+                prefixIcon: const Icon(Icons.phone_android_rounded, color: AppColors.primaryBlue),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              label: 'SAVE NUMBER',
+              onPressed: () async {
+                if (controller.text.length >= 10) {
+                  await authVM.updatePhoneNumber(controller.text);
+                  if (context.mounted) Navigator.pop(context);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -61,7 +115,7 @@ class ProfilePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border.withOpacity(0.5)),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
@@ -111,7 +165,7 @@ class ProfilePage extends StatelessWidget {
                       Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primaryBlue.withOpacity(0.1), width: 8),
+                          border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.1), width: 8),
                         ),
                         child: CircleAvatar(
                           radius: 60,
@@ -150,12 +204,12 @@ class ProfilePage extends StatelessWidget {
                   ).animate().fadeIn(delay: 400.ms).slideX(begin: 0.1, end: 0),
                   const SizedBox(height: 16),
                   _profileItem(
-                    icon: Icons.security_rounded,
-                    title: 'Privacy & Security',
-                    subtitle: 'Manage your data and account info',
-                    color: AppColors.primaryBlack,
-                    onTap: () {},
-                  ).animate().fadeIn(delay: 500.ms).slideX(begin: 0.1, end: 0),
+                    icon: Icons.phone_android_rounded,
+                    title: 'Mobile Number',
+                    subtitle: authVM.phoneNumber ?? 'Add your mobile number',
+                    color: AppColors.success,
+                    onTap: () => _showEditPhoneSheet(context, authVM),
+                  ).animate().fadeIn(delay: 450.ms).slideX(begin: 0.1, end: 0),
                   const SizedBox(height: 16),
                   _profileItem(
                     icon: Icons.help_outline_rounded,
@@ -220,13 +274,13 @@ class ProfilePage extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.greyLight.withOpacity(0.5)),
+          border: Border.all(color: AppColors.greyLight.withValues(alpha: 0.5)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(width: 16),
@@ -253,7 +307,6 @@ class _OrdersStatsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final LocalStorageService localStorage = LocalStorageService();
     final FirestoreService firestoreService = FirestoreService();
 
     return Container(
@@ -277,32 +330,16 @@ class _OrdersStatsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          FutureBuilder<List<PrintOrderModel>>(
-            future: localStorage.getLocalOrders(),
+          FutureBuilder<Map<String, dynamic>>(
+            future: firestoreService.getUserStatistics(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const SizedBox(height: 100);
-              final allOrders = snapshot.data!;
               
-              // 📊 PERFECT STATS: Only count confirmed past orders (Successfully Printed)
-              // (Or orders that were paid but might have reached end-of-life)
-              final orders = allOrders.where((o) => 
-                o.status == OrderStatus.completed || 
-                (o.status == OrderStatus.expired && o.totalPages > 0)
-              ).toList();
-              
-              int totalPages = 0;
-              double totalAmount = 0;
-              double totalKB = 0;
-              
-              for (var o in orders) {
-                totalPages += o.totalPages;
-                totalAmount += o.totalPrice;
-                totalKB += o.totalSizeKB;
-              }
-
-              String storageStr = totalKB > 1024 
-                  ? '${(totalKB / 1024).toStringAsFixed(1)} MB' 
-                  : '${totalKB.toStringAsFixed(0)} KB';
+              final stats = snapshot.data!;
+              final double totalAmount = (stats['totalAmount'] as num?)?.toDouble() ?? 0.0;
+              final int totalOrders = (stats['totalOrders'] as num?)?.toInt() ?? 0;
+              final int totalPages = (stats['totalPages'] as num?)?.toInt() ?? 0;
+              final int totalFiles = (stats['totalFiles'] as num?)?.toInt() ?? 0;
 
               return Container(
                 width: double.infinity,
@@ -311,7 +348,7 @@ class _OrdersStatsSheet extends StatelessWidget {
                   color: AppColors.primaryBlack,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 30, offset: const Offset(0, 15)),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 30, offset: const Offset(0, 15)),
                   ],
                 ),
                 child: Column(
@@ -320,25 +357,25 @@ class _OrdersStatsSheet extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('PAST PRINTS (LOCAL)', 
-                          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.5), letterSpacing: 1)),
-                        const Icon(Icons.history_toggle_off_rounded, color: Colors.white, size: 20),
+                        Text('ACCOUNT-WIDE STATISTICS', 
+                          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withValues(alpha: 0.5), letterSpacing: 1)),
+                        const Icon(Icons.stars_rounded, color: Colors.white, size: 20),
                       ],
                     ),
                     const SizedBox(height: 20),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('$totalPages', style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white)),
+                        Text('₹${totalAmount.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white)),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4, left: 8),
-                          child: Text('PAGES', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.6))),
+                          child: Text('SPENT', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6))),
                         ),
                         const Spacer(),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                          child: Text(storageStr, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                          child: Text('$totalOrders ORDERS', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
                         ),
                       ],
                     ),
@@ -348,9 +385,9 @@ class _OrdersStatsSheet extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _statMini('TOTAL FARE', '₹${totalAmount.toStringAsFixed(0)}'),
-                        _statMini('ORDERS', '${orders.length}'),
-                        _statMini('FILES', '${orders.fold(0, (sum, o) => sum + (o.printSettings['files'] as List? ?? []).length)}'),
+                        _statMini('TOTAL PAGES', '$totalPages'),
+                        _statMini('TOTAL FILES', '$totalFiles'),
+                        _statMini('ACC LEVEL', totalAmount > 500 ? 'GOLD' : 'SILVER'),
                       ],
                     ),
                   ],
@@ -370,17 +407,11 @@ class _OrdersStatsSheet extends StatelessWidget {
               
               int activePages = 0;
               double activeAmount = 0;
-              double activeKB = 0;
 
               for (var o in orders) {
                 activePages += o.totalPages;
                 activeAmount += o.totalPrice;
-                activeKB += o.totalSizeKB;
               }
-
-              String activeStorageStr = activeKB > 1024 
-                  ? '${(activeKB / 1024).toStringAsFixed(1)} MB' 
-                  : '${activeKB.toStringAsFixed(0)} KB';
 
               return Container(
                 width: double.infinity,
@@ -389,7 +420,7 @@ class _OrdersStatsSheet extends StatelessWidget {
                   color: AppColors.primaryBlue,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
-                    BoxShadow(color: AppColors.primaryBlue.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, 10)),
+                    BoxShadow(color: AppColors.primaryBlue.withValues(alpha: 0.2), blurRadius: 30, offset: const Offset(0, 10)),
                   ],
                 ),
                 child: Column(
@@ -398,9 +429,9 @@ class _OrdersStatsSheet extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('ACTIVE PRINTS (CLOUD)', 
-                          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.7), letterSpacing: 1)),
-                        const Icon(Icons.cloud_sync_rounded, color: Colors.white, size: 20),
+                        Text('ACTIVE PRINTS', 
+                          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white.withValues(alpha: 0.7), letterSpacing: 1)),
+                        const Icon(Icons.print_rounded, color: Colors.white, size: 20),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -410,10 +441,10 @@ class _OrdersStatsSheet extends StatelessWidget {
                         Text('$activeCount', style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white)),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4, left: 8),
-                          child: Text('RUNNING', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.8))),
+                          child: Text('ORDERS', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.8))),
                         ),
                         const Spacer(),
-                        Text(activeStorageStr, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+                        _statMini('ACTIVE PAGES', '$activePages'),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -422,9 +453,9 @@ class _OrdersStatsSheet extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _statMini('EST. FARE', '₹${activeAmount.toStringAsFixed(0)}'),
-                        _statMini('TOTAL PAGES', '$activePages'),
-                        _statMini('ACTIVE FLOW', '100%'),
+                        _statMini('ACTIVE AMOUNT', '₹${activeAmount.toStringAsFixed(0)}'),
+                        _statMini('STATUS', 'PRINTING'),
+                        _statMini('SPEED', '100%'),
                       ],
                     ),
                   ],
@@ -442,7 +473,7 @@ class _OrdersStatsSheet extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white.withOpacity(0.5))),
+        Text(label, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white.withValues(alpha: 0.5))),
         Text(value, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
       ],
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'dart:convert';
 import 'dart:io';
 import '../models/file_model.dart';
 import '../utils/file_validator.dart';
@@ -32,10 +33,14 @@ class UploadViewModel extends ChangeNotifier {
         size = await File(image.path).length();
       }
 
+      final String webPath = kIsWeb && bytes != null 
+          ? "data:image/png;base64,${base64Encode(bytes)}" 
+          : image.path;
+
       final fileModel = FileModel(
         id: DateTime.now().toString(),
         name: image.name,
-        path: image.path,
+        path: webPath,
         file: kIsWeb ? null : File(image.path),
         bytes: bytes,
         addedAt: DateTime.now(),
@@ -63,10 +68,14 @@ class UploadViewModel extends ChangeNotifier {
         size = await File(img.path).length();
       }
       
+      final String webPath = kIsWeb && bytes != null 
+          ? "data:image/png;base64,${base64Encode(bytes)}" 
+          : img.path;
+      
       _addFileIfValid(FileModel(
         id: DateTime.now().toString() + img.name,
         name: img.name,
-        path: img.path,
+        path: webPath,
         file: kIsWeb ? null : File(img.path),
         bytes: bytes,
         addedAt: DateTime.now(),
@@ -86,10 +95,14 @@ class UploadViewModel extends ChangeNotifier {
     if (result == null) return;
 
     for (final f in result.files) {
+      final String webPath = kIsWeb && f.bytes != null 
+          ? "data:image/png;base64,${base64Encode(f.bytes!)}" 
+          : (f.path ?? '');
+
       _addFileIfValid(FileModel(
         id: DateTime.now().toString() + f.name,
         name: f.name,
-        path: f.path ?? '',
+        path: webPath,
         file: f.path == null ? null : File(f.path!),
         bytes: f.bytes,
         addedAt: DateTime.now(),

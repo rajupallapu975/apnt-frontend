@@ -64,13 +64,44 @@ class OrderDetailsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          Text(
-            dateFormat.format(order.createdAt),
-            style: GoogleFonts.manrope(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CREATED ON',
+                    style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.textTertiary, letterSpacing: 0.5),
+                  ),
+                  Text(
+                    dateFormat.format(order.createdAt),
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'EXPIRES ON',
+                    style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.error, letterSpacing: 0.5),
+                  ),
+                  Text(
+                    dateFormat.format(order.expiresAt),
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           const Divider(),
@@ -97,9 +128,9 @@ class OrderDetailsSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withOpacity(0.05),
+              color: AppColors.primaryBlue.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.primaryBlue.withOpacity(0.1)),
+              border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.1)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -156,13 +187,14 @@ class OrderDetailsSheet extends StatelessWidget {
 
           const SizedBox(height: 32),
           
-          // Reprint Button
-          PrimaryButton(
-            label: 'REPRINT THIS ORDER',
-            icon: Icons.replay_rounded,
-            onPressed: () => _handleReprint(context),
-          ),
-          const SizedBox(height: 16),
+          if (order.isActive) ...[
+            PrimaryButton(
+              label: 'REPRINT THIS ORDER',
+              icon: Icons.replay_rounded,
+              onPressed: () => _handleReprint(context),
+            ),
+            const SizedBox(height: 16),
+          ],
         ],
       ),
     );

@@ -31,8 +31,13 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
     final orders = await _localStorage.getLocalOrders();
-    // Show orders that are explicitly completed or cancelled, excluding expired ones
-    _historyOrders = orders.where((o) => (o.status == OrderStatus.completed || o.status == OrderStatus.cancelled) && !o.isExpired).toList();
+    // Show orders that are completed, cancelled, or expired
+    _historyOrders = orders.where((o) => 
+      o.status == OrderStatus.completed || 
+      o.status == OrderStatus.cancelled || 
+      o.status == OrderStatus.expired ||
+      o.isExpired
+    ).toList();
     setState(() => _isLoading = false);
   }
 
@@ -98,7 +103,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isExpired ? AppColors.error.withOpacity(0.1) : AppColors.success.withOpacity(0.1),
+                    color: isExpired ? AppColors.error.withValues(alpha: 0.1) : AppColors.success.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -136,9 +141,20 @@ class _HistoryPageState extends State<HistoryPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _miniInfoRow(Icons.description_outlined, '${order.totalPages} Pages'),
-                Text(
-                  '₹${order.totalPrice.toStringAsFixed(2)}',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.textPrimary),
+                Row(
+                  children: [
+                    Text(
+                      '₹${order.totalPrice.toStringAsFixed(2)}',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
+                      onPressed: () => _confirmDelete(order),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -146,6 +162,30 @@ class _HistoryPageState extends State<HistoryPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(PrintOrderModel order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Delete from History'),
+        content: const Text('Are you sure you want to remove this order from your local history?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _localStorage.deleteOrderLocally(order.orderId);
+      _loadHistory();
+    }
   }
 
   Widget _miniInfoRow(IconData icon, String text) {
@@ -166,7 +206,7 @@ class _HistoryPageState extends State<HistoryPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.history_rounded, size: 64, color: AppColors.textTertiary.withOpacity(0.3)),
+          Icon(Icons.history_rounded, size: 64, color: AppColors.textTertiary.withValues(alpha: 0.3)),
           const SizedBox(height: 24),
           Text(
             'NO PRINT HISTORY',
