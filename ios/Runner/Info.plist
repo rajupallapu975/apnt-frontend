@@ -24,16 +24,56 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- ========== URL Schemes for Google Sign-In ========== -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- REVERSED_CLIENT_ID from GoogleService-Info.plist -->
+				<string>com.googleusercontent.apps.52763236709-cfrgl63tvnublb11r48jnsvhd8c4ghkl</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- ========== Privacy Permission Descriptions ========== -->
+
+	<!-- Camera (image_picker, camera plugin) -->
+	<key>NSCameraUsageDescription</key>
+	<string>ThinkInk needs camera access to capture documents and images for printing.</string>
+
+	<!-- Photo Library Read (image_picker) -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ThinkInk needs access to your photo library to select images and documents for printing.</string>
+
+	<!-- Photo Library Add (image_picker - saving) -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>ThinkInk needs permission to save photos to your library.</string>
+
+	<!-- Microphone (camera plugin may require it) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ThinkInk needs microphone access for video recording features.</string>
+
+	<!-- File access (file_picker) -->
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>ThinkInk needs access to your documents to select files for printing.</string>
+
+	<!-- ========== UI Configuration ========== -->
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
+	<!-- Portrait-only for phone (recommended for print app) -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<!-- Allow all orientations on iPad -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -41,9 +81,19 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<!-- Performance -->
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Background modes for local notifications -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+
 </dict>
 </plist>

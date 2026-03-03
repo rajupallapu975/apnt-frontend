@@ -52,3 +52,10 @@ android/local.properties
 .firebase/
 .vscode/
 android/.kotlin/
+
+# iOS specific
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+# Note: Podfile and Podfile.lock should be committed for reproducible builds
