@@ -4,21 +4,22 @@ import 'package:flutter/foundation.dart';
 /// Automatically selects the correct backend URL based on platform
 class BackendConfig {
   /// Get the base URL for the backend based on the current platform
+  /// Set this to false for Local Development, true for Render (Prod)
+  static const bool isProduction = false; 
+
+  /// Get the base URL for the backend based on current context
   static String get baseUrl {
+    // ⚠️ UPDATE THIS IP to your LAPTOP'S CURRENT IP if testing locally on a real device
+    const String laptopIp = "192.168.10.204";
+    const String localUrl = "http://$laptopIp:5000";
+    const String renderUrl = "https://printer-backend-ch2e.onrender.com";
+
+    if (isProduction) return renderUrl;
+
     if (kIsWeb) {
-      // Web: Use localhost (same machine)
-      return "https://printer-backend-ch2e.onrender.com";
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      // Android: Use Windows PC IP address
-      // Make sure your Android device is on the same WiFi network
-      return "https://printer-backend-ch2e.onrender.com";
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      // iOS: Use Windows PC IP address
-      // Make sure your iOS device is on the same WiFi network
-      return "https://printer-backend-ch2e.onrender.com";
+      return "http://localhost:5000";
     } else {
-      // Fallback for other platforms (Linux, macOS, Windows desktop)
-      return "https://printer-backend-ch2e.onrender.com";
+      return localUrl;
     }
   }
 
@@ -31,9 +32,13 @@ class BackendConfig {
   static String get createRazorpayOrderUrl => "$baseUrl/create-razorpay-order";
   static String get verifyPaymentUrl => "$baseUrl/verify-payment";
   static String get refundPaymentUrl => "$baseUrl/refund-payment";
+  static String get getXeroxShopsUrl => "$baseUrl/get-xerox-shops";
 
   /// Upload Files endpoint
   static String get uploadFilesUrl => "$baseUrl/upload-files";
+
+  /// Complete Order endpoint
+  static String get completeOrderUrl => "$baseUrl/complete-order";
 
   /// Print current configuration (for debugging)
   static void printConfig() {

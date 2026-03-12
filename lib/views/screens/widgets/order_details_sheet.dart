@@ -132,55 +132,123 @@ class OrderDetailsSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.1)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                if (order.isXerox && order.xeroxId != null) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'XEROX SHOP ID',
+                            style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.success, letterSpacing: 1),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            order.xeroxId!,
+                            style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.success, letterSpacing: 6),
+                          ),
+                        ],
+                      ),
+                      if (order.printSettings['shopName'] != null)
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'DESTINATION',
+                                style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.textSecondary),
+                              ),
+                              Text(
+                                order.printSettings['shopName'],
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                textAlign: TextAlign.right,
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Divider(),
+                  ),
+                ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'PICKUP CODE',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primaryBlue,
-                        letterSpacing: 1,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PICKUP CODE',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryBlue,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          order.pickupCode,
+                          style: GoogleFonts.inter(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primaryBlue,
+                            letterSpacing: 4,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      order.pickupCode,
-                      style: GoogleFonts.inter(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.primaryBlue,
-                        letterSpacing: 4,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'TOTAL AMOUNT',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${order.totalPrice.toStringAsFixed(2)}',
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'TOTAL AMOUNT',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textSecondary,
-                      ),
+                if (order.printSettings['watermarking'] == true) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '₹${order.totalPrice.toStringAsFixed(2)}',
-                      style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                      ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.verified_rounded, color: AppColors.success, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'SECURITY WATERMARK VERIFIED: ${order.printSettings['watermarkCode']}',
+                            style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: AppColors.success, letterSpacing: 0.5),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ],
             ),
           ),

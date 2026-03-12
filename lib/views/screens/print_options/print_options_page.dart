@@ -10,12 +10,14 @@ import 'package:file_picker/file_picker.dart';
 
 import '../payment_processing_page.dart';
 import '../widgets/payment_summary_sheet.dart';
+import '../../../models/print_order_model.dart';
 import '../../../models/file_model.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/common/modern_card.dart';
 import 'widgets/print_preview_carousel.dart';
 import '../../../services/backend_service.dart';
 import '../../../services/image_processing_service.dart';
+import '../../../utils/order_utils.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config model
@@ -41,7 +43,17 @@ class PagePrintConfig {
 // ─────────────────────────────────────────────────────────────────────────────
 class PrintOptionsPage extends StatefulWidget {
   final List<FileModel> pickedFiles;
-  const PrintOptionsPage({super.key, required this.pickedFiles});
+  final PrintMode printMode;
+  final String? shopId;
+  final String? shopName;
+  
+  const PrintOptionsPage({
+    super.key, 
+    required this.pickedFiles, 
+    required this.printMode,
+    this.shopId,
+    this.shopName,
+  });
 
   @override
   State<PrintOptionsPage> createState() => _PrintOptionsPageState();
@@ -389,7 +401,37 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               ],
             ),
           ),
-          
+
+          if (widget.printMode == PrintMode.xeroxShop)
+            Column(
+              children: [
+                divider,
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Double sided print',
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
+                          Text('Print on both sides of paper',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                        ],
+                      ),
+                      Switch.adaptive(
+                        value: cfg.isDoubleSided,
+                        activeColor: AppColors.primaryBlue,
+                        onChanged: (v) => setState(() => cfg.isDoubleSided = v),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
           // Proper bottom spacing before the bottom bar
           const SizedBox(height: 120),
         ],
@@ -637,6 +679,63 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 ),
                 const Spacer(),
                 const Icon(Icons.description_outlined, color: AppColors.primaryBlue, size: 32),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Print Mode Display ──
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: widget.printMode == PrintMode.autonomous 
+                  ? AppColors.primaryBlue.withValues(alpha: 0.04)
+                  : AppColors.success.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: (widget.printMode == PrintMode.autonomous 
+                    ? AppColors.primaryBlue 
+                    : AppColors.success).withValues(alpha: 0.1)
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  widget.printMode == PrintMode.autonomous 
+                      ? Icons.smart_toy_rounded 
+                      : Icons.store_rounded,
+                  color: widget.printMode == PrintMode.autonomous 
+                      ? AppColors.primaryBlue 
+                      : AppColors.success,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'PRINT MODE',
+                        style: GoogleFonts.inter(
+                          fontSize: 9, 
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textTertiary, 
+                          letterSpacing: 1.2
+                        ),
+                      ),
+                      Text(
+                        widget.printMode == PrintMode.autonomous ? 'Autonomous' : 'Xerox Shop',
+                        style: GoogleFonts.inter(
+                          fontSize: 14, 
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -1183,7 +1282,16 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         totalPg += pc.pageCount * pc.copies;
       }
 
+      // 🆔 GENERATE 4-DIGIT UNIQUE CODE (ONLY FOR XEROX SHOP)
+      final bool isXerox = widget.printMode == PrintMode.xeroxShop;
+      final String xeroxCode = isXerox ? OrderUtils.generateXeroxCode() : '';
+
       final printSettings = {
+        'printMode': widget.printMode.name,
+        'orderId': isXerox ? 'PRT($xeroxCode)' : '', // This matches PRT(id)
+        'xeroxCode': xeroxCode, // Store for matching unique code
+        'shopId': widget.shopId,
+        'shopName': widget.shopName, // Pass the destination shop name
         'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
         'files': List.generate(pageConfigs.length, (i) {
           final model = pickedFiles[i];
@@ -1221,6 +1329,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               return await ImageProcessingService.processImageToA4(
                 imageBytes: originalBytes,
                 isPortrait: cfg.isPortrait,
+                watermark: isXerox ? 'PRT($xeroxCode)' : null, // 💧 MATCHING WATERMARK ONLY FOR XEROX
               );
             } catch (e) {
               debugPrint("⚠️ Image processing failed: $e");

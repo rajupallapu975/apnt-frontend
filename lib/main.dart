@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/upload_viewmodel.dart';
+import 'xerox_shop/xerox_shop_viewmodel.dart';
 import 'views/screens/login_view.dart';
 import 'views/screens/upload_page.dart';
 import 'utils/app_theme.dart';
@@ -27,6 +28,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => UploadViewModel()),
+        ChangeNotifierProvider(create: (_) => XeroxShopViewModel()),
         ChangeNotifierProvider.value(value: notificationService),
       ],
       child: const MyApp(),

@@ -1,7 +1,9 @@
 class CloudinaryConfig {
-  // Your Cloud Name (from Cloudinary dashboard)
+  // Main Cloudinary
   static const String cloudName = 'dpmpyvmbg';
-
-  // Your unsigned upload preset name
   static const String uploadPreset = 'printer_unsigned';
+
+  // Secondary Cloudinary (Xerox Shop)
+  static const String cloudNameB = 'doymq9qhk';
+  static const String uploadPresetB = 'printer_unsigned'; // Assume same for now or ask
 }

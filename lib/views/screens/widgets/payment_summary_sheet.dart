@@ -30,10 +30,12 @@ class PaymentSummarySheet extends StatefulWidget {
 
 class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
   final TextEditingController _phoneController = TextEditingController();
+
   final bool _isInit = true;
   bool _needsPhone = false;
   bool _isProcessing = false;
-  bool _isWaitingForRequest = true; // 🚀 ANIMATION STARTS IMMEDIATELY
+  bool _isWaitingForRequest = true; 
+
 
   @override
   void initState() {
@@ -71,6 +73,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
   @override
   void dispose() {
     _phoneController.dispose();
+
     super.dispose();
   }
 
@@ -161,6 +164,10 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
             ),
             child: Column(
               children: [
+                if (widget.printSettings['shopName'] != null) ...[
+                  _buildSimpleRow('Destination', widget.printSettings['shopName']),
+                  const SizedBox(height: 12),
+                ],
                 _buildSimpleRow('Base Price', '₹3/page'),
                 const SizedBox(height: 12),
                 _buildSimpleRow('Subtotal', '₹${widget.totalPrice.toStringAsFixed(0)}'),
@@ -227,6 +234,18 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
             ).animate().fadeIn().slideY(begin: 0.1, end: 0),
           ],
 
+
+          
+          // Center(
+          //   child: TextButton(
+          //     onPressed: () => setState(() => _showPasscodeField = !_showPasscodeField),
+          //     child: Text(
+          //       _showPasscodeField ? 'Use Standard Payment' : 'Use Passcode (Debug)',
+          //       style: GoogleFonts.inter(fontSize: 12, color: AppColors.textTertiary, decoration: TextDecoration.underline),
+          //     ),
+          //   ),
+          // ),
+
           const SizedBox(height: 32),
 
           // 🚀 Action Button (Pay ₹X)
@@ -264,19 +283,22 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                 shadowColor: AppColors.primaryBlack.withValues(alpha: 0.3),
               ),
               child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.print_rounded, size: 22),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Proceed to Pay ₹${widget.totalPrice.toStringAsFixed(0)}',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.print_rounded, size: 22),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      'Confirm Order',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
                       ),
-                    ],
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
+                ],
+              ),
             ),
           ).animate().fadeIn(delay: 400.ms).scale(begin: const Offset(0.95, 0.95)),
           

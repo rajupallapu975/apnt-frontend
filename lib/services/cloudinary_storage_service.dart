@@ -38,7 +38,12 @@ class CloudinaryStorageService {
     required List<File?> files,
     required List<Uint8List?> bytes,
     List<String?>? filenames,
+    String printMode = 'autonomous', // Determine which account to use
   }) async {
+    final isXerox = printMode == 'xeroxShop';
+    final currentCloudName = isXerox ? CloudinaryConfig.cloudNameB : CloudinaryConfig.cloudName;
+    final currentUploadPreset = isXerox ? CloudinaryConfig.uploadPresetB : CloudinaryConfig.uploadPreset;
+
     // ⚔️ EXPERT FIX: CLONE EVERYTHING IMMEDIATELY
     // We must copy every single file into standard memory BEFORE the first 'await'.
     // If we wait (sequential upload), Chrome will detach the later files in the list.
@@ -91,12 +96,12 @@ class CloudinaryStorageService {
         final bool isPdf = extension == '.pdf';
         final bool isDoc = extension == '.doc' || extension == '.docx';
         final String resourceType = isPdf ? 'image' : (isDoc ? 'raw' : 'auto');
-        final String uploadUrl = 'https://api.cloudinary.com/v1_1/${CloudinaryConfig.cloudName}/$resourceType/upload';
+        final String uploadUrl = 'https://api.cloudinary.com/v1_1/$currentCloudName/$resourceType/upload';
 
-        debugPrint('📤 Uploading $originalName as $resourceType to $fullPublicId...');
+        debugPrint('📤 Uploading $originalName as $resourceType to $fullPublicId (account: $currentCloudName)...');
         
         final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
-        request.fields['upload_preset'] = CloudinaryConfig.uploadPreset;
+        request.fields['upload_preset'] = currentUploadPreset;
         request.fields['public_id'] = fullPublicId;
 
         request.files.add(

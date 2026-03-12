@@ -1,3 +1,5 @@
+import 'package:apnt/xerox_shop/xerox_shop_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,7 +19,8 @@ import 'notifications_page.dart';
 import '../../services/notification_service.dart';
 import '../../services/pwa_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart';
+import 'widgets/print_mode_selection_sheet.dart';
+import 'widgets/upload_source_sheet.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -95,43 +98,89 @@ class _UploadPageState extends State<UploadPage> {
   }
 
 
-  void _showUploadSheet(UploadViewModel uploadVM) {
+  void _showModeSheet({List<FileModel>? existingFiles}) {
+    final uploadVM = context.read<UploadViewModel>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PrintModeSelectionSheet(
+        onSelected: (mode) {
+          if (mode == PrintMode.xeroxShop) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => XeroxShopPage(files: existingFiles ?? []),
+              ),
+            );
+            return;
+          }
+
+          if (existingFiles != null && existingFiles.isNotEmpty) {
+             _handleSelectedFiles(mode, existingFiles);
+          } else {
+             _showSourceSheet(mode, uploadVM);
+          }
+        },
+      ),
+    );
+  }
+
+  void _showSourceSheet(PrintMode mode, UploadViewModel uploadVM) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _UploadSourceSheet(
+      builder: (_) => UploadSourceSheet(
         onCamera: () async {
           Navigator.pop(context);
           await uploadVM.pickFromCamera();
           if (!context.mounted) return;
           if (uploadVM.files.isEmpty) return;
-          final files = List<FileModel>.from(uploadVM.files);
-          uploadVM.clearPickedFiles();
-          if (!mounted) return;
-          Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
+          _handleUploadedFiles(mode, uploadVM);
         },
         onGallery: () async {
           Navigator.pop(context);
           await uploadVM.pickFromGallery();
           if (!context.mounted) return;
           if (uploadVM.files.isEmpty) return;
-          final files = List<FileModel>.from(uploadVM.files);
-          uploadVM.clearPickedFiles();
-          if (!context.mounted) return;
-          Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
+          _handleUploadedFiles(mode, uploadVM);
         },
         onFiles: () async {
           Navigator.pop(context);
           await uploadVM.pickFromFiles();
           if (!context.mounted) return;
           if (uploadVM.files.isEmpty) return;
-          final files = List<FileModel>.from(uploadVM.files);
-          uploadVM.clearPickedFiles();
-          if (!context.mounted) return;
-          Navigator.push(context, MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)));
+          _handleUploadedFiles(mode, uploadVM);
         },
       ),
     );
+  }
+
+  void _handleUploadedFiles(PrintMode mode, UploadViewModel uploadVM) {
+    final files = List<FileModel>.from(uploadVM.files);
+    uploadVM.clearPickedFiles();
+    _handleSelectedFiles(mode, files);
+  }
+
+  void _handleSelectedFiles(PrintMode mode, List<FileModel> files) {
+    if (mode == PrintMode.autonomous) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PrintOptionsPage(
+            pickedFiles: files,
+            printMode: mode,
+          ),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => XeroxShopPage(files: files),
+        ),
+      );
+    }
   }
 
   @override
@@ -231,7 +280,7 @@ class _UploadPageState extends State<UploadPage> {
                 SizedBox(
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: () => _showUploadSheet(uploadVM),
+                    onPressed: _showModeSheet,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2E7D32),
                       foregroundColor: Colors.white,
@@ -446,80 +495,99 @@ class _UploadPageState extends State<UploadPage> {
 
   // ─── Order Card (Unique Code + Name only) ────────────────────────────────────
   Widget _buildOrderCard(PrintOrderModel order) {
-    final shortName = 'Order #${order.orderId.substring(0, 6).toUpperCase()}';
+    // 🆔 Use the custom Order ID (PRT(xxxx)) for Xerox, otherwise short Firestore ID
+    final String? customId = order.printSettings['orderId'];
+    final String displayId = (customId != null && customId.isNotEmpty) 
+        ? customId.toUpperCase() 
+        : 'JOB #${order.orderId.substring(0, 6).toUpperCase()}';
 
-    return InkWell(
-      onTap: () => _showOrderDetails(order),
-      borderRadius: BorderRadius.circular(16),
-      child: ModernCard(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        margin: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            // ── Code accent bar ──
-            Container(
-              width: 4,
-              height: 52,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // ── Name column ──
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'NAME',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textTertiary,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    shortName,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // ── Unique Code column ──
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+    return Stack(
+      children: [
+        InkWell(
+          onTap: () => _showOrderDetails(order),
+          borderRadius: BorderRadius.circular(16),
+          child: ModernCard(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Row(
               children: [
-                Text(
-                  'UNIQUE CODE',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textTertiary,
-                    letterSpacing: 1.2,
+                // ── Code accent bar ──
+                Container(
+                  width: 4,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: order.isXerox ? AppColors.success : AppColors.primaryBlue,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  order.pickupCode,
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.primaryBlue,
-                    letterSpacing: 3,
+                const SizedBox(width: 16),
+                // ── Name column ──
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayId,
+                        style: GoogleFonts.inter(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textPrimary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                // ── Unique Code column ──
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      order.isXerox ? 'STATUS' : 'UNIQUE CODE',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textTertiary,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      order.isXerox ? 'READY' : order.pickupCode,
+                      style: GoogleFonts.inter(
+                        fontSize: order.isXerox ? 18 : 22,
+                        fontWeight: FontWeight.w900,
+                        color: order.isXerox ? AppColors.success : AppColors.primaryBlue,
+                        letterSpacing: order.isXerox ? 0 : 3,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
-      ),
+        Positioned(
+          top: 4,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: (order.isXerox ? AppColors.success : AppColors.primaryBlue).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              order.isXerox ? 'XEROX SHOP' : 'KIOSK PRINT',
+              style: GoogleFonts.inter(
+                fontSize: 7,
+                fontWeight: FontWeight.w900,
+                color: order.isXerox ? AppColors.success : AppColors.primaryBlue,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -566,13 +634,9 @@ class _UploadPageState extends State<UploadPage> {
                 file: file,
                 onRemove: () => uploadVM.removeFile(file.id),
                 onTap: () {
-                  // Re-open just this file in PrintOptionsPage
                   final files = List<FileModel>.from(uploadVM.pendingFiles);
                   uploadVM.clearPickedFiles();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => PrintOptionsPage(pickedFiles: files)),
-                  );
+                  _showModeSheet(existingFiles: files);
                 },
               ).animate().fadeIn(delay: (i * 60).ms).scale(begin: const Offset(0.9, 0.9));
             },
@@ -649,79 +713,3 @@ class _PendingFileChip extends StatelessWidget {
   }
 }
 
-// ─── Upload Source Bottom Sheet ──────────────────────────────────────────────
-class _UploadSourceSheet extends StatelessWidget {
-  final VoidCallback onCamera;
-  final VoidCallback onGallery;
-  final VoidCallback onFiles;
-
-  const _UploadSourceSheet({
-    required this.onCamera,
-    required this.onGallery,
-    required this.onFiles,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: AppColors.mediumShadow,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(10))),
-            const SizedBox(height: 28),
-            Text(
-              'SELECT SOURCE',
-              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 28),
-            Row(
-              children: [
-                _sourceOption(context, icon: Icons.camera_alt_rounded, label: 'Camera', onTap: onCamera),
-                const SizedBox(width: 14),
-                _sourceOption(context, icon: Icons.photo_library_rounded, label: 'Gallery', onTap: onGallery),
-                const SizedBox(width: 14),
-                _sourceOption(context, icon: Icons.folder_rounded, label: 'Files', onTap: onFiles),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sourceOption(BuildContext context, {required IconData icon, required String label, required VoidCallback onTap}) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 22),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: AppColors.primaryBlue, size: 30),
-              const SizedBox(height: 10),
-              Text(
-                label.toUpperCase(),
-                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.textSecondary, letterSpacing: 0.5),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

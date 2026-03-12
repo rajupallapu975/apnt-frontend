@@ -91,6 +91,7 @@ class BackendService {
     required Map<String, dynamic> printSettings,
     required double amount,
     required int totalPages,
+    String printMode = 'autonomous', // New: added printMode
   }) async {
     final user = _auth.currentUser;
     final String uid = user?.uid ?? "guest_user";
@@ -107,6 +108,7 @@ class BackendService {
           "userId": uid,
           "amount": amount,
           "totalPages": totalPages,
+          "printMode": printMode, // Pass mode to backend
         }),
       ).timeout(const Duration(seconds: 30));
 
@@ -121,6 +123,37 @@ class BackendService {
       throw Exception("Verification Timed Out: The server took too long. Check if Render is active.");
     } catch (e) {
       throw Exception("Verification Logic Error: $e");
+    }
+  }
+
+  /* =================================================
+     XEROX SHOPS: FETCH LIVE DATA 
+  ================================================= */
+  Future<List<Map<String, dynamic>>> getXeroxShops() async {
+    try {
+      final url = BackendConfig.getXeroxShopsUrl;
+      debugPrint("📡 Fetching shops from: $url");
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+      ).timeout(const Duration(seconds: 30));
+
+      debugPrint("📡 Backend Response: ${response.statusCode}");
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['shops'] != null) {
+          return List<Map<String, dynamic>>.from(data['shops']);
+        }
+        return [];
+      } else {
+        debugPrint("❌ Backend HTTP Error: ${response.statusCode}");
+        return [];
+      }
+    } catch (e) {
+      debugPrint("❌ BackendService: getXeroxShops Error: $e");
+      return [];
     }
   }
 
@@ -149,6 +182,41 @@ class BackendService {
       }
     } catch (e) {
       debugPrint("❌ Refund Error: $e");
+    }
+  }
+
+  /* =================================================
+     ATTACH FILES TO ORDER (Backend-side to bypass Firestore rules)
+  ================================================= */
+  Future<void> completeOrder({
+    required String orderId,
+    required List<String> fileUrls,
+    required List<String> publicIds,
+    required List<String> localFilePaths,
+    String printMode = 'autonomous',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(BackendConfig.completeOrderUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "orderId": orderId,
+          "fileUrls": fileUrls,
+          "publicIds": publicIds,
+          "localFilePaths": localFilePaths,
+          "printMode": printMode,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode != 200) {
+        throw Exception("Server failed to attach files (${response.statusCode}): ${response.body}");
+      }
+    } on SocketException {
+      throw Exception("Complete Order Network Error: Check your connection.");
+    } on TimeoutException {
+      throw Exception("Complete Order Timed Out: The server is not responding.");
+    } catch (e) {
+      throw Exception("Complete Order Logic Error: $e");
     }
   }
 }

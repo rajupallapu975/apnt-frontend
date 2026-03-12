@@ -89,9 +89,13 @@ class FirestoreService {
     required List<String> fileUrls,
     required List<String> publicIds,
     required List<String> localFilePaths,
+    String printMode = 'autonomous', // Distinguish collection
   }) async {
     try {
-      await _ordersCollection.doc(orderId).update({
+      final isXerox = printMode == 'xeroxShop';
+      final collection = isXerox ? 'xerox_orders' : 'orders';
+      
+      await _firestore.collection(collection).doc(orderId).update({
         'fileUrls': fileUrls,
         'publicIds': publicIds,
         'localFilePaths': localFilePaths,
@@ -156,6 +160,19 @@ class FirestoreService {
       // Only return orders that are actually still active (not expired)
       return orders.where((o) => o.expiresAt.isAfter(now)).toList();
     });
+  }
+
+  /* =================================================
+     GET ACTIVE XEROX ORDERS
+  ================================================= */
+  Stream<List<PrintOrderModel>> getActiveXeroxOrders() {
+    if (_currentUserId == null) return Stream.value([]);
+    return _firestore.collection('xerox_orders')
+        .where('userId', isEqualTo: _currentUserId)
+        .where('status', isEqualTo: 'ACTIVE')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList());
   }
 
   /* =================================================
@@ -233,9 +250,11 @@ class FirestoreService {
   Future<void> updateOrderStatus({
     required String orderId,
     required String status,
+    String printMode = 'autonomous',
   }) async {
     try {
-      await _ordersCollection.doc(orderId).update({
+      final collection = printMode == 'xeroxShop' ? 'xerox_orders' : 'orders';
+      await _firestore.collection(collection).doc(orderId).update({
         'status': status,
       });
     } on FirebaseException catch (e) {
@@ -251,10 +270,11 @@ class FirestoreService {
   ================================================= */
 
   Future<PrintOrderModel?> getOrder(
-      String orderId) async {
+      String orderId, {String printMode = 'autonomous'}) async {
     try {
+      final collection = printMode == 'xeroxShop' ? 'xerox_orders' : 'orders';
       final doc =
-          await _ordersCollection.doc(orderId).get();
+          await _firestore.collection(collection).doc(orderId).get();
 
       if (!doc.exists) return null;
 

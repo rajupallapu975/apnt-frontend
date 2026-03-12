@@ -7,6 +7,11 @@ enum OrderStatus {
   cancelled,
 }
 
+enum PrintMode {
+  autonomous,
+  xeroxShop,
+}
+
 class PrintOrderModel {
   final String orderId;
   final String pickupCode;
@@ -22,6 +27,10 @@ class PrintOrderModel {
   final List<String> localFilePaths; // Local paths for reprinting
 
   final String? reason;
+  final String? xeroxId;
+
+  bool get isXerox => printSettings['printMode'] == 'xeroxShop';
+  PrintMode get printMode => isXerox ? PrintMode.xeroxShop : PrintMode.autonomous;
 
   PrintOrderModel({
     required this.orderId,
@@ -37,6 +46,7 @@ class PrintOrderModel {
     this.publicIds = const [],
     this.localFilePaths = const [],
     this.reason,
+    this.xeroxId,
   });
 
   // Check if order is expired
@@ -68,6 +78,7 @@ class PrintOrderModel {
       publicIds: List<String>.from(data['publicIds'] ?? []),
       localFilePaths: List<String>.from(data['localFilePaths'] ?? []),
       reason: data['reason'],
+      xeroxId: data['xeroxId']?.toString(),
     );
   }
 
@@ -89,6 +100,7 @@ class PrintOrderModel {
       publicIds: List<String>.from(data['publicIds'] ?? []),
       localFilePaths: List<String>.from(data['localFilePaths'] ?? []),
       reason: data['reason'],
+      xeroxId: data['xeroxId']?.toString(),
     );
   }
 
@@ -133,6 +145,7 @@ class PrintOrderModel {
       'publicIds': publicIds,
       'localFilePaths': localFilePaths,
       'reason': reason,
+      'xeroxId': xeroxId,
     };
   }
 
@@ -165,6 +178,7 @@ class PrintOrderModel {
       publicIds: publicIds,
       localFilePaths: localFilePaths ?? this.localFilePaths,
       reason: reason ?? this.reason,
+      xeroxId: xeroxId ?? this.xeroxId,
     );
   }
 }

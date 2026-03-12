@@ -10,11 +10,15 @@ import '../../widgets/common/modern_card.dart';
 class PaymentSuccessPage extends StatelessWidget {
   final String orderId;
   final String pickupCode;
+  final String? xeroxId;
+  final bool isXerox;
 
   const PaymentSuccessPage({
     super.key,
     required this.orderId,
     required this.pickupCode,
+    this.xeroxId,
+    this.isXerox = false,
   });
 
   @override
@@ -43,14 +47,16 @@ class PaymentSuccessPage extends StatelessWidget {
                 const SizedBox(height: 40),
 
                 Text(
-                  'ORDER CONFIRMED',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(letterSpacing: -1),
+                  isXerox ? 'FILES SENT TO SHOP' : 'ORDER CONFIRMED',
+                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(letterSpacing: -1, color: isXerox ? AppColors.success : AppColors.primaryBlack),
                 ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
 
                 const SizedBox(height: 12),
 
                 Text(
-                  'Your documents are ready for printing. Use the code below at any Think Ink kiosk.',
+                  isXerox 
+                    ? 'Your documents have been successfully sent to the Xerox Shop. Please visit the counter to collect them.'
+                    : 'Your documents are ready for printing. Use the code below at any Think Ink kiosk.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
@@ -60,12 +66,12 @@ class PaymentSuccessPage extends StatelessWidget {
                 // 🔑 Pickup Code Card
                 ModernCard(
                   padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-                  color: AppColors.primaryBlue,
+                  color: isXerox ? AppColors.success : AppColors.primaryBlue,
                   boxShadow: AppColors.mediumShadow,
                   child: Column(
                     children: [
                       Text(
-                        'PICKUP CODE',
+                        isXerox ? 'IDENTIFIER' : 'PICKUP CODE',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
@@ -77,10 +83,10 @@ class PaymentSuccessPage extends StatelessWidget {
                       Text(
                         pickupCode.toUpperCase(),
                         style: GoogleFonts.inter(
-                          fontSize: 48,
+                          fontSize: isXerox ? 32 : 48,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
-                          letterSpacing: 8,
+                          letterSpacing: isXerox ? 2 : 8,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -111,34 +117,70 @@ class PaymentSuccessPage extends StatelessWidget {
                   ),
                 ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutBack),
 
+                if (xeroxId != null && !isXerox) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.1)),
+                    ),
+                    child: Column(
+                      children: [
+                         Text(
+                          'XEROX SHOP ID',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.success,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                         Text(
+                          xeroxId!,
+                          style: GoogleFonts.inter(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.success,
+                            letterSpacing: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),
+                ],
+
                 const SizedBox(height: 32),
 
                 // ⌨️ Keypad Instructions
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.1)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.keyboard_alt_outlined, color: AppColors.primaryBlue, size: 24),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          'Enter this code on the Think Ink kiosk keypad to start printing.',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                            height: 1.4,
+                if (!isXerox)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.1)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.keyboard_alt_outlined, color: AppColors.primaryBlue, size: 24),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            'Enter this code on the Think Ink kiosk keypad to start printing.',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                              height: 1.4,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ).animate().fadeIn(delay: 800.ms).slideY(begin: 0.2, end: 0),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 800.ms).slideY(begin: 0.2, end: 0),
 
                 const Spacer(flex: 2),
 

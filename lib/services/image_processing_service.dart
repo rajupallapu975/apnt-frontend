@@ -8,22 +8,25 @@ class ImageProcessingService {
   static const int a4Height = 3508;
 
   /// Process an image to fit into an A4 sheet (Portrait or Landscape)
-  /// without cropping, adding white margins if necessary.
+  /// without cropping, adding white margins if necessary, and adding a watermark.
   static Future<Uint8List> processImageToA4({
     required Uint8List imageBytes,
     required bool isPortrait,
+    String? watermark,
     int quality = 90,
   }) async {
     return await compute(_processImage, {
       'bytes': imageBytes,
       'isPortrait': isPortrait,
+      'watermark': watermark,
       'quality': quality,
     });
   }
-
+  
   static Uint8List _processImage(Map<String, dynamic> params) {
     final Uint8List bytes = params['bytes'];
     final bool isPortrait = params['isPortrait'];
+    final String? watermark = params['watermark'];
     final int quality = params['quality'];
 
     final img.Image? original = img.decodeImage(bytes);
@@ -62,6 +65,19 @@ class ImageProcessingService {
       dstX: xOffset,
       dstY: yOffset,
     );
+
+    // ─── ADD WATERMARK ───
+    if (watermark != null && watermark.isNotEmpty) {
+      // Small light gray font/text at bottom-right
+      img.drawString(
+        canvas,
+        watermark,
+        font: img.arial48, // Bigger font
+        x: targetWidth - 480, // Positioned further left to accommodate larger text
+        y: targetHeight - 120, // Positioned higher up
+        color: img.ColorRgb8(180, 180, 180), // Light gray
+      );
+    }
 
     return Uint8List.fromList(img.encodeJpg(canvas, quality: quality));
   }
