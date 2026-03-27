@@ -10,7 +10,7 @@ class BackendConfig {
   /// Get the base URL for the backend based on current context
   static String get baseUrl {
     // ⚠️ UPDATE THIS IP to your LAPTOP'S CURRENT IP if testing locally on a real device
-    const String laptopIp = "192.168.10.204";
+    const String laptopIp = "10.0.53.78";
     const String localUrl = "http://$laptopIp:5000";
     const String renderUrl = "https://printer-backend-ch2e.onrender.com";
 
@@ -18,7 +18,7 @@ class BackendConfig {
 
     if (kIsWeb) {
       return "http://localhost:5000";
-    } else {
+    } else {  
       return localUrl;
     }
   }
@@ -40,11 +40,14 @@ class BackendConfig {
   /// Complete Order endpoint
   static String get completeOrderUrl => "$baseUrl/complete-order";
 
+  /// Delete Order Files endpoint (Cloudinary)
+  static String get deleteOrderFilesUrl => "$baseUrl/delete-order-files";
+
   /// Print current configuration (for debugging)
   static void printConfig() {
-    print('🔧 Backend Configuration:');
-    print('   Platform: ${defaultTargetPlatform.name}');
-    print('   Is Web: $kIsWeb');
-    print('   Base URL: $baseUrl');
+    debugPrint('🔧 Backend Configuration:');
+    debugPrint('   Platform: ${defaultTargetPlatform.name}');
+    debugPrint('   Is Web: $kIsWeb');
+    debugPrint('   Base URL: $baseUrl');
   }
 }

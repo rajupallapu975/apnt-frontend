@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:pdfx/pdfx.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -17,7 +18,9 @@ import '../../../widgets/common/modern_card.dart';
 import 'widgets/print_preview_carousel.dart';
 import '../../../services/backend_service.dart';
 import '../../../services/image_processing_service.dart';
+import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import '../../../utils/order_utils.dart';
+import '../../../services/firestore_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config model
@@ -46,6 +49,7 @@ class PrintOptionsPage extends StatefulWidget {
   final PrintMode printMode;
   final String? shopId;
   final String? shopName;
+  final String? shopPhone;
   
   const PrintOptionsPage({
     super.key, 
@@ -53,6 +57,7 @@ class PrintOptionsPage extends StatefulWidget {
     required this.printMode,
     this.shopId,
     this.shopName,
+    this.shopPhone,
   });
 
   @override
@@ -65,6 +70,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
   late List<FileModel> pickedFiles;
   late List<PagePrintConfig> pageConfigs;
+  late List<Uint8List?> _thumbnails;
   bool _isLoading = false;
 
   PagePrintConfig get _current => pageConfigs[_currentPageIndex];
@@ -90,16 +96,19 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   void initState() {
     super.initState();
     pickedFiles = List.from(widget.pickedFiles);
+    _thumbnails = List.generate(pickedFiles.length, (i) => pickedFiles[i].bytes);
     pageConfigs = List.generate(pickedFiles.length, (i) {
-      final cfg = PagePrintConfig(pageCount: 1);
-      if (pickedFiles[i].name.toLowerCase().endsWith('.pdf')) {
-        _loadPdfPageCount(i, pickedFiles[i]);
+      final model = pickedFiles[i];
+      final cfg = PagePrintConfig(pageCount: model.pageCount ?? 1);
+      final fileName = model.name.toLowerCase();
+      if (fileName.endsWith('.pdf') && model.pageCount == null) {
+        _loadPdfMetadata(i, model);
       }
       return cfg;
     });
   }
 
-  Future<void> _loadPdfPageCount(int index, FileModel model) async {
+  Future<void> _loadPdfMetadata(int index, FileModel model) async {
     try {
       Uint8List? data = model.bytes;
       if (data == null && !kIsWeb && model.file != null) {
@@ -108,11 +117,29 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       if (data != null) {
         final doc = await PdfDocument.openData(Uint8List.fromList(data));
         final count = doc.pagesCount;
-        doc.close();
-        if (mounted) setState(() => pageConfigs[index].pageCount = count);
+        
+        // 🖼️ RENDER FIRST PAGE FOR PREVIEW
+        final page = await doc.getPage(1);
+        final pageImage = await page.render(
+          width: page.width * 1.5,
+          height: page.height * 1.5,
+          format: PdfPageImageFormat.jpeg,
+          quality: 70,
+        );
+        await page.close();
+        await doc.close();
+
+        if (mounted) {
+          setState(() {
+            pageConfigs[index].pageCount = count;
+            if (pageImage != null) {
+              _thumbnails[index] = pageImage.bytes;
+            }
+          });
+        }
       }
     } catch (e) {
-      debugPrint('PDF load error: $e');
+      debugPrint('PDF metadata/preview load error: $e');
     }
   }
 
@@ -402,7 +429,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             ),
           ),
 
-          if (widget.printMode == PrintMode.xeroxShop)
+          if (cfg.pageCount >= 2)
             Column(
               children: [
                 divider,
@@ -423,7 +450,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                       ),
                       Switch.adaptive(
                         value: cfg.isDoubleSided,
-                        activeColor: AppColors.primaryBlue,
+                        activeTrackColor: AppColors.primaryBlue.withValues(alpha: 0.5),
+                        activeThumbColor: AppColors.primaryBlue,
                         onChanged: (v) => setState(() => cfg.isDoubleSided = v),
                       ),
                     ],
@@ -545,11 +573,11 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               controller: _pageController,
               fileNames: pickedFiles.map((e) => e.name).toList(),
               files: pickedFiles.map((e) => e.file).toList(),
-              bytes: pickedFiles.map((e) => e.bytes).toList(),
+              bytes: _thumbnails,
               isPortraitList: pageConfigs.map((e) => e.isPortrait).toList(),
               isColorList: pageConfigs.map((e) => e.isColor).toList(),
               onPageChanged: (i) => setState(() => _currentPageIndex = i),
-              onEdit: _editImage,
+              onEdit: _handleEditOrOpen,
               onRemove: _removeFile,
             ),
           ),
@@ -621,6 +649,30 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               _webTile('Landscape', null, !cfg.isPortrait, () => setState(() => cfg.isPortrait = false)),
             ],
           ),
+
+          if (cfg.pageCount >= 2) ...[
+            const SizedBox(height: 24),
+            const Divider(color: AppColors.border),
+            const SizedBox(height: 24),
+            _webSettingLabel('Double Sided'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Print on both sides of paper',
+                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                ),
+                Switch.adaptive(
+                  value: cfg.isDoubleSided,
+                  activeTrackColor: AppColors.primaryBlue.withValues(alpha: 0.5),
+                  activeThumbColor: AppColors.primaryBlue,
+                  onChanged: (v) => setState(() => cfg.isDoubleSided = v),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     ).animate().fadeIn(delay: 150.ms, duration: 300.ms);
@@ -906,7 +958,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
-            color: selected ? selColor.withOpacity(0.06) : Colors.white,
+            color: selected ? selColor.withValues(alpha: 0.06) : Colors.white,
             border: Border.all(
               color: selected ? selColor : AppColors.border,
               width: selected ? 2 : 1,
@@ -1013,7 +1065,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primaryBlue.withOpacity(0.05) : Colors.white,
+            color: selected ? AppColors.primaryBlue.withValues(alpha: 0.05) : Colors.white,
             border: Border.all(
               color: selected ? AppColors.primaryBlue : AppColors.border,
               width: selected ? 1.5 : 1,
@@ -1063,7 +1115,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
           decoration: BoxDecoration(
-            color: selected ? selColor.withOpacity(0.06) : Colors.white,
+            color: selected ? selColor.withValues(alpha: 0.06) : Colors.white,
             border: Border.all(
               color: selected ? selColor : AppColors.border,
               width: selected ? 2 : 1,
@@ -1277,6 +1329,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   // ── Logic ──────────────────────────────────────────────────────────────────
   Future<void> _handlePayment() async {
     try {
+      setState(() => _isLoading = true);
       int totalPg = 0;
       for (var pc in pageConfigs) {
         totalPg += pc.pageCount * pc.copies;
@@ -1285,13 +1338,22 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       // 🆔 GENERATE 4-DIGIT UNIQUE CODE (ONLY FOR XEROX SHOP)
       final bool isXerox = widget.printMode == PrintMode.xeroxShop;
       final String xeroxCode = isXerox ? OrderUtils.generateXeroxCode() : '';
+      
+      // Get the sequential index (1, 2, 3...) separately for Kiosk and Xerox
+      final int nextIdx = await FirestoreService().getNextOrderIndex(isXerox);
+      final String sequentialId = 'order_$nextIdx';
+      
+      // Use a secure unique ID for the order itself so it doesn't leak the pickup code in URLs
+      final String secureOrderId = isXerox ? 'ORDER_${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}' : '';
 
       final printSettings = {
         'printMode': widget.printMode.name,
-        'orderId': isXerox ? 'PRT($xeroxCode)' : '', // This matches PRT(id)
-        'xeroxCode': xeroxCode, // Store for matching unique code
+        'orderId': isXerox ? secureOrderId : '', 
+        'customId': sequentialId, // Store the sequential 'order_N' ID
+        'xeroxCode': xeroxCode, // This is the actual pickup code
         'shopId': widget.shopId,
         'shopName': widget.shopName, // Pass the destination shop name
+        'shopPhone': widget.shopPhone, // Track shop contact
         'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
         'files': List.generate(pageConfigs.length, (i) {
           final model = pickedFiles[i];
@@ -1303,11 +1365,13 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             'orientation': cfg.isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
             'copies': cfg.copies,
             'doubleSided': cfg.isDoubleSided,
+            'paperSize': 'A4',
             'fileSizeKB': (model.size / 1024).toStringAsFixed(1),
             'url': '', 
             'publicId': '',
           };
         }),
+        'paperSize': 'A4',
       };
 
       final razorpayFuture = BackendService().createRazorpayOrder(_totalPrice.toDouble());
@@ -1329,7 +1393,6 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               return await ImageProcessingService.processImageToA4(
                 imageBytes: originalBytes,
                 isPortrait: cfg.isPortrait,
-                watermark: isXerox ? 'PRT($xeroxCode)' : null, // 💧 MATCHING WATERMARK ONLY FOR XEROX
               );
             } catch (e) {
               debugPrint("⚠️ Image processing failed: $e");
@@ -1341,13 +1404,14 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       );
 
       if (!mounted) return;
+      setState(() => _isLoading = false);
 
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (context) => PaymentSummarySheet(
-          totalPages: totalPg,
+          totalPages: _totalPages,
           totalPrice: _totalPrice.toDouble(),
           printSettings: printSettings,
           razorpayFuture: razorpayFuture,
@@ -1359,8 +1423,10 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               final finalizedBytes = await processingFuture;
 
               if (!mounted) return;
+              if (!context.mounted) return;
               Navigator.pop(context); // Close sheet
               
+              if (!context.mounted) return;
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -1392,6 +1458,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     setState(() {
       pickedFiles.removeAt(index);
       pageConfigs.removeAt(index);
+      _thumbnails.removeAt(index);
       if (pageConfigs.isEmpty) {
         Navigator.pop(context);
       } else if (_currentPageIndex >= pageConfigs.length) {
@@ -1400,9 +1467,44 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     });
   }
 
-  Future<void> _editImage(int index) async {
+  Future<void> _handleEditOrOpen(int index) async {
     final model = pickedFiles[index];
-    if (model.name.toLowerCase().endsWith('.pdf')) return;
+    final isImage = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff'].any((ext) => model.name.toLowerCase().endsWith(ext));
+    
+    if (!isImage) {
+      // 📂 OPEN DOCUMENT FLOW
+      if (kIsWeb) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Document preview is only available in the mobile app.')));
+        return;
+      }
+      
+      try {
+        if (model.file != null) {
+          if (!kIsWeb && Platform.isAndroid) {
+            final channel = const MethodChannel('com.example.apnt/file_opener');
+            await channel.invokeMethod('openFile', {
+              'path': model.file!.path,
+              'mimeType': null, // native will detect
+            });
+          } else {
+            final uri = Uri.file(model.file!.path);
+            if (await url_launcher.canLaunchUrl(uri)) {
+              await url_launcher.launchUrl(uri);
+            } else {
+              await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("Error opening file: $e");
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the document.')));
+      }
+      return;
+    }
+    
+    // 🎨 IMAGE EDIT FLOW
     
     // For Web, 'path' is a Data URI from bytes. On Native, it's a file path.
     final String src = kIsWeb ? model.path : (model.file?.path ?? model.path);
@@ -1497,9 +1599,10 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       setState(() {
         pickedFiles.add(newFile);
         pageConfigs.add(cfg);
+        _thumbnails.add(f.bytes);
       });
       if (f.name.toLowerCase().endsWith('.pdf')) {
-        _loadPdfPageCount(pickedFiles.length - 1, newFile);
+        _loadPdfMetadata(pickedFiles.length - 1, newFile);
       }
     }
   }

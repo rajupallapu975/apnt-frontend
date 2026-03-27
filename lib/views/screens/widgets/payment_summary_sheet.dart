@@ -35,6 +35,8 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
   bool _needsPhone = false;
   bool _isProcessing = false;
   bool _isWaitingForRequest = true; 
+  bool _showPasscodeField = false;
+  final TextEditingController _passcodeController = TextEditingController();
 
 
   @override
@@ -73,7 +75,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
   @override
   void dispose() {
     _phoneController.dispose();
-
+    _passcodeController.dispose();
     super.dispose();
   }
 
@@ -234,6 +236,54 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
             ).animate().fadeIn().slideY(begin: 0.1, end: 0),
           ],
 
+          const SizedBox(height: 16),
+          
+          // 🔑 Passcode Field (9750 Bypass)
+          GestureDetector(
+            onTap: () => setState(() => _showPasscodeField = !_showPasscodeField),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.vpn_key_outlined, size: 14, color: AppColors.textTertiary),
+                const SizedBox(width: 8),
+                Text(
+                  _showPasscodeField ? 'Use Gateway Payment' : 'Enter Admin Code',
+                  style: GoogleFonts.inter(
+                    fontSize: 12, 
+                    color: AppColors.textTertiary, 
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (_showPasscodeField) ...[
+            const SizedBox(height: 12),
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+              ),
+              child: TextField(
+                controller: _passcodeController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 8),
+                decoration: InputDecoration(
+                  hintText: '••••',
+                  hintStyle: GoogleFonts.inter(fontSize: 18, color: AppColors.textTertiary, letterSpacing: 4),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ).animate().fadeIn().slideY(begin: 0.1, end: 0),
+          ],
+
 
           
           // Center(
@@ -271,6 +321,21 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                 }
                 
                 // � PROCEED TO PAYMENT
+                
+                // 💳 PROCEED TO PAYMENT
+                final bool isBypass = _showPasscodeField && _passcodeController.text == '9750';
+                if (_showPasscodeField && _passcodeController.text != '9750') {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Invalid Admin Code'))
+                  );
+                  return;
+                }
+
+                if (isBypass) {
+                  widget.printSettings['isBypass'] = true;
+                }
+
                 widget.onProceed?.call(_needsPhone ? _phoneController.text : null);
               },
               style: ElevatedButton.styleFrom(

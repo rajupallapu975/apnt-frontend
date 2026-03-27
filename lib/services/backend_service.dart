@@ -32,7 +32,7 @@ class BackendService {
       Map<String, dynamic> printSettings) async {
 
     final user = _auth.currentUser;
-    final String uid = user?.uid ?? "guest_user";
+    final String userId = user?.email ?? "guest_user";
 
     final response = await http.post(
       Uri.parse(BackendConfig.createOrderUrl),
@@ -41,7 +41,7 @@ class BackendService {
       },
       body: jsonEncode({
         "printSettings": printSettings,
-        "userId": uid,   // ✅ SEND USER ID OR GUEST
+        "userId": userId,   // ✅ SEND EMAIL OR GUEST
       }),
     );
 
@@ -94,7 +94,7 @@ class BackendService {
     String printMode = 'autonomous', // New: added printMode
   }) async {
     final user = _auth.currentUser;
-    final String uid = user?.uid ?? "guest_user";
+    final String userId = user?.email ?? "guest_user";
 
     try {
       final response = await http.post(
@@ -105,7 +105,7 @@ class BackendService {
           "razorpay_payment_id": razorpayPaymentId,
           "razorpay_signature": razorpaySignature,
           "printSettings": printSettings,
-          "userId": uid,
+          "userId": userId,
           "amount": amount,
           "totalPages": totalPages,
           "printMode": printMode, // Pass mode to backend
@@ -137,7 +137,7 @@ class BackendService {
       final response = await http.get(
         Uri.parse(url),
         headers: {"Content-Type": "application/json"},
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 8));
 
       debugPrint("📡 Backend Response: ${response.statusCode}");
 
@@ -217,6 +217,26 @@ class BackendService {
       throw Exception("Complete Order Timed Out: The server is not responding.");
     } catch (e) {
       throw Exception("Complete Order Logic Error: $e");
+    }
+  }
+
+  /// Cloudinary: Delete files for order after pickup
+  Future<void> deleteOrderFiles({
+    required String orderId,
+    required List<dynamic> publicIds,
+  }) async {
+    try {
+      debugPrint("🗑️ Requesting Cloudinary Deletion for Order: $orderId");
+      await http.post(
+        Uri.parse(BackendConfig.deleteOrderFilesUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "orderId": orderId,
+          "publicIds": publicIds,
+        }),
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint("❌ Cloudinary Deletion Status/Error Trace: $e");
     }
   }
 }

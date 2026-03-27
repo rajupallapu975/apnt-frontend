@@ -10,12 +10,15 @@ import '../../models/file_model.dart';
 import '../../models/print_order_model.dart';
 import '../views/screens/print_options/print_options_page.dart';
 import '../services/preferences_service.dart';
+import '../services/firestore_service.dart';
 import '../views/screens/widgets/upload_source_sheet.dart';
 import '../viewmodels/upload_viewmodel.dart';
+import '../views/screens/qr_scanner_page.dart';
 
 class XeroxShopPage extends StatefulWidget {
   final List<FileModel> files;
-  const XeroxShopPage({super.key, required this.files});
+  final String? initiallySelectedShopId;
+  const XeroxShopPage({super.key, required this.files, this.initiallySelectedShopId});
 
   @override
   State<XeroxShopPage> createState() => _XeroxShopPageState();
@@ -25,10 +28,25 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<XeroxShopViewModel>().fetchShops();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<XeroxShopViewModel>().fetchShops();
       _checkDefaultShop();
+      _handleInitialShop();
     });
+  }
+
+  void _handleInitialShop() {
+    if (widget.initiallySelectedShopId != null) {
+      final viewModel = context.read<XeroxShopViewModel>();
+      try {
+        final shop = viewModel.shops.firstWhere(
+          (s) => s.id == widget.initiallySelectedShopId,
+        );
+        _showShopDetails(context, shop);
+      } catch (e) {
+        debugPrint("Initial shop not found: ${widget.initiallySelectedShopId}");
+      }
+    }
   }
 
   Future<void> _checkDefaultShop() async {
@@ -125,6 +143,36 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
     );
   }
 
+  Future<void> _openScanner(XeroxShopViewModel viewModel) async {
+    final String? result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QRScannerPage()),
+    );
+
+    if (result != null && mounted) {
+      // Find the shop by ID or Name
+      try {
+        final shop = viewModel.shops.firstWhere(
+          (s) {
+            final String normalizedResult = result.startsWith('thinkink-shop:') 
+                ? result.replaceFirst('thinkink-shop:', '') 
+                : result;
+            return s.id == normalizedResult || s.name.toLowerCase() == normalizedResult.toLowerCase();
+          },
+          orElse: () => throw Exception('Shop not found'),
+        );
+        _handleShopSelection(context, shop);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Shop not found for scanned code: $result'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildSearchBar(XeroxShopViewModel viewModel) {
     return Container(
       height: 56,
@@ -159,6 +207,12 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
               ),
             ),
           ),
+          const VerticalDivider(width: 24, indent: 16, endIndent: 16),
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primaryBlue, size: 24),
+            onPressed: () => _openScanner(viewModel),
+            splashRadius: 24,
+          ),
         ],
       ),
     );
@@ -191,19 +245,24 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
        if (!proceed) return;
     }
 
-    // 2. Check for Default Shop preference
+    // ✅ 2. Immediately record the shop selection in Firebase
+    FirestoreService().saveSelectedShop(shopId: shop.id, shopName: shop.name);
+    debugPrint("📌 Shop selected & saved to Firebase: ${shop.name} (${shop.id})");
+
+    // 3. Check for Default Shop preference
     final defaultShop = await PreferencesService.getDefaultShop();
     if (!mounted) return;
     
     if (defaultShop == null || defaultShop['id'] != shop.id) {
+       if (!context.mounted) return;
        final setAsDefault = await _showDefaultPrompt(context, shop);
        if (setAsDefault) {
           await PreferencesService.setDefaultShop(shop.id, shop.name);
        }
     }
 
-    // 3. Trigger File Picker Sheet (White Background Picker)
-    if (!mounted) return;
+    // 4. Trigger File Picker Sheet
+    if (!mounted || !context.mounted) return;
     _showSourceSheet(context, shop);
   }
 
@@ -246,19 +305,19 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
         onCamera: () async {
           Navigator.pop(context);
           await uploadVM.pickFromCamera();
-          if (!mounted) return;
+          if (!mounted || !context.mounted) return;
           _handlePickedFiles(context, shop, uploadVM);
         },
         onGallery: () async {
           Navigator.pop(context);
           await uploadVM.pickFromGallery();
-          if (!mounted) return;
+          if (!mounted || !context.mounted) return;
           _handlePickedFiles(context, shop, uploadVM);
         },
         onFiles: () async {
           Navigator.pop(context);
           await uploadVM.pickFromFiles();
-          if (!mounted) return;
+          if (!mounted || !context.mounted) return;
           _handlePickedFiles(context, shop, uploadVM);
         },
       ),
@@ -279,6 +338,7 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
           printMode: PrintMode.xeroxShop,
           shopId: shop.id,
           shopName: shop.name,
+          shopPhone: shop.phoneNumber,
         ),
       ),
     );
@@ -334,6 +394,35 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
                       Text(
                         shop.address,
                         style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: shop.activePrinters > 0 
+                            ? AppColors.success.withValues(alpha: 0.1) 
+                            : AppColors.textTertiary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.bolt_rounded, 
+                              size: 14, 
+                              color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${shop.activePrinters} PRINTERS ACTIVE',
+                              style: GoogleFonts.inter(
+                                fontSize: 10, 
+                                fontWeight: FontWeight.w900, 
+                                color: shop.activePrinters > 0 ? AppColors.success : AppColors.textSecondary
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

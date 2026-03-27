@@ -12,15 +12,20 @@ import '../../models/print_order_model.dart';
 import '../../models/file_model.dart';
 import '../../repositories/order_repository.dart';
 import 'print_options/print_options_page.dart';
-import 'history_page.dart';
+import 'pickup_page.dart';
+import 'history_page.dart'; // Rename reference if needed
 import 'widgets/order_details_sheet.dart';
 import '../profile_page.dart';
 import 'notifications_page.dart';
 import '../../services/notification_service.dart';
 import '../../services/pwa_service.dart';
+import '../../services/firestore_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'widgets/print_mode_selection_sheet.dart';
 import 'widgets/upload_source_sheet.dart';
+import 'qr_scanner_page.dart';
+import '../../xerox_shop/xerox_shop_model.dart';
+import '../../xerox_shop/xerox_shop_viewmodel.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -31,6 +36,8 @@ class UploadPage extends StatefulWidget {
 
 class _UploadPageState extends State<UploadPage> {
   final OrderRepository _orderRepo = OrderRepository();
+  final Set<String> _autoOpenedIds = {}; // Prevent multiple auto-opens per session
+  // codeRevealed is now persisted in Firebase — no in-memory Set needed
 
   @override
   void initState() {
@@ -183,6 +190,182 @@ class _UploadPageState extends State<UploadPage> {
     }
   }
 
+  Future<void> _openQRScanner({PrintOrderModel? targetOrder}) async {
+    final String? result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QRScannerPage()),
+    );
+
+    if (result != null && mounted) {
+      // ── Order Verification Flow (scan order's shop QR) ──────────────────────
+      if (targetOrder != null) {
+        // Normalize: strip the thinkink-shop: prefix if present
+        final String scannedShopId = result.startsWith('thinkink-shop:')
+            ? result.replaceFirst('thinkink-shop:', '')
+            : result;
+
+        // Show loading while we check Firebase
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+
+        final bool verified = await FirestoreService().verifyOrderAtShop(
+          orderId: targetOrder.orderId,
+          scannedShopId: scannedShopId,
+        );
+
+        if (!mounted) return;
+        
+        // 🆕 Fetch the latest order state to check orderStatus
+        final freshOrder = await FirestoreService().getOrder(targetOrder.orderId, printMode: 'xeroxShop');
+
+        Navigator.pop(context); // close loading dialog
+
+        if (verified && freshOrder != null) {
+          if (!freshOrder.isPrintingCompleted) {
+            // 🛑 Block access if not printed yet
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.hourglass_empty_rounded, color: Colors.orange),
+                    SizedBox(width: 12),
+                    Text('Not Ready'),
+                  ],
+                ),
+                content: const Text(
+                  'Order not printed yet. Please wait for the shop to finish printing before scanning.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+            return;
+          }
+
+          // ✅ Persist scan status permanently
+          await FirestoreService().markOrderScanned(
+            orderId: targetOrder.orderId,
+            shopId: targetOrder.shopId,
+          );
+          if (!mounted) return;
+          // 🚀 Navigate to dedicated Pickup Page
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => PickupPage(order: freshOrder)),
+          );
+        } else {
+          // ❌ Wrong shop dialog
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Row(
+                children: [
+                  Icon(Icons.error_outline_rounded, color: Color(0xFFE53935)),
+                  SizedBox(width: 12),
+                  Text('Wrong Shop'),
+                ],
+              ),
+              content: const Text(
+                'This order was not placed at this shop. Please scan the correct Xerox shop\'s QR code.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+
+      // General Shop Scan Flow
+      final xeroxVM = context.read<XeroxShopViewModel>();
+
+      // Normalize the scanned result (strip the thinkink-shop: prefix)
+      final String normalizedResult = result.startsWith('thinkink-shop:')
+          ? result.replaceFirst('thinkink-shop:', '')
+          : result;
+
+      // Only fetch from backend if we haven't loaded shops yet
+      if (!xeroxVM.hasLoaded) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+        await xeroxVM.fetchShops();
+        if (mounted) Navigator.pop(context); // Close loading dialog
+      }
+
+      if (!mounted) return;
+
+      // Find shop by ID or name  
+      try {
+        final shop = xeroxVM.shops.firstWhere(
+          (s) => s.id == normalizedResult || s.name.toLowerCase() == normalizedResult.toLowerCase(),
+          orElse: () => throw Exception('No shop matches: "$normalizedResult"'),
+        );
+        _handleScannedShop(shop);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Shop not found for QR: "$normalizedResult"'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _handleScannedShop(XeroxShopModel shop) {
+    // Similar to _handleShopSelection in XeroxShopPage
+    // But since we are in UploadPage, we might need to pick files first if tray is empty
+    final uploadVM = context.read<UploadViewModel>();
+    
+    if (uploadVM.pendingFiles.isNotEmpty) {
+      final files = List<FileModel>.from(uploadVM.pendingFiles);
+      uploadVM.clearPickedFiles();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PrintOptionsPage(
+            pickedFiles: files,
+            printMode: PrintMode.xeroxShop,
+            shopId: shop.id,
+            shopName: shop.name,
+          ),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => XeroxShopPage(
+            files: const <FileModel>[],
+            initiallySelectedShopId: shop.id,
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final uploadVM = context.watch<UploadViewModel>();
@@ -196,7 +379,7 @@ class _UploadPageState extends State<UploadPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history_rounded, size: 24),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompletedOrdersPage())),
           ),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded, size: 24),
@@ -213,7 +396,12 @@ class _UploadPageState extends State<UploadPage> {
       body: uploadVM.isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () async => setState(() {}),
+              onRefresh: () async {
+                final xeroxVM = context.read<XeroxShopViewModel>();
+                await xeroxVM.fetchShops();
+                await Future.delayed(const Duration(milliseconds: 500));
+                if (mounted) setState(() {});
+              },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -226,7 +414,6 @@ class _UploadPageState extends State<UploadPage> {
                     const SizedBox(height: 16),
                     _buildOrdersList(),
 
-                    // ─── Pending File Tray ───────────────────────────────────
                     if (uploadVM.pendingFiles.isNotEmpty) ...[
                       const SizedBox(height: 24),
                       _buildPendingTray(uploadVM),
@@ -445,15 +632,64 @@ class _UploadPageState extends State<UploadPage> {
     ).animate().fadeIn(delay: 300.ms);
   }
 
+  Widget _actionChip({required String label, required IconData icon, required Color color, required VoidCallback onPressed}) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 10, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── Orders Stream ───────────────────────────────────────────────────────────
   Widget _buildOrdersList() {
     return StreamBuilder<List<PrintOrderModel>>(
       stream: _orderRepo.getActiveOrders(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Text(
+              'Error loading orders: ${snapshot.error}',
+              style: GoogleFonts.inter(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          );
+        }
         if (!snapshot.hasData) return const SizedBox.shrink();
-        final activeOrders = snapshot.data!.where((o) => o.isActive).toList();
+        final allOrders = snapshot.data!.where((o) => o.isActive).toList();
 
-        if (activeOrders.isEmpty) {
+        // 🚀 AUTO-REOPEN PICKUP PAGE Logic
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final needsPickup = allOrders.where((o) => o.scanned && !o.isPicked).toList();
+          if (needsPickup.isNotEmpty) {
+            final order = needsPickup.first;
+            if (!_autoOpenedIds.contains(order.orderId)) {
+              _autoOpenedIds.add(order.orderId);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => PickupPage(order: order)),
+              );
+            }
+          }
+        });
+
+        if (allOrders.isEmpty) {
           return Container(
             padding: const EdgeInsets.symmetric(vertical: 32),
             child: Center(
@@ -471,16 +707,43 @@ class _UploadPageState extends State<UploadPage> {
           );
         }
 
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: activeOrders.length,
-          itemBuilder: (context, index) => _buildOrderCard(activeOrders[index])
-              .animate()
-              .fadeIn(delay: (index * 80).ms)
-              .slideY(begin: 0.1, end: 0),
+        final kioskOrders = allOrders.where((o) => o.printMode == PrintMode.autonomous).toList();
+        final xeroxOrders = allOrders.where((o) => o.printMode == PrintMode.xeroxShop).toList();
+
+        return Column(
+          children: [
+            if (kioskOrders.isNotEmpty) ...[
+              _sectionHeader('KIOSK PRINTS', Icons.on_device_training_rounded),
+              const SizedBox(height: 12),
+              ...kioskOrders.map((order) => _buildOrderCard(order)),
+              const SizedBox(height: 24),
+            ],
+            if (xeroxOrders.isNotEmpty) ...[
+              _sectionHeader('XEROX SHOP ORDERS', Icons.store_rounded),
+              const SizedBox(height: 12),
+              ...xeroxOrders.map((order) => _buildOrderCard(order)),
+            ],
+          ],
         );
       },
+    );
+  }
+
+  Widget _sectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: AppColors.textTertiary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 10, 
+            fontWeight: FontWeight.w900, 
+            letterSpacing: 1.5, 
+            color: AppColors.textTertiary
+          ),
+        ),
+      ],
     );
   }
 
@@ -493,73 +756,288 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
-  // ─── Order Card (Unique Code + Name only) ────────────────────────────────────
+  // ─── Order Card ──────────────────────────────────────────────────────────────
   Widget _buildOrderCard(PrintOrderModel order) {
-    // 🆔 Use the custom Order ID (PRT(xxxx)) for Xerox, otherwise short Firestore ID
-    final String? customId = order.printSettings['orderId'];
-    final String displayId = (customId != null && customId.isNotEmpty) 
-        ? customId.toUpperCase() 
-        : 'JOB #${order.orderId.substring(0, 6).toUpperCase()}';
+    final String displayId = order.customId != null 
+        ? order.customId!.toUpperCase().replaceAll('_', ' ') 
+        : 'JOB #${order.orderId.length > 6 ? order.orderId.substring(order.orderId.length - 6).toUpperCase() : order.orderId.toUpperCase()}';
+    // codeRevealed comes from Firebase — permanent after QR scan
+    final bool isVerified = order.codeRevealed || order.status == OrderStatus.completed;
 
-    return Stack(
+    return Dismissible(
+      key: Key(order.orderId),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(
+              children: [
+                Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 22),
+                const SizedBox(width: 10),
+                const Text('Delete Order?'),
+              ],
+            ),
+            content: Text(
+              order.isXerox
+                  ? 'This will remove the order from your account and notify the shop to clear it from their dashboard too.'
+                  : 'This will permanently remove this print job from your active orders.',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('CANCEL', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.textTertiary)),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        ) ?? false;
+      },
+      onDismissed: (_) async {
+        try {
+          await FirestoreService().deleteOrder(
+            order.orderId,
+            printMode: order.isXerox ? 'xeroxShop' : 'autonomous',
+            shopId: order.shopId,
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Order deleted', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                backgroundColor: AppColors.textSecondary,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to delete: $e'), backgroundColor: AppColors.error),
+            );
+          }
+        }
+      },
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.error,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+            const SizedBox(height: 4),
+            Text('DELETE', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
+          ],
+        ),
+      ),
+      child: Stack(
       children: [
         InkWell(
           onTap: () => _showOrderDetails(order),
           borderRadius: BorderRadius.circular(16),
           child: ModernCard(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             margin: const EdgeInsets.only(bottom: 12),
             child: Row(
               children: [
-                // ── Code accent bar ──
+                // ── Accent bar ──
                 Container(
                   width: 4,
-                  height: 52,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: order.isXerox ? AppColors.success : AppColors.primaryBlue,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                const SizedBox(width: 16),
-                // ── Name column ──
+                const SizedBox(width: 12),
+                // ── Job ID column ──
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         displayId,
                         style: GoogleFonts.inter(
-                          fontSize: 22,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textPrimary,
-                          letterSpacing: 1.5,
+                          letterSpacing: 1.0,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      if (order.isXerox) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded, size: 10, color: AppColors.success),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                "VIEW SHOP DETAILS",
+                                style: GoogleFonts.inter(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.success,
+                                  letterSpacing: 0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            // 📄 Print Status (Real-time from Admin)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: (order.isPrintingCompleted ? Colors.green : Colors.orange).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: (order.isPrintingCompleted ? Colors.green : Colors.orange).withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    order.isPrintingCompleted 
+                                        ? Icons.check_circle_rounded 
+                                        : Icons.hourglass_bottom_rounded, 
+                                    size: 12, 
+                                    color: order.isPrintingCompleted ? Colors.green : Colors.orange,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    (order.orderStatus ?? 'NOT PRINTED YET').toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10, 
+                                      fontWeight: FontWeight.w900, 
+                                      color: order.isPrintingCompleted ? Colors.green : Colors.orange, 
+                                      letterSpacing: 0.5
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // 📂 View Files Button
+                            _actionChip(
+                              label: 'VIEW FILES',
+                              icon: Icons.description_outlined,
+                              color: AppColors.primaryBlue,
+                              onPressed: () => _showOrderDetails(order),
+                            ),
+                            // 🏪 Shop Info Button
+                            _actionChip(
+                              label: 'SHOP INFO',
+                              icon: Icons.info_outline_rounded,
+                              color: AppColors.success,
+                              onPressed: () => _showOrderDetails(order),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                // ── Unique Code column ──
+                // ── Right: Pickup code (masked ↔ revealed) ──
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      order.isXerox ? 'STATUS' : 'UNIQUE CODE',
+                      'PICKUP CODE',
                       style: GoogleFonts.inter(
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textTertiary,
-                        letterSpacing: 1.2,
+                        letterSpacing: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      order.isXerox ? 'READY' : order.pickupCode,
-                      style: GoogleFonts.inter(
-                        fontSize: order.isXerox ? 18 : 22,
-                        fontWeight: FontWeight.w900,
-                        color: order.isXerox ? AppColors.success : AppColors.primaryBlue,
-                        letterSpacing: order.isXerox ? 0 : 3,
-                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // QR scan button — only shown when not yet verified
+                        if (order.isXerox && !isVerified) ...[
+                          GestureDetector(
+                            onTap: () => _openQRScanner(targetOrder: order),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+                              ),
+                              child: const Icon(
+                                Icons.qr_code_scanner_rounded,
+                                size: 18,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
+                          ),
+                        ],
+                        // Code: masked dots OR revealed number with animation
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 450),
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: ScaleTransition(scale: anim, child: child),
+                          ),
+                          child: order.isXerox
+                              ? isVerified
+                                  ? Text(
+                                      order.pickupCode,
+                                      key: const ValueKey('revealed'),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.success,
+                                        letterSpacing: 3,
+                                      ),
+                                    ).animate().shimmer(duration: 800.ms, color: AppColors.success.withValues(alpha: 0.4))
+                                  : Text(
+                                      '• • • •',
+                                      key: const ValueKey('masked'),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.textTertiary,
+                                        letterSpacing: 4,
+                                      ),
+                                    )
+                              : Text(
+                                  order.pickupCode,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.primaryBlue,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -567,13 +1045,14 @@ class _UploadPageState extends State<UploadPage> {
             ),
           ),
         ),
+        // ── Shop/mode badge ──
         Positioned(
           top: 4,
           right: 12,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
             decoration: BoxDecoration(
-              color: (order.isXerox ? AppColors.success : AppColors.primaryBlue).withOpacity(0.12),
+              color: (order.isXerox ? AppColors.success : AppColors.primaryBlue).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -583,13 +1062,18 @@ class _UploadPageState extends State<UploadPage> {
                 fontWeight: FontWeight.w900,
                 color: order.isXerox ? AppColors.success : AppColors.primaryBlue,
                 letterSpacing: 0.8,
-              ),
             ),
           ),
         ),
+      
+        ),
       ],
-    );
+      ),
+      );
   }
+
+  
+
 
   // ─── Blinkit-style Pending Tray ──────────────────────────────────────────────
   Widget _buildPendingTray(UploadViewModel uploadVM) {

@@ -176,12 +176,27 @@ class ShopCard extends StatelessWidget {
           '${shop.rating}',
           style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryBlack),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 12),
         Icon(Icons.directions_walk_rounded, size: 14, color: AppColors.textTertiary),
         const SizedBox(width: 4),
         Text(
           shop.distance,
           style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textTertiary),
+        ),
+        const SizedBox(width: 12),
+        Icon(
+          Icons.print_rounded, 
+          size: 14, 
+          color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '${shop.activePrinters} Ready',
+          style: GoogleFonts.inter(
+            fontSize: 12, 
+            fontWeight: FontWeight.w700, 
+            color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
+          ),
         ),
       ],
     );

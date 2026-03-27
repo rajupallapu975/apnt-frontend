@@ -47,12 +47,47 @@ class PrintPreviewCarousel extends StatelessWidget {
             
             Widget previewWidget;
 
-            if (name.toLowerCase().endsWith('.pdf')) {
+            final isPdf = name.toLowerCase().endsWith('.pdf');
+            final isWord = name.toLowerCase().endsWith('.doc') || name.toLowerCase().endsWith('.docx');
+
+            if (isPdf) {
+              // PDF PREVIEW (Show thumbnail if available in byteData)
+              if (byteData != null) {
+                previewWidget = Image.memory(byteData, fit: BoxFit.contain, filterQuality: FilterQuality.high);
+              } else {
+                previewWidget = Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.picture_as_pdf_outlined,
+                      size: 64,
+                      color: color ? AppColors.primaryBlue : AppColors.textTertiary,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        name,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: color ? AppColors.textPrimary : AppColors.textTertiary,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                );
+              }
+            } else if (isWord) {
+              // DOCX PREVIEW (Placeholder icon)
               previewWidget = Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.picture_as_pdf_outlined,
+                    Icons.description_rounded,
                     size: 64,
                     color: color ? AppColors.primaryBlue : AppColors.textTertiary,
                   ),
@@ -84,19 +119,19 @@ class PrintPreviewCarousel extends StatelessWidget {
                   ? Image.file(file, fit: BoxFit.contain, filterQuality: FilterQuality.high) 
                   : const Center(child: CircularProgressIndicator());
               }
-              
-              // B&W filter
-              if (!color) {
-                previewWidget = ColorFiltered(
-                  colorFilter: const ColorFilter.matrix([
-                    0.2126, 0.7152, 0.0722, 0, 0,
-                    0.2126, 0.7152, 0.0722, 0, 0,
-                    0.2126, 0.7152, 0.0722, 0, 0,
-                    0, 0, 0, 1, 0,
-                  ]),
-                  child: previewWidget,
-                );
-              }
+            }
+
+            // B&W filter (Apply to images and PDF thumbnails)
+            if (!color && !isWord && (isPdf ? byteData != null : true)) {
+              previewWidget = ColorFiltered(
+                colorFilter: const ColorFilter.matrix([
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0.2126, 0.7152, 0.0722, 0, 0,
+                  0, 0, 0, 1, 0,
+                ]),
+                child: previewWidget,
+              );
             }
 
             return Padding(
@@ -107,20 +142,18 @@ class PrintPreviewCarousel extends StatelessWidget {
                   child: Stack(
                     children: [
                       // 📄 A4 PAPER (Invariant Background)
-                        // 📄 A4 PAPER (Invariant Background)
                         Container(
                           width: double.infinity,
                           height: double.infinity,
                           clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(4), // Sharper corners for paper look
+                            borderRadius: BorderRadius.circular(4), 
                             border: Border.all(
                               color: Colors.black.withValues(alpha: 0.08), 
                               width: 1,
                             ),
                             boxShadow: [
-                              // Layered shadows for physical depth
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 1,
@@ -141,8 +174,7 @@ class PrintPreviewCarousel extends StatelessWidget {
                           child: previewWidget,
                         ),
 
-                      // 🟣 EDIT OVERLAY (Centered Bottom)
-                      if (!name.toLowerCase().endsWith('.pdf'))
+                      // 🟣 ACTION OVERLAY (Edit for Images, Open for Docs)
                         Positioned(
                           bottom: 12,
                           left: 0,
@@ -166,10 +198,14 @@ class PrintPreviewCarousel extends StatelessWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.tune_rounded, color: AppColors.primaryBlue, size: 18),
+                                    Icon(
+                                      (isPdf || isWord) ? Icons.visibility_rounded : Icons.tune_rounded, 
+                                      color: AppColors.primaryBlue, 
+                                      size: 18
+                                    ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Edit',
+                                      (isPdf || isWord) ? 'Open' : 'Edit',
                                       style: GoogleFonts.inter(
                                         color: AppColors.primaryBlue,
                                         fontWeight: FontWeight.w700,

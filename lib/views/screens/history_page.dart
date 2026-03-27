@@ -7,20 +7,18 @@ import '../../models/print_order_model.dart';
 import '../../services/local_storage_service.dart';
 import '../../utils/app_colors.dart';
 import '../../widgets/common/modern_card.dart';
-import '../../widgets/common/status_badge.dart';
-import 'widgets/order_details_sheet.dart';
 
-class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key});
+class CompletedOrdersPage extends StatefulWidget {
+  const CompletedOrdersPage({super.key});
 
   @override
-  State<HistoryPage> createState() => _HistoryPageState();
+  State<CompletedOrdersPage> createState() => _CompletedOrdersPageState();
 }
 
-class _HistoryPageState extends State<HistoryPage> {
+class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
   final LocalStorageService _localStorage = LocalStorageService();
   bool _isLoading = true;
-  List<PrintOrderModel> _historyOrders = [];
+  List<PrintOrderModel> _completedOrders = [];
 
   @override
   void initState() {
@@ -31,46 +29,40 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
     final orders = await _localStorage.getLocalOrders();
-    // Show orders that are completed, cancelled, or expired
-    _historyOrders = orders.where((o) => 
+    // Focused on COMPLETED orders per user request
+    _completedOrders = orders.where((o) => 
       o.status == OrderStatus.completed || 
-      o.status == OrderStatus.cancelled || 
-      o.status == OrderStatus.expired ||
-      o.isExpired
+      o.isPicked ||
+      o.orderDone
     ).toList();
+    _completedOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     setState(() => _isLoading = false);
   }
 
-  void _showOrderDetails(PrintOrderModel order) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => OrderDetailsSheet(order: order),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'PRINT HISTORY',
+          'COMPLETED ORDERS',
           style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 16),
         ),
         centerTitle: true,
         elevation: 0,
+        backgroundColor: AppColors.background,
       ),
+      backgroundColor: AppColors.background,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _historyOrders.isEmpty
+          : _completedOrders.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(
                   onRefresh: _loadHistory,
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                    itemCount: _historyOrders.length,
-                    itemBuilder: (context, index) => _buildHistoryCard(_historyOrders[index])
+                    itemCount: _completedOrders.length,
+                    itemBuilder: (context, index) => _buildCompletedCard(_completedOrders[index])
                         .animate()
                         .fadeIn(delay: (index * 50).ms)
                         .slideY(begin: 0.1, end: 0),
@@ -79,87 +71,73 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  Widget _buildHistoryCard(PrintOrderModel order) {
-    final dateFormat = DateFormat('MMM dd, yyyy');
-    final shortId = order.orderId.substring(0, 8).toUpperCase();
+  Widget _buildCompletedCard(PrintOrderModel order) {
+    final dateFormat = DateFormat('MMM dd, yyyy • hh:mm a');
+    final String displayId = order.customId?.toUpperCase() ?? 
+        'ORDER #${order.orderId.substring(order.orderId.length > 6 ? order.orderId.length - 6 : 0).toUpperCase()}';
     
-    // Determine the "Reason" or Status label
-    String reasonLabel = order.status == OrderStatus.completed ? "PRINTED" : "EXPIRED";
-    if (order.status == OrderStatus.cancelled) reasonLabel = "CANCELLED";
-    if (order.reason != null) reasonLabel = order.reason!.toUpperCase();
-
-    final isExpired = order.status == OrderStatus.expired;
-
-    return InkWell(
-      onTap: () => _showOrderDetails(order),
-      borderRadius: BorderRadius.circular(20),
-      child: ModernCard(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isExpired ? AppColors.error.withValues(alpha: 0.1) : AppColors.success.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isExpired ? Icons.timer_off_rounded : Icons.check_circle_rounded,
-                    color: isExpired ? AppColors.error : AppColors.success,
-                    size: 20,
-                  ),
+    return ModernCard(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Order #$shortId',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15),
-                      ),
-                      Text(
-                        dateFormat.format(order.createdAt),
-                        style: GoogleFonts.manrope(fontSize: 12, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                StatusBadge(
-                  label: reasonLabel,
-                  type: isExpired ? StatusType.error : StatusType.success,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _miniInfoRow(Icons.description_outlined, '${order.totalPages} Pages'),
-                Row(
+                child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '₹${order.totalPrice.toStringAsFixed(2)}',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.textPrimary),
+                      displayId,
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary),
                     ),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
-                      onPressed: () => _confirmDelete(order),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                    const SizedBox(height: 2),
+                    Text(
+                      dateFormat.format(order.createdAt),
+                      style: GoogleFonts.manrope(fontSize: 12, color: AppColors.textTertiary, fontWeight: FontWeight.w700),
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.textTertiary, size: 22),
+                onPressed: () => _confirmDelete(order),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'PICKUP CODE',
+                  style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.textTertiary, letterSpacing: 2),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  order.pickupCode,
+                  style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.success, letterSpacing: 8),
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -169,14 +147,14 @@ class _HistoryPageState extends State<HistoryPage> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Delete from History'),
-        content: const Text('Are you sure you want to remove this order from your local history?'),
+        title: const Text('Remove from Completed'),
+        content: const Text('This will remove the order from your completed list.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
-            child: const Text('Delete'),
+            child: const Text('Remove'),
           ),
         ],
       ),
@@ -188,33 +166,21 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  Widget _miniInfoRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: AppColors.textTertiary),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-        ),
-      ],
-    );
-  }
 
   Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.history_rounded, size: 64, color: AppColors.textTertiary.withValues(alpha: 0.3)),
+          Icon(Icons.assignment_turned_in_rounded, size: 64, color: AppColors.textTertiary.withValues(alpha: 0.2)),
           const SizedBox(height: 24),
           Text(
-            'NO PRINT HISTORY',
+            'NO COMPLETED ORDERS',
             style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1),
           ),
           const SizedBox(height: 8),
           Text(
-            'Historical orders will appear here.',
+            'Keep printing and your history will grow!',
             style: GoogleFonts.manrope(color: AppColors.textSecondary, fontSize: 14),
           ),
         ],

@@ -64,6 +64,7 @@ class PaymentProcessingPage extends StatefulWidget {
 class _PaymentProcessingPageState
     extends State<PaymentProcessingPage> {
   bool _isConfirming = true;
+  bool _isHandlingSuccess = false; // 🛡️ Prevent duplicate processing
   String _status = "Preparing Summary...";
   double _progress = 0.1;
   RazorpayHandler? _paymentHandler;
@@ -120,7 +121,8 @@ class _PaymentProcessingPageState
       setState(() {
         _status = "Proceed to Pay..."; 
         _progress = 0.4;
-      });      _paymentHandler ??= RazorpayHandler();
+      });
+      _paymentHandler ??= RazorpayHandler();
 
       final user = FirebaseAuth.instance.currentUser;
       final userEmail = user?.email ?? 'customer_${DateTime.now().millisecondsSinceEpoch}@thinkink.com';
@@ -161,6 +163,23 @@ class _PaymentProcessingPageState
         'timeout': 180 
       };
 
+      final bool isBypass = widget.printSettings['isBypass'] == true;
+
+      if (isBypass) {
+        debugPrint("🔑 ADMIN BYPASS DETECTED: 9750");
+        setState(() {
+          _status = "Admin Code Verified...";
+          _progress = 0.5;
+        });
+        await Future.delayed(const Duration(milliseconds: 800));
+        _handlePaymentSuccess(
+          'pay_admin_9750', 
+          rzpId, 
+          'mock_signature_9750'
+        );
+        return;
+      }
+
       _paymentHandler!.openCheckout(
         options: options,
         onSuccess: _handlePaymentSuccess,
@@ -172,6 +191,12 @@ class _PaymentProcessingPageState
   }
 
   Future<void> _handlePaymentSuccess(String paymentId, String orderId, String signature) async {
+    if (_isHandlingSuccess) {
+      debugPrint("🛡️ Duplicate success callback ignored for $paymentId");
+      return; 
+    }
+    _isHandlingSuccess = true;
+    
     debugPrint("💳 Payment Success Action: $paymentId");
     String? currentOrderId;
     final authVM = context.read<AuthViewModel>();
@@ -266,12 +291,14 @@ class _PaymentProcessingPageState
           phone: userPhone,
           pages: widget.expectedPages,
           files: widget.filenames.length,
+          isXerox: widget.printSettings['printMode'] == 'xeroxShop',
         );
       } catch (_) {}
 
       NotificationService().notifyOrderCreated(
         finalPickupCode, 
         freshOrder?.expiresAt ?? DateTime.now().add(const Duration(hours: 12)),
+        isXerox: widget.printSettings['printMode'] == 'xeroxShop',
       );
 
       if (!mounted) return;
@@ -284,6 +311,7 @@ class _PaymentProcessingPageState
             pickupCode: finalPickupCode,
             xeroxId: verifyResult['xeroxId'],
             isXerox: widget.printSettings['printMode'] == 'xeroxShop',
+            expiresAt: freshOrder?.expiresAt ?? DateTime.now().add(const Duration(hours: 12)),
           ),
         ),
       );
@@ -421,7 +449,7 @@ class _PaymentProcessingPageState
           Expanded(
             child: ListView.separated(
               itemCount: widget.filenames.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 return Container(
                   padding: const EdgeInsets.all(16),

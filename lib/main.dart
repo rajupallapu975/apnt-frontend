@@ -14,10 +14,28 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // ✅ Initialize Firebase
+  // ✅ Initialize Firebase (Primary: PSFC)
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 🏪 Initialize ThinkInk Admin as a secondary app
+  try {
+    await Firebase.initializeApp(
+      name: "thinkink_admin",
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyCG9N9vDUPmWyId1ZgkiPa7O5vXLp-2l1M",
+        authDomain: "thinkink-admin.firebaseapp.com",
+        projectId: "thinkink-admin",
+        storageBucket: "thinkink-admin.firebasestorage.app",
+        messagingSenderId: "1071627103248",
+        appId: "1:1071627103248:web:a67da5bcbf4d1ad29bae95",
+      ),
+    );
+    debugPrint("🚀 ThinkInk Admin Secondary App Initialized");
+  } catch (e) {
+    debugPrint("⚠️ ThinkInk Admin Init Error: $e");
+  }
 
   // 🔔 Initialize Notifications
   final notificationService = NotificationService();

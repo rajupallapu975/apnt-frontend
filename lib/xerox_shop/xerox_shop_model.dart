@@ -8,6 +8,7 @@ class XeroxShopModel {
   final bool isOpen;
   final double pricePerBWPage;
   final double pricePerColorPage;
+  final int activePrinters; // Added active printers count
 
   final String? ownerName;
   final String? phoneNumber;
@@ -25,6 +26,7 @@ class XeroxShopModel {
     required this.isOpen,
     required this.pricePerBWPage,
     required this.pricePerColorPage,
+    this.activePrinters = 0,
     this.ownerName,
     this.phoneNumber,
     this.email,
@@ -86,6 +88,7 @@ class XeroxShopModel {
       isOpen: map['isOpen'] ?? true, // Manual override from DB
       pricePerBWPage: (map['priceBW'] ?? 3.0).toDouble(),
       pricePerColorPage: (map['priceColor'] ?? 10.0).toDouble(),
+      activePrinters: map['activePrinters'] ?? 0,
       ownerName: map['ownerName'] ?? 'Shop Keeper',
       phoneNumber: map['phone'] ?? map['phoneNumber'] ?? 'N/A',
       email: map['email'] ?? 'N/A',

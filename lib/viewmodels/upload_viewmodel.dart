@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'dart:io';
 import '../models/file_model.dart';
 import '../utils/file_validator.dart';
+import 'package:pdfx/pdfx.dart';
+// archive import removed
 
 class UploadViewModel extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
@@ -45,6 +47,7 @@ class UploadViewModel extends ChangeNotifier {
         bytes: bytes,
         addedAt: DateTime.now(),
         size: size,
+        pageCount: 1,
       );
       
       _addFileIfValid(fileModel);
@@ -79,7 +82,8 @@ class UploadViewModel extends ChangeNotifier {
         file: kIsWeb ? null : File(img.path),
         bytes: bytes,
         addedAt: DateTime.now(),
-        size: size, // Pass the captured size
+        size: size,
+        pageCount: 1,
       ));
     }
   }
@@ -87,7 +91,7 @@ class UploadViewModel extends ChangeNotifier {
   Future<void> pickFromFiles() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'bmp', 'tiff'],
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'bmp', 'tiff'],
       allowMultiple: true,
       withData: kIsWeb,
     );
@@ -99,6 +103,11 @@ class UploadViewModel extends ChangeNotifier {
           ? "data:image/png;base64,${base64Encode(f.bytes!)}" 
           : (f.path ?? '');
 
+      int? pageCount;
+      if (f.name.toLowerCase().endsWith('.pdf')) {
+        pageCount = await _getPdfPageCount(f.path, f.bytes);
+      }
+
       _addFileIfValid(FileModel(
         id: DateTime.now().toString() + f.name,
         name: f.name,
@@ -107,7 +116,25 @@ class UploadViewModel extends ChangeNotifier {
         bytes: f.bytes,
         addedAt: DateTime.now(),
         size: f.size,
+        pageCount: pageCount,
       ));
+    }
+  }
+
+  Future<int?> _getPdfPageCount(String? path, Uint8List? bytes) async {
+    try {
+      PdfDocument? doc;
+      if (kIsWeb && bytes != null) {
+        doc = await PdfDocument.openData(bytes);
+      } else if (path != null) {
+        doc = await PdfDocument.openFile(path);
+      }
+      int? count = doc?.pagesCount;
+      await doc?.close();
+      return count;
+    } catch (e) {
+      debugPrint("Error counting PDF pages: $e");
+      return 1; // Fallback
     }
   }
 

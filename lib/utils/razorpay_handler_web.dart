@@ -1,16 +1,12 @@
-// ignore_for_file: undefined_function, undefined_method
-@JS()
-library razorpay_web_interop;
-
-import 'package:js/js.dart';
+import 'dart:js_interop';
 import 'dart:convert';
 import 'razorpay_handler.dart';
 
 @JS('openRazorpayWebCheckout')
 external void _openRazorpayWebCheckout(
-  String options,
-  void Function(String paymentId, String orderId, String signature) successCallback,
-  void Function(String error) errorCallback,
+  JSString options,
+  JSFunction successCallback,
+  JSFunction errorCallback,
 );
 
 class WebRazorpayHandler implements RazorpayHandler {
@@ -21,13 +17,13 @@ class WebRazorpayHandler implements RazorpayHandler {
     required Function(String error) onFailure,
   }) {
     _openRazorpayWebCheckout(
-      jsonEncode(options),
-      allowInterop((paymentId, orderId, signature) {
-        onSuccess(paymentId, orderId, signature);
-      }),
-      allowInterop((error) {
-        onFailure(error);
-      }),
+      jsonEncode(options).toJS,
+      ((JSString paymentId, JSString orderId, JSString signature) {
+        onSuccess(paymentId.toDart, orderId.toDart, signature.toDart);
+      }).toJS,
+      ((JSString error) {
+        onFailure(error.toDart);
+      }).toJS,
     );
   }
 

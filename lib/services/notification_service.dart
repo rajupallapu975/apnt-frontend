@@ -207,30 +207,37 @@ class NotificationService extends ChangeNotifier {
 
   // ─── Trigger Logic ─────────────────────────────────────────────────────────
 
-  void notifyOrderCreated(String pickupCode, DateTime expiresAt) {
+  void notifyOrderCreated(String pickupCode, DateTime expiresAt, {bool isXerox = false}) {
     addNotification(
       title: 'Order Status: Active',
-      body: 'Pickup code generated: $pickupCode. Scan it at the printer.',
+      body: isXerox
+          // 🔒 Do NOT reveal the code in notifications — user must scan QR at shop
+          ? 'Your Xerox order is active. Visit the shop and scan their QR to reveal your pickup code.'
+          : 'Pickup code generated: $pickupCode. Scan it at the printer.',
       type: 'success',
     );
     
     // Schedule background alerts for expiry
-    _scheduleExpiryAlerts(pickupCode, expiresAt);
+    _scheduleExpiryAlerts(pickupCode, expiresAt, isXerox: isXerox);
   }
 
   void notifyOrderPrinted(String orderId) {
+    final String displayId = orderId.length > 6 ? orderId.substring(0, 6).toUpperCase() : orderId.toUpperCase();
     addNotification(
       title: 'Print Complete!',
-      body: 'Your order #${orderId.substring(0,6).toUpperCase()} has been printed.',
+      body: 'Your order #$displayId has been printed.',
       type: 'success',
     );
   }
 
   // Schedule alerts that work when app is closed
-  Future<void> _scheduleExpiryAlerts(String pickupCode, DateTime expiresAt) async {
+  Future<void> _scheduleExpiryAlerts(String pickupCode, DateTime expiresAt, {bool isXerox = false}) async {
     if (kIsWeb) return;
 
     final now = DateTime.now();
+    // 🔒 For Xerox orders, never show the code in notifications
+    final String orderRef = isXerox ? 'Xerox order' : 'order (Code: $pickupCode)';
+    final String actionReminder = isXerox ? ' Visit the shop and scan their QR code to print.' : '';
     
     // 4 Hour Alert
     final fourHourMark = expiresAt.subtract(const Duration(hours: 4));
@@ -238,7 +245,7 @@ class NotificationService extends ChangeNotifier {
       await _scheduleLocalNotification(
         id: (pickupCode.hashCode + 400),
         title: 'Order Expiring Soon',
-        body: 'Your order (Code: $pickupCode) expires in 4 hours.',
+        body: 'Your $orderRef expires in 4 hours.$actionReminder',
         scheduledDate: fourHourMark,
       );
     }
@@ -249,17 +256,17 @@ class NotificationService extends ChangeNotifier {
       await _scheduleLocalNotification(
         id: (pickupCode.hashCode + 100),
         title: 'Final Expiry Warning',
-        body: 'Order (Code: $pickupCode) will expire in 1 hour. Pick it up now!',
+        body: 'Your $orderRef will expire in 1 hour. Visit the shop now!$actionReminder',
         scheduledDate: oneHourMark,
       );
     }
 
-    // 📢 EXPIRE ALERT (Exactly at expiry)
+    // Exactly at expiry
     if (expiresAt.isAfter(now)) {
       await _scheduleLocalNotification(
         id: (pickupCode.hashCode + 0),
         title: 'Order Expired',
-        body: 'Your order (Code: $pickupCode) has expired.',
+        body: 'Your $orderRef has expired.',
         scheduledDate: expiresAt,
       );
     }
@@ -334,11 +341,12 @@ class NotificationService extends ChangeNotifier {
     final key = '${orderId}_$label';
     if (_sentAlerts.contains(key)) return;
 
+    final String displayId = orderId.length > 6 ? orderId.substring(0, 6).toUpperCase() : orderId.toUpperCase();
     addNotification(
       title: label.contains('Expired') ? 'Order Expired' : 'Order Expiring Soon',
       body: label.contains('Expired') 
-        ? 'Order #${orderId.substring(0,6).toUpperCase()} is no longer valid.'
-        : 'Order #${orderId.substring(0,6).toUpperCase()} expires in $label.',
+        ? 'Order #$displayId is no longer valid.'
+        : 'Order #$displayId expires in $label.',
       type: type,
       showLocal: false, 
     );
