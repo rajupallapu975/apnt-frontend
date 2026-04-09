@@ -87,11 +87,12 @@ class CloudinaryStorageService {
 
         final extension = path.extension(originalName).toLowerCase();
         final String basePublicId = '${pickupCode}_${i + 1}';
-        final String fullPublicId = 'orders/$pickupCode/$basePublicId';
+        final String folderPath = isXerox ? 'xerox_orders' : 'autonomous_orders';
+        final String fullPublicId = '$folderPath/$pickupCode/$basePublicId';
 
         // 🚀 Resource type routing:
-        // - PDF → 'image' (viewable in dashboard)
-        // - DOC/DOCX → 'raw' (office documents)
+        // - PDF → 'image' (required for most free-tier unsigned presets)
+        // - DOC/DOCX → 'raw'
         // - everything else → 'auto'
         final bool isPdf = extension == '.pdf';
         final bool isDoc = extension == '.doc' || extension == '.docx';

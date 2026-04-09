@@ -78,6 +78,12 @@ class XeroxShopModel {
   }
 
   factory XeroxShopModel.fromMap(Map<String, dynamic> map, String id) {
+    // 🚀 Robust Field Mapping: The Dashboard uses 'mobile' while models traditionally used 'phoneNumber'
+    final dynamic rawMobile = map['mobile'] ?? map['phone'] ?? map['phoneNumber'] ?? 'N/A';
+    final String? phoneNumber = (rawMobile.toString() == 'N/A' || rawMobile.toString().isEmpty) 
+        ? null 
+        : rawMobile.toString();
+
     return XeroxShopModel(
       id: id,
       name: map['shopName'] ?? 'Unknown Shop',
@@ -86,12 +92,12 @@ class XeroxShopModel {
       distance: 'Nearby', 
       imageUrl: map['imageUrl'] ?? '',
       isOpen: map['isOpen'] ?? true, // Manual override from DB
-      pricePerBWPage: (map['priceBW'] ?? 3.0).toDouble(),
-      pricePerColorPage: (map['priceColor'] ?? 10.0).toDouble(),
+      pricePerBWPage: (map['pricePerBWPage'] ?? map['priceBW'] ?? 3.0).toDouble(),
+      pricePerColorPage: (map['pricePerColorPage'] ?? map['priceColor'] ?? 10.0).toDouble(),
       activePrinters: map['activePrinters'] ?? 0,
       ownerName: map['ownerName'] ?? 'Shop Keeper',
-      phoneNumber: map['phone'] ?? map['phoneNumber'] ?? 'N/A',
-      email: map['email'] ?? 'N/A',
+      phoneNumber: phoneNumber,
+      email: map['email'],
       openingTime: map['openingTime'] ?? '09:00 AM',
       closingTime: map['closingTime'] ?? '09:00 PM',
     );

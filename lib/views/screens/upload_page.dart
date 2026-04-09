@@ -11,7 +11,6 @@ import '../../widgets/common/modern_card.dart';
 import '../../models/print_order_model.dart';
 import '../../models/file_model.dart';
 import '../../repositories/order_repository.dart';
-import 'print_options/print_options_page.dart';
 import 'pickup_page.dart';
 import 'history_page.dart'; // Rename reference if needed
 import 'widgets/order_details_sheet.dart';
@@ -21,11 +20,11 @@ import '../../services/notification_service.dart';
 import '../../services/pwa_service.dart';
 import '../../services/firestore_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'widgets/print_mode_selection_sheet.dart';
 import 'widgets/upload_source_sheet.dart';
 import 'qr_scanner_page.dart';
 import '../../xerox_shop/xerox_shop_model.dart';
 import '../../xerox_shop/xerox_shop_viewmodel.dart';
+import 'print_options/print_options_page.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -37,11 +36,12 @@ class UploadPage extends StatefulWidget {
 class _UploadPageState extends State<UploadPage> {
   final OrderRepository _orderRepo = OrderRepository();
   final Set<String> _autoOpenedIds = {}; // Prevent multiple auto-opens per session
-  // codeRevealed is now persisted in Firebase — no in-memory Set needed
+  late Stream<List<PrintOrderModel>> _ordersStream;
 
   @override
   void initState() {
     super.initState();
+    _ordersStream = _orderRepo.getActiveOrders();
     // 🔔 Prompt for notifications on home entrance
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -106,34 +106,19 @@ class _UploadPageState extends State<UploadPage> {
 
 
   void _showModeSheet({List<FileModel>? existingFiles}) {
-    final uploadVM = context.read<UploadViewModel>();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => PrintModeSelectionSheet(
-        onSelected: (mode) {
-          if (mode == PrintMode.xeroxShop) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => XeroxShopPage(files: existingFiles ?? []),
-              ),
-            );
-            return;
-          }
-
-          if (existingFiles != null && existingFiles.isNotEmpty) {
-             _handleSelectedFiles(mode, existingFiles);
-          } else {
-             _showSourceSheet(mode, uploadVM);
-          }
-        },
+    // 🚀 After modularization, only Xerox Shop mode remains in this app.
+    // Autonomous is now a separate project.
+    
+    // Always navigate to XeroxShopPage first to select a shop
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => XeroxShopPage(files: existingFiles ?? const []),
       ),
     );
   }
 
-  void _showSourceSheet(PrintMode mode, UploadViewModel uploadVM) {
+  void _showSourceSheet(UploadViewModel uploadVM) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -142,52 +127,52 @@ class _UploadPageState extends State<UploadPage> {
           Navigator.pop(context);
           await uploadVM.pickFromCamera();
           if (!context.mounted) return;
+          if (uploadVM.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error));
+            uploadVM.clearError();
+          }
           if (uploadVM.files.isEmpty) return;
-          _handleUploadedFiles(mode, uploadVM);
+          _handleUploadedFiles(uploadVM);
         },
         onGallery: () async {
           Navigator.pop(context);
           await uploadVM.pickFromGallery();
           if (!context.mounted) return;
+          if (uploadVM.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error));
+            uploadVM.clearError();
+          }
           if (uploadVM.files.isEmpty) return;
-          _handleUploadedFiles(mode, uploadVM);
+          _handleUploadedFiles(uploadVM);
         },
         onFiles: () async {
           Navigator.pop(context);
           await uploadVM.pickFromFiles();
           if (!context.mounted) return;
+          if (uploadVM.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error));
+            uploadVM.clearError();
+          }
           if (uploadVM.files.isEmpty) return;
-          _handleUploadedFiles(mode, uploadVM);
+          _handleUploadedFiles(uploadVM);
         },
       ),
     );
   }
 
-  void _handleUploadedFiles(PrintMode mode, UploadViewModel uploadVM) {
+  void _handleUploadedFiles(UploadViewModel uploadVM) {
     final files = List<FileModel>.from(uploadVM.files);
     uploadVM.clearPickedFiles();
-    _handleSelectedFiles(mode, files);
+    _handleSelectedFiles(files);
   }
 
-  void _handleSelectedFiles(PrintMode mode, List<FileModel> files) {
-    if (mode == PrintMode.autonomous) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PrintOptionsPage(
-            pickedFiles: files,
-            printMode: mode,
-          ),
-        ),
-      );
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => XeroxShopPage(files: files),
-        ),
-      );
-    }
+  void _handleSelectedFiles(List<FileModel> files) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => XeroxShopPage(files: files),
+      ),
+    );
   }
 
   Future<void> _openQRScanner({PrintOrderModel? targetOrder}) async {
@@ -208,37 +193,91 @@ class _UploadPageState extends State<UploadPage> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) => const Center(child: CircularProgressIndicator()),
+          builder: (_) => PopScope(
+            canPop: false, // 🛑 Disable system back button
+            child: const Center(
+              child: CircularProgressIndicator(
+                 color: Colors.white, // White loader on dimmed background
+                 strokeWidth: 4,
+              ),
+            ),
+          ),
         );
 
-        final bool verified = await FirestoreService().verifyOrderAtShop(
-          orderId: targetOrder.orderId,
-          scannedShopId: scannedShopId,
-        );
+        try {
+          final bool verified = await FirestoreService().verifyOrderAtShop(
+            orderId: targetOrder.orderId,
+            scannedShopId: scannedShopId,
+          );
 
-        if (!mounted) return;
-        
-        // 🆕 Fetch the latest order state to check orderStatus
-        final freshOrder = await FirestoreService().getOrder(targetOrder.orderId, printMode: 'xeroxShop');
+          if (!mounted) return;
+          
+          if (verified) {
+            // 🆕 Fetch the latest order state to check orderStatus
+            final freshOrder = await FirestoreService().getOrder(targetOrder.orderId, printMode: 'xeroxShop');
 
-        Navigator.pop(context); // close loading dialog
+            if (freshOrder != null) {
+              if (!freshOrder.isPrintingCompleted) {
+                if (mounted) Navigator.pop(context); // Close loading dialog
+                // 🛑 Block access if not printed yet
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    title: const Row(
+                      children: [
+                        Icon(Icons.hourglass_empty_rounded, color: Colors.orange),
+                        SizedBox(width: 12),
+                        Text('Not Ready'),
+                      ],
+                    ),
+                    content: const Text(
+                      'Order not printed yet. Please wait for the shop to finish printing before scanning.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                );
+                return;
+              }
 
-        if (verified && freshOrder != null) {
-          if (!freshOrder.isPrintingCompleted) {
-            // 🛑 Block access if not printed yet
+              // ✅ Persist scan status permanently
+              await FirestoreService().markOrderScanned(
+                orderId: targetOrder.orderId,
+                shopId: targetOrder.shopId,
+              );
+              
+              if (mounted) {
+                Navigator.pop(context); // Close loading dialog
+                // 🚀 Navigate to dedicated Pickup Page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => PickupPage(order: freshOrder)),
+                );
+              }
+            } else {
+              if (mounted) Navigator.pop(context);
+            }
+          } else {
+            if (mounted) Navigator.pop(context); // close loading dialog
+            // ❌ Wrong shop dialog
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 title: const Row(
                   children: [
-                    Icon(Icons.hourglass_empty_rounded, color: Colors.orange),
+                    Icon(Icons.error_outline_rounded, color: Color(0xFFE53935)),
                     SizedBox(width: 12),
-                    Text('Not Ready'),
+                    Text('Wrong Shop'),
                   ],
                 ),
                 content: const Text(
-                  'Order not printed yet. Please wait for the shop to finish printing before scanning.',
+                  'This order was not placed at this shop. Please scan the correct Xerox shop\'s QR code.',
                 ),
                 actions: [
                   TextButton(
@@ -248,44 +287,10 @@ class _UploadPageState extends State<UploadPage> {
                 ],
               ),
             );
-            return;
           }
-
-          // ✅ Persist scan status permanently
-          await FirestoreService().markOrderScanned(
-            orderId: targetOrder.orderId,
-            shopId: targetOrder.shopId,
-          );
-          if (!mounted) return;
-          // 🚀 Navigate to dedicated Pickup Page
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => PickupPage(order: freshOrder)),
-          );
-        } else {
-          // ❌ Wrong shop dialog
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              title: const Row(
-                children: [
-                  Icon(Icons.error_outline_rounded, color: Color(0xFFE53935)),
-                  SizedBox(width: 12),
-                  Text('Wrong Shop'),
-                ],
-              ),
-              content: const Text(
-                'This order was not placed at this shop. Please scan the correct Xerox shop\'s QR code.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
+        } catch (e) {
+           if (mounted) Navigator.pop(context);
+           debugPrint("❌ Scan Verification Error: $e");
         }
         return;
       }
@@ -462,8 +467,8 @@ class _UploadPageState extends State<UploadPage> {
                 const SizedBox(height: 6),
                 _bullet(bulletStyle, bulletColor, 'Paper quality: 70 GSM'),
                 const SizedBox(height: 6),
-                _bullet(bulletStyle, bulletColor, 'Single side prints'),
-                const SizedBox(height: 18),
+                _bullet(bulletStyle, bulletColor, 'Max 10MB per file'),
+                const SizedBox(height: 6),
                 SizedBox(
                   height: 48,
                   child: ElevatedButton(
@@ -659,7 +664,7 @@ class _UploadPageState extends State<UploadPage> {
   // ─── Orders Stream ───────────────────────────────────────────────────────────
   Widget _buildOrdersList() {
     return StreamBuilder<List<PrintOrderModel>>(
-      stream: _orderRepo.getActiveOrders(),
+      stream: _ordersStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Padding(
@@ -671,7 +676,10 @@ class _UploadPageState extends State<UploadPage> {
           );
         }
         if (!snapshot.hasData) return const SizedBox.shrink();
-        final allOrders = snapshot.data!.where((o) => o.isActive).toList();
+        // 🚀 FIX: Keep orders visible even after 'completed' status (Admin Done) 
+        // until the user actually picks them up (isPicked == false)
+        final allOrders = snapshot.data!.where((o) => o.isActive || (o.status == OrderStatus.completed && !o.isPicked)).toList();
+
 
         // 🚀 AUTO-REOPEN PICKUP PAGE Logic
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -707,17 +715,10 @@ class _UploadPageState extends State<UploadPage> {
           );
         }
 
-        final kioskOrders = allOrders.where((o) => o.printMode == PrintMode.autonomous).toList();
         final xeroxOrders = allOrders.where((o) => o.printMode == PrintMode.xeroxShop).toList();
 
         return Column(
           children: [
-            if (kioskOrders.isNotEmpty) ...[
-              _sectionHeader('KIOSK PRINTS', Icons.on_device_training_rounded),
-              const SizedBox(height: 12),
-              ...kioskOrders.map((order) => _buildOrderCard(order)),
-              const SizedBox(height: 24),
-            ],
             if (xeroxOrders.isNotEmpty) ...[
               _sectionHeader('XEROX SHOP ORDERS', Icons.store_rounded),
               const SizedBox(height: 12),
@@ -761,97 +762,18 @@ class _UploadPageState extends State<UploadPage> {
     final String displayId = order.customId != null 
         ? order.customId!.toUpperCase().replaceAll('_', ' ') 
         : 'JOB #${order.orderId.length > 6 ? order.orderId.substring(order.orderId.length - 6).toUpperCase() : order.orderId.toUpperCase()}';
-    // codeRevealed comes from Firebase — permanent after QR scan
-    final bool isVerified = order.codeRevealed || order.status == OrderStatus.completed;
+    // 🔐 Code is ONLY revealed after a successful QR scan (scanned) or legacy reveal
+    final bool isVerified = order.scanned || order.codeRevealed;
 
-    return Dismissible(
-      key: Key(order.orderId),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: Row(
-              children: [
-                Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 22),
-                const SizedBox(width: 10),
-                const Text('Delete Order?'),
-              ],
-            ),
-            content: Text(
-              order.isXerox
-                  ? 'This will remove the order from your account and notify the shop to clear it from their dashboard too.'
-                  : 'This will permanently remove this print job from your active orders.',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text('CANCEL', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.textTertiary)),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.error,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
-              ),
-            ],
-          ),
-        ) ?? false;
-      },
-      onDismissed: (_) async {
-        try {
-          await FirestoreService().deleteOrder(
-            order.orderId,
-            printMode: order.isXerox ? 'xeroxShop' : 'autonomous',
-            shopId: order.shopId,
-          );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Order deleted', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                backgroundColor: AppColors.textSecondary,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to delete: $e'), backgroundColor: AppColors.error),
-            );
-          }
-        }
-      },
-      background: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: AppColors.error,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
-            const SizedBox(height: 4),
-            Text('DELETE', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
-          ],
-        ),
-      ),
-      child: Stack(
+
+    return Stack(
       children: [
+
         InkWell(
           onTap: () => _showOrderDetails(order),
           borderRadius: BorderRadius.circular(16),
           child: ModernCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             margin: const EdgeInsets.only(bottom: 12),
             child: Row(
               children: [
@@ -883,79 +805,39 @@ class _UploadPageState extends State<UploadPage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (order.isXerox) ...[
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            const Icon(Icons.info_outline_rounded, size: 10, color: AppColors.success),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                "VIEW SHOP DETAILS",
-                                style: GoogleFonts.inter(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.success,
-                                  letterSpacing: 0.5,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            // 📄 Print Status (Real-time from Admin)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: (order.isPrintingCompleted ? Colors.green : Colors.orange).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: (order.isPrintingCompleted ? Colors.green : Colors.orange).withValues(alpha: 0.2),
+                        // 📄 Print Status (Real-time from Admin)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: (order.isPrintingCompleted ? Colors.green : Colors.orange).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: (order.isPrintingCompleted ? Colors.green : Colors.orange).withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                order.isPrintingCompleted 
+                                    ? Icons.check_circle_rounded 
+                                    : Icons.hourglass_bottom_rounded, 
+                                size: 12, 
+                                color: order.isPrintingCompleted ? Colors.green : Colors.orange,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                (order.orderStatus ?? 'NOT PRINTED YET').toUpperCase(),
+                                style: GoogleFonts.inter(
+                                  fontSize: 10, 
+                                  fontWeight: FontWeight.w900, 
+                                  color: order.isPrintingCompleted ? Colors.green : Colors.orange, 
+                                  letterSpacing: 0.5
                                 ),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    order.isPrintingCompleted 
-                                        ? Icons.check_circle_rounded 
-                                        : Icons.hourglass_bottom_rounded, 
-                                    size: 12, 
-                                    color: order.isPrintingCompleted ? Colors.green : Colors.orange,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    (order.orderStatus ?? 'NOT PRINTED YET').toUpperCase(),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10, 
-                                      fontWeight: FontWeight.w900, 
-                                      color: order.isPrintingCompleted ? Colors.green : Colors.orange, 
-                                      letterSpacing: 0.5
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // 📂 View Files Button
-                            _actionChip(
-                              label: 'VIEW FILES',
-                              icon: Icons.description_outlined,
-                              color: AppColors.primaryBlue,
-                              onPressed: () => _showOrderDetails(order),
-                            ),
-                            // 🏪 Shop Info Button
-                            _actionChip(
-                              label: 'SHOP INFO',
-                              icon: Icons.info_outline_rounded,
-                              color: AppColors.success,
-                              onPressed: () => _showOrderDetails(order),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ],
@@ -998,7 +880,7 @@ class _UploadPageState extends State<UploadPage> {
                             ),
                           ),
                         ],
-                        // Code: masked dots OR revealed number with animation
+                        // Code: revealed number with animation
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 450),
                           transitionBuilder: (child, anim) => FadeTransition(
@@ -1018,12 +900,9 @@ class _UploadPageState extends State<UploadPage> {
                                       ),
                                     ).animate().shimmer(duration: 800.ms, color: AppColors.success.withValues(alpha: 0.4))
                                   : Text(
-                                      '• • • •',
+                                      'LOCKED',
                                       key: const ValueKey('masked'),
                                       style: GoogleFonts.inter(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppColors.textTertiary,
                                         letterSpacing: 4,
                                       ),
                                     )
@@ -1068,9 +947,9 @@ class _UploadPageState extends State<UploadPage> {
       
         ),
       ],
-      ),
-      );
+    );
   }
+
 
   
 

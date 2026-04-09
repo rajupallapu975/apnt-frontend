@@ -10,6 +10,14 @@ class FileValidator {
     '.tiff',
   ];
 
+  static const int maxFileSizeMB = 10;
+  static const int maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
+
+  /// Checks if the file size is within the allowed limit (10MB).
+  static bool isValidSize(int sizeInBytes) {
+    return sizeInBytes <= maxFileSizeBytes;
+  }
+
   /// Checks if the file name has an allowed extension.
   static bool isValidFile(String fileName) {
     final extension = path.extension(fileName).toLowerCase();
@@ -21,7 +29,6 @@ class FileValidator {
       allowedExtensions.map((e) => e.replaceAll('.', '').toUpperCase()).join(', ');
 
   /// Validates a list of files and returns only the valid ones.
-  /// If any file is invalid, it can throw an exception or return a result indicating failure.
   static List<String> getInvalidFiles(List<String> fileNames) {
     return fileNames
         .where((name) => !isValidFile(name))

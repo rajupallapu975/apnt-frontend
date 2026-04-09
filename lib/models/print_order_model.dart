@@ -5,6 +5,8 @@ enum OrderStatus {
   expired,
   completed,
   cancelled,
+  failed,
+  refunded,
 }
 
 enum PrintMode {
@@ -83,13 +85,18 @@ class PrintOrderModel {
       userId: data['userId'] ?? '',
       createdAt: data['createdAt'] is Timestamp 
           ? (data['createdAt'] as Timestamp).toDate() 
-          : DateTime.parse(data['createdAt'].toString()),
+          : (data['createdAt'] != null ? DateTime.parse(data['createdAt'].toString()) : DateTime.now()),
       expiresAt: data['expiresAt'] is Timestamp 
           ? (data['expiresAt'] as Timestamp).toDate() 
-          : DateTime.parse(data['expiresAt'].toString()),
+          : (data['expiresAt'] != null ? DateTime.parse(data['expiresAt'].toString()) : DateTime(1970)),
       status: OrderStatus.values.firstWhere(
         (e) => e.name == data['status'].toString().toLowerCase(),
-        orElse: () => OrderStatus.active,
+        orElse: () {
+          final String s = data['status']?.toString().toLowerCase() ?? '';
+          if (s == 'hidden_failed' || s == 'failed_processing') return OrderStatus.failed;
+          if (s == 'refunded') return OrderStatus.refunded;
+          return OrderStatus.active;
+        },
       ),
       printMode: data['printMode'] == 'xeroxShop' ? PrintMode.xeroxShop : PrintMode.autonomous,
       printSettings: data['printSettings'] ?? {},
@@ -149,6 +156,42 @@ class PrintOrderModel {
 
   String? get shopName => printSettings['shopName']?.toString();
   String? get shopId => printSettings['shopId']?.toString();
+
+  List<Map<String, dynamic>> get fileSettings {
+    final List<dynamic> fList = printSettings['files'] ?? [];
+    return fList.cast<Map<String, dynamic>>();
+  }
+
+  bool getIsColor(int index) {
+    if (index < 0 || index >= fileSettings.length) return false;
+    final color = fileSettings[index]['color']?.toString().toUpperCase();
+    return color == 'COLOR';
+  }
+
+  bool getIsDuplex(int index) {
+    if (index < 0 || index >= fileSettings.length) return false;
+    return fileSettings[index]['doubleSided'] == true ||
+        fileSettings[index]['isDoubleSided'] == true;
+  }
+
+  String getOrientation(int index) {
+    if (index < 0 || index >= fileSettings.length) return 'portrait';
+    return fileSettings[index]['orientation']?.toString().toLowerCase() ??
+        'portrait';
+  }
+
+  int getCopies(int index) {
+    if (index < 0 || index >= fileSettings.length) return 1;
+    return (fileSettings[index]['copies'] ?? 1) as int;
+  }
+
+  int getPageCount(int index) {
+    if (index >= 0 && index < fileSettings.length) {
+      return (fileSettings[index]['pageCount'] ?? 1) as int;
+    }
+    return 1;
+  }
+
 
   List<String> get filenames {
     final List<dynamic> fList = printSettings['files'] ?? [];

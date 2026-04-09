@@ -47,29 +47,43 @@ class FilePickerSheet extends StatelessWidget {
 
       final List<FileModel> picked = [];
       final List<String> invalidExtensions = [];
+      final List<String> oversizedFiles = [];
 
       for (final img in images) {
-        if (FileValidator.isValidFile(img.name)) {
-          final raw = await img.readAsBytes();
-          final cloned = Uint8List.fromList(raw); // 🔥 CLONE IMMEDIATELY
-          
-          picked.add(FileModel(
-            id: DateTime.now().toString(),
-            name: img.name,
-            path: kIsWeb ? '' : img.path,
-            file: kIsWeb ? null : File(img.path),
-            bytes: cloned,
-            addedAt: DateTime.now(),
-            size: cloned.length,
-          ));
-        } else {
+        final raw = await img.readAsBytes();
+        
+        if (!FileValidator.isValidFile(img.name)) {
           invalidExtensions.add(path.extension(img.name));
+          continue;
         }
+        
+        if (!FileValidator.isValidSize(raw.length)) {
+          oversizedFiles.add(img.name);
+          continue;
+        }
+
+        final cloned = Uint8List.fromList(raw); // 🔥 CLONE IMMEDIATELY
+        
+        picked.add(FileModel(
+          id: DateTime.now().toString(),
+          name: img.name,
+          path: kIsWeb ? '' : img.path,
+          file: kIsWeb ? null : File(img.path),
+          bytes: cloned,
+          addedAt: DateTime.now(),
+          size: cloned.length,
+        ));
       }
 
       if (invalidExtensions.isNotEmpty && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Format mismatch: ${invalidExtensions.toSet().join(", ")} not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.')),
+        );
+      }
+      
+      if (oversizedFiles.isNotEmpty && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('The file must be below 10 MB. Omitted: ${oversizedFiles.join(", ")}')),
         );
       }
 
@@ -90,31 +104,44 @@ class FilePickerSheet extends StatelessWidget {
 
       final List<FileModel> picked = [];
       final List<String> invalidExtensions = [];
+      final List<String> oversizedFiles = [];
 
       for (final f in result.files) {
-        if (FileValidator.isValidFile(f.name)) {
-          Uint8List? clonedBytes;
-          if (f.bytes != null) {
-            clonedBytes = Uint8List.fromList(f.bytes!); // 🔥 CLONE IMMEDIATELY
-          }
-
-          picked.add(FileModel(
-            id: DateTime.now().toString(),
-            name: f.name,
-            path: f.path ?? '',
-            file: f.path == null ? null : File(f.path!),
-            bytes: clonedBytes,
-            addedAt: DateTime.now(),
-            size: f.size,
-          ));
-        } else {
+        if (!FileValidator.isValidFile(f.name)) {
           invalidExtensions.add(path.extension(f.name));
+          continue;
         }
+        
+        if (!FileValidator.isValidSize(f.size)) {
+          oversizedFiles.add(f.name);
+          continue;
+        }
+
+        Uint8List? clonedBytes;
+        if (f.bytes != null) {
+          clonedBytes = Uint8List.fromList(f.bytes!); // 🔥 CLONE IMMEDIATELY
+        }
+
+        picked.add(FileModel(
+          id: DateTime.now().toString(),
+          name: f.name,
+          path: f.path ?? '',
+          file: f.path == null ? null : File(f.path!),
+          bytes: clonedBytes,
+          addedAt: DateTime.now(),
+          size: f.size,
+        ));
       }
 
       if (invalidExtensions.isNotEmpty && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Format mismatch: ${invalidExtensions.toSet().join(", ")} not accepted. Only PDF, JPG, JPEG, PNG, BMP, TIFF are allowed.')),
+        );
+      }
+      
+      if (oversizedFiles.isNotEmpty && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('The file must be below 10 MB. Omitted: ${oversizedFiles.join(", ")}')),
         );
       }
 

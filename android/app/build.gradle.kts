@@ -26,7 +26,7 @@ android {
         applicationId = "com.example.apnt"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion // Required for desugaring
+        minSdk = flutter.minSdkVersion // MANDATORY: Required for CameraX / mobile_scanner build stability. DO NOT REVERT.
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -86,6 +86,13 @@ class LocalStorageService {
     }
   }
 
+  /// 🗑️ CLEAR ALL local orders history
+  Future<void> clearAllOrdersLocally() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyOrders);
+  }
+
+
   /// 📞 Save the last used phone number for prefilling
   Future<void> saveLastPhone(String phone) async {
     final prefs = await SharedPreferences.getInstance();

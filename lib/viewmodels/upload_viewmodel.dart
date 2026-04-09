@@ -139,11 +139,14 @@ class UploadViewModel extends ChangeNotifier {
   }
 
   void _addFileIfValid(FileModel file) {
-    if (FileValidator.isValidFile(file.name)) {
+    if (!FileValidator.isValidFile(file.name)) {
+      _error = "Unsupported format: ${file.name}";
+    } else if (!FileValidator.isValidSize(file.size)) {
+      _error = "The file must be below 10 MB";
+      debugPrint("❌ File size limit exceeded: ${file.size} bytes");
+    } else {
       _files.add(file);
       _error = null;
-    } else {
-      _error = "Unsupported file format: ${file.name}";
     }
     notifyListeners();
   }

@@ -9,6 +9,9 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'firestore_service.dart';
+// 🛡️ Safe platform abstraction for JS calls
+import '../utils/notification_helper.dart' if (dart.library.js) '../utils/notification_helper_web.dart' as web_js;
+
 
 class NotificationItem {
   final String id;
@@ -65,7 +68,6 @@ class NotificationService extends ChangeNotifier {
         
         // 🛠️ FIX: Handle cases where platform returns decorated strings like "TimezoneInfo(Asia/Kolkata, ...)"
         if (timeZoneName.contains('(')) {
-          // Extract content within parentheses if possible, or just the part before the first comma
           final match = RegExp(r'\(([^,)]+)').firstMatch(timeZoneName);
           if (match != null && match.groupCount >= 1) {
             timeZoneName = match.group(1)!;
@@ -74,18 +76,12 @@ class NotificationService extends ChangeNotifier {
         
         try {
           tz.setLocalLocation(tz.getLocation(timeZoneName));
-          debugPrint("🔔 Timezone initialized: $timeZoneName");
         } catch (e) {
-          debugPrint("⚠️ Location $timeZoneName not found in database, falling back to UTC");
           tz.setLocalLocation(tz.getLocation('UTC'));
         }
       }
     } catch (e) {
-      debugPrint("⚠️ Could not initialize timezone: $e");
-      // Fallback to UTC to prevent crashes later
-      try {
-        tz.setLocalLocation(tz.getLocation('UTC'));
-      } catch (_) {}
+      try { tz.setLocalLocation(tz.getLocation('UTC')); } catch (_) {}
     }
 
     await loadNotifications();
@@ -102,27 +98,88 @@ class NotificationService extends ChangeNotifier {
       if (!kIsWeb) {
         await _localNotifications.initialize(
           settings: initializationSettings,
-          onDidReceiveNotificationResponse: (details) {
-            // Handle notification tap
-          },
+          onDidReceiveNotificationResponse: (details) {},
         );
-        // Request permissions
-        await requestPermission();
       }
+      // Request permissions (Unified Web/Mobile)
+      await requestPermission();
     } catch (e) {
-      debugPrint("Notification Plugin not linked yet. Please perform a Full Re-run (Stop & Run). Error: $e");
+      debugPrint("Notification Plugin initialization check failed: $e");
     }
 
     _startExpiryChecker();
+    initOrderListeners();
+  }
+
+  StreamSubscription? _orderSubscription;
+  void initOrderListeners() {
+    _orderSubscription?.cancel();
+    _orderSubscription = FirestoreService().getActiveOrders().listen((orders) {
+      _checkOrdersStatusRealtime(orders);
+    });
+  }
+
+  void _checkOrdersStatusRealtime(List<PrintOrderModel> orders) {
+    for (var order in orders) {
+      // 🛡️ 1. Detect COMPLETION (Real-time)
+      if (order.status == OrderStatus.completed || order.isPrintingCompleted) {
+        final completionKey = 'comp_${order.orderId}';
+        if (!_sentAlerts.contains(completionKey)) {
+          notifyOrderCompleted(order);
+          _sentAlerts.add(completionKey);
+        }
+        continue;
+      }
+    }
   }
 
   Future<void> requestPermission() async {
-    if (kIsWeb) return;
+    final prefs = await SharedPreferences.getInstance();
+    int retryCount = prefs.getInt('notification_permission_retries') ?? 0;
+    
+    // 🛡️ STOP after 3 failed attempts to avoid annoying the user
+    if (retryCount >= 3) {
+      debugPrint("🔔 Permission Retry Policy: Max attempts (3) reached.");
+      return;
+    }
+
     try {
-      await Permission.notification.request();
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        if (await Permission.scheduleExactAlarm.isDenied) {
-          await Permission.scheduleExactAlarm.request();
+      if (kIsWeb) {
+        // 🌐 WEB REQUEST via Safe Abstraction
+        final String status = await web_js.getBrowserNotificationStatus();
+        if (status != 'granted') {
+           debugPrint("🌐 Requesting Web Notification Permission (Attempt ${retryCount + 1})...");
+           web_js.triggerBrowserNotificationPermission();
+           
+           // We'll check again next time or via an event listener if we had JS-to-Dart callbacks
+           // For now, optimistic retry count increment if not granted
+           await prefs.setInt('notification_permission_retries', retryCount + 1);
+        } else {
+           await prefs.setInt('notification_permission_retries', 0); // Reset on success
+        }
+      } else {
+        // 📱 MOBILE REQUEST
+        PermissionStatus status = await Permission.notification.request();
+        
+        if (status.isDenied || status.isPermanentlyDenied) {
+          debugPrint("📱 Notification Permission Denied (Attempt ${retryCount + 1}).");
+          await prefs.setInt('notification_permission_retries', retryCount + 1);
+          
+          if (retryCount < 2) {
+            addNotification(
+              title: "Notifications Disabled",
+              body: "Enable system notifications to receive order updates.",
+              type: "warning",
+              showLocal: false
+            );
+          }
+        } else {
+          await prefs.setInt('notification_permission_retries', 0); // Reset on success
+          if (defaultTargetPlatform == TargetPlatform.android) {
+            if (await Permission.scheduleExactAlarm.isDenied) {
+              await Permission.scheduleExactAlarm.request();
+            }
+          }
         }
       }
     } catch (e) {
@@ -192,9 +249,7 @@ class NotificationService extends ChangeNotifier {
   }
 
   void markAsRead() {
-    for (var n in _notifications) {
-      n.isRead = true;
-    }
+    for (var n in _notifications) { n.isRead = true; }
     saveNotifications();
     notifyListeners();
   }
@@ -205,58 +260,53 @@ class NotificationService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Trigger Logic ─────────────────────────────────────────────────────────
+  void notifyOrderCompleted(PrintOrderModel order) {
+    final String orderNum = (order.customId ?? order.orderId).toLowerCase().replaceFirst('order_', '');
+    
+    addNotification(
+      title: 'Greetings! Print Complete! 🎉',
+      body: 'the printing of order $orderNum is completed so collect your prints at your shop',
+      type: 'success',
+    );
+
+    // 🛡️ Cancel any scheduled expiry alerts for this order
+    _cancelExpiryAlerts(order.pickupCode);
+  }
+
+  Future<void> _cancelExpiryAlerts(String pickupCode) async {
+    if (kIsWeb) return;
+    try {
+      await _localNotifications.cancel(id: pickupCode.hashCode + 100); // 1h warning
+      await _localNotifications.cancel(id: pickupCode.hashCode + 0);   // expiry alert
+      debugPrint("🔕 Cancelled scheduled expiry alerts for pickup code: $pickupCode");
+    } catch (e) {
+      debugPrint("Error cancelling notifications: $e");
+    }
+  }
 
   void notifyOrderCreated(String pickupCode, DateTime expiresAt, {bool isXerox = false}) {
     addNotification(
       title: 'Order Status: Active',
       body: isXerox
-          // 🔒 Do NOT reveal the code in notifications — user must scan QR at shop
-          ? 'Your Xerox order is active. Visit the shop and scan their QR to reveal your pickup code.'
-          : 'Pickup code generated: $pickupCode. Scan it at the printer.',
+          ? 'Your Xerox order is active. Visit the shop and scan their QR code to collect.'
+          : 'Your order is active. Proceed to the printer to scan and collect.',
       type: 'success',
     );
-    
-    // Schedule background alerts for expiry
     _scheduleExpiryAlerts(pickupCode, expiresAt, isXerox: isXerox);
   }
 
-  void notifyOrderPrinted(String orderId) {
-    final String displayId = orderId.length > 6 ? orderId.substring(0, 6).toUpperCase() : orderId.toUpperCase();
-    addNotification(
-      title: 'Print Complete!',
-      body: 'Your order #$displayId has been printed.',
-      type: 'success',
-    );
-  }
-
-  // Schedule alerts that work when app is closed
   Future<void> _scheduleExpiryAlerts(String pickupCode, DateTime expiresAt, {bool isXerox = false}) async {
     if (kIsWeb) return;
-
     final now = DateTime.now();
-    // 🔒 For Xerox orders, never show the code in notifications
-    final String orderRef = isXerox ? 'Xerox order' : 'order (Code: $pickupCode)';
-    final String actionReminder = isXerox ? ' Visit the shop and scan their QR code to print.' : '';
+    final String orderRef = isXerox ? 'Xerox order' : 'order ($pickupCode)';
     
-    // 4 Hour Alert
-    final fourHourMark = expiresAt.subtract(const Duration(hours: 4));
-    if (fourHourMark.isAfter(now)) {
-      await _scheduleLocalNotification(
-        id: (pickupCode.hashCode + 400),
-        title: 'Order Expiring Soon',
-        body: 'Your $orderRef expires in 4 hours.$actionReminder',
-        scheduledDate: fourHourMark,
-      );
-    }
-
     // 1 Hour Alert
     final oneHourMark = expiresAt.subtract(const Duration(hours: 1));
     if (oneHourMark.isAfter(now)) {
       await _scheduleLocalNotification(
         id: (pickupCode.hashCode + 100),
         title: 'Final Expiry Warning',
-        body: 'Your $orderRef will expire in 1 hour. Visit the shop now!$actionReminder',
+        body: 'Your $orderRef will expire in 1 hour.',
         scheduledDate: oneHourMark,
       );
     }
@@ -304,34 +354,30 @@ class NotificationService extends ChangeNotifier {
   }
 
   Future<void> _checkOrdersExpiry() async {
-    // This part still adds items to the IN-APP list for when user opens app
     final fs = FirestoreService();
     final orders = await fs.getActiveOrders().first; 
     final now = DateTime.now();
 
     for (var order in orders) {
+      // 🛡️ SKIP EXPIRED NOTIFICATION IF COMPLETED
+      if (order.status == OrderStatus.completed || order.isPrintingCompleted) {
+        // Real-time listener handles the notification, but we double check here
+        final completionKey = 'comp_${order.orderId}';
+        if (!_sentAlerts.contains(completionKey)) {
+          notifyOrderCompleted(order);
+          _sentAlerts.add(completionKey);
+        }
+        continue;
+      }
+
       final remaining = order.expiresAt.difference(now);
       final minutes = remaining.inMinutes;
 
-      if (minutes > 0) {
-        if (minutes > 225 && minutes <= 240) {
-          _triggerListAlert(order.orderId, '4 hours', 'warning');
-        }
-        else if (minutes > 45 && minutes <= 60) {
-          _triggerListAlert(order.orderId, '1 hour', 'warning');
-        }
-      } else {
-        // 🚨 JUST EXPIRED
+      if (minutes <= 0) {
         _triggerListAlert(order.orderId, 'now (Expired)', 'payment');
-        
-        // 🗳️ ARCHIVE TO LOCAL HISTORY
-        // We set status to expired so it shows up correctly in history
         final expiredOrder = order.copyWith(status: OrderStatus.expired, reason: "Auto-Expired");
         await fs.archiveOrderLocally(expiredOrder);
-        
-        // ☁️ UPDATE FIRESTORE STATUS
         await fs.updateOrderStatus(orderId: order.orderId, status: 'EXPIRED');
-        debugPrint("🗑️ Order ${order.orderId} moved to history because it expired.");
       }
     }
   }
@@ -340,7 +386,6 @@ class NotificationService extends ChangeNotifier {
   void _triggerListAlert(String orderId, String label, String type) {
     final key = '${orderId}_$label';
     if (_sentAlerts.contains(key)) return;
-
     final String displayId = orderId.length > 6 ? orderId.substring(0, 6).toUpperCase() : orderId.toUpperCase();
     addNotification(
       title: label.contains('Expired') ? 'Order Expired' : 'Order Expiring Soon',

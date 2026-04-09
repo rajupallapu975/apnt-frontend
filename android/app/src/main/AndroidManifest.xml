@@ -18,6 +18,10 @@
         android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true">
         
+        <meta-data
+            android:name="android.window.PROPERTY_LEVEL_BACK_GESTURE"
+            android:value="true" />
+
         <!-- Disable Impeller to fix 'Invalid external texture' camera errors -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

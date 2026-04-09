@@ -55,19 +55,17 @@ class PaymentSuccessPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 40),
-
+                    const SizedBox(height: 16),
                     // ✅ Success Icon
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: AppColors.success.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check_rounded, color: AppColors.success, size: 64),
+                      child: const Icon(Icons.check_rounded, color: AppColors.success, size: 48),
                     ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack).shimmer(delay: 800.ms),
-
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 20),
 
                     Text(
                       isXerox ? 'FILES SENT TO SHOP' : 'ORDER CONFIRMED',
@@ -86,8 +84,7 @@ class PaymentSuccessPage extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
-
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 20),
 
                     // 🔑 Pickup Code Card (Autonomous / Kiosk only)
                     if (!isXerox)
@@ -124,7 +121,7 @@ class PaymentSuccessPage extends StatelessWidget {
                     if (isXerox)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 28),
+                        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -139,6 +136,7 @@ class PaymentSuccessPage extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
+
                             // Lock icon
                             Container(
                               padding: const EdgeInsets.all(16),
@@ -173,13 +171,13 @@ class PaymentSuccessPage extends StatelessWidget {
                             Text(
                               '• • • •',
                               style: GoogleFonts.inter(
-                                fontSize: 36,
+                                fontSize: 32,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.textTertiary,
-                                letterSpacing: 10,
+                                letterSpacing: 8,
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                             // Scan button hint
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -281,18 +279,16 @@ class PaymentSuccessPage extends StatelessWidget {
                         ),
                       ).animate().fadeIn(delay: 800.ms),
 
-                    const Spacer(),
-                    const SizedBox(height: 24),
-
+                    const SizedBox(height: 12),
                     PrimaryButton(
                       label: 'DONE',
                       onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
                     ).animate().fadeIn(delay: 1000.ms).slideY(begin: 0.5, end: 0),
-
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
+
             ),
           ),
         ),

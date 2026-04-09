@@ -92,6 +92,7 @@ class BackendService {
     required double amount,
     required int totalPages,
     String printMode = 'autonomous', // New: added printMode
+    String? customId, // Sequential ID (order_1)
   }) async {
     final user = _auth.currentUser;
     final String userId = user?.email ?? "guest_user";
@@ -109,6 +110,7 @@ class BackendService {
           "amount": amount,
           "totalPages": totalPages,
           "printMode": printMode, // Pass mode to backend
+          "customId": customId,
         }),
       ).timeout(const Duration(seconds: 30));
 
@@ -137,7 +139,7 @@ class BackendService {
       final response = await http.get(
         Uri.parse(url),
         headers: {"Content-Type": "application/json"},
-      ).timeout(const Duration(seconds: 8));
+      ).timeout(const Duration(seconds: 30));
 
       debugPrint("📡 Backend Response: ${response.statusCode}");
 
@@ -206,7 +208,7 @@ class BackendService {
           "localFilePaths": localFilePaths,
           "printMode": printMode,
         }),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode != 200) {
         throw Exception("Server failed to attach files (${response.statusCode}): ${response.body}");

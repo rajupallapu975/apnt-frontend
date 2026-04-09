@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:apnt/utils/file_validator.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -1581,7 +1582,14 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     );
     if (result == null || result.files.isEmpty) return;
 
+    final List<String> oversizedFiles = [];
+
     for (final f in result.files) {
+      if (!FileValidator.isValidSize(f.size)) {
+        oversizedFiles.add(f.name);
+        continue;
+      }
+
       final String webPath = kIsWeb && f.bytes != null 
           ? "data:image/png;base64,${base64Encode(f.bytes!)}" 
           : (f.path ?? '');
@@ -1604,6 +1612,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       if (f.name.toLowerCase().endsWith('.pdf')) {
         _loadPdfMetadata(pickedFiles.length - 1, newFile);
       }
+    }
+
+    if (oversizedFiles.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('The file must be below 10 MB. Omitted: ${oversizedFiles.join(", ")}')),
+      );
     }
   }
 }

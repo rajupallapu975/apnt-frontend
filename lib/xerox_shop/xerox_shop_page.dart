@@ -261,9 +261,14 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
        }
     }
 
-    // 4. Trigger File Picker Sheet
+    // 4. Proceed with files or trigger source selection
     if (!mounted || !context.mounted) return;
-    _showSourceSheet(context, shop);
+    
+    if (widget.files.isNotEmpty) {
+      _navigateToPrintOptions(context, shop, widget.files);
+    } else {
+      _showSourceSheet(context, shop);
+    }
   }
 
   Future<bool> _showClosedWarning(BuildContext context, XeroxShopModel shop) async {
@@ -306,30 +311,32 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
           Navigator.pop(context);
           await uploadVM.pickFromCamera();
           if (!mounted || !context.mounted) return;
-          _handlePickedFiles(context, shop, uploadVM);
+          _handlePickedFromSheet(context, shop, uploadVM);
         },
         onGallery: () async {
           Navigator.pop(context);
           await uploadVM.pickFromGallery();
           if (!mounted || !context.mounted) return;
-          _handlePickedFiles(context, shop, uploadVM);
+          _handlePickedFromSheet(context, shop, uploadVM);
         },
         onFiles: () async {
           Navigator.pop(context);
           await uploadVM.pickFromFiles();
           if (!mounted || !context.mounted) return;
-          _handlePickedFiles(context, shop, uploadVM);
+          _handlePickedFromSheet(context, shop, uploadVM);
         },
       ),
     );
   }
 
-  void _handlePickedFiles(BuildContext context, XeroxShopModel shop, UploadViewModel uploadVM) {
+  void _handlePickedFromSheet(BuildContext context, XeroxShopModel shop, UploadViewModel uploadVM) {
     if (uploadVM.files.isEmpty) return;
-    
-    final files = List<FileModel>.from(uploadVM.files);
+    final filesSource = List<FileModel>.from(uploadVM.files);
     uploadVM.clearPickedFiles(); // ✅ Clear tray after navigation
+    _navigateToPrintOptions(context, shop, filesSource);
+  }
 
+  void _navigateToPrintOptions(BuildContext context, XeroxShopModel shop, List<FileModel> files) {
     Navigator.push(
       context,
       MaterialPageRoute(

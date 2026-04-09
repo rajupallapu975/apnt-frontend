@@ -208,6 +208,11 @@ class _PaymentProcessingPageState
         _progress = 0.45;
       });
 
+      // 🆔 FETCH USER ORDER COUNT FOR SEQUENTIAL NAMING (order_1)
+      final stats = await FirestoreService().getUserStatistics();
+      final currentOrderCount = (stats['totalOrders'] as num? ?? 0).toInt();
+      final String customId = "order_${currentOrderCount + 1}";
+
       final verifyResult = await BackendService().verifyPayment(
         razorpayOrderId: orderId,
         razorpayPaymentId: paymentId,
@@ -216,6 +221,7 @@ class _PaymentProcessingPageState
         amount: widget.expectedPrice,
         totalPages: widget.expectedPages,
         printMode: widget.printSettings['printMode'] ?? 'autonomous',
+        customId: customId,
       );
 
       final finalOrderId = verifyResult['orderId'];
@@ -327,11 +333,11 @@ class _PaymentProcessingPageState
         } catch (_) {}
       }
       await BackendService().refundPayment(razorpayPaymentId: paymentId, amount: widget.expectedPrice);
-      _goToError("Payment successful, but setup failed. Refund initiated.");
+      _goToError("Payment successful, but setup failed. Refund initiated.", isRefundInitiated: true);
     }
   }
 
-  void _goToError(dynamic error) {
+  void _goToError(dynamic error, {bool isRefundInitiated = false}) {
     if (!mounted) return;
     final String message = error.toString().toLowerCase();
     bool isUserCancel = message.contains("cancel") || message.contains("dismiss") || message.contains("back") || message.contains("pop") || message == "undefined" || message == "null" || message.trim().isEmpty;
@@ -346,6 +352,7 @@ class _PaymentProcessingPageState
       MaterialPageRoute(
         builder: (_) => PaymentErrorPage(
           message: error.toString(),
+          isRefundInitiated: isRefundInitiated,
           onRetry: (errorCtx) {
             Navigator.pushReplacement(
               errorCtx,

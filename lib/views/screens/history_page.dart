@@ -51,7 +51,17 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
         centerTitle: true,
         elevation: 0,
         backgroundColor: AppColors.background,
+        actions: [
+          if (_completedOrders.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.error),
+              tooltip: 'Clear All',
+              onPressed: _confirmDeleteAll,
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
+
       backgroundColor: AppColors.background,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -165,6 +175,31 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
       _loadHistory();
     }
   }
+
+  Future<void> _confirmDeleteAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Clear All History?'),
+        content: const Text('This will permanently remove ALL completed orders from your local list. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            child: const Text('CLEAR ALL'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _localStorage.clearAllOrdersLocally();
+      _loadHistory();
+    }
+  }
+
 
 
   Widget _buildEmptyState() {

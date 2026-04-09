@@ -1,3 +1,4 @@
+import 'package:apnt/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
@@ -17,6 +18,8 @@ class AuthViewModel extends ChangeNotifier {
       _user = user;
       if (user != null) {
         await _loadUserProfile();
+        // 🔔 Restart notification listeners with correct user email
+        NotificationService().initOrderListeners();
       } else {
         _phoneNumber = null;
       }
