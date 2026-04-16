@@ -10,9 +10,9 @@ class BackendConfig {
   /// Get the base URL for the backend based on current context
   static String get baseUrl {
     // ⚠️ UPDATE THIS IP to your LAPTOP'S CURRENT IP if testing locally on a real device
-    const String laptopIp = "10.0.53.78";
-    const String localUrl = "http://$laptopIp:5000";
-    const String renderUrl = "https://printer-backend-ch2e.onrender.com";
+    const String laptopIp = "13.233.76.8";
+    const String localUrl = "http://$laptopIp:5001";
+    const String renderUrl = "http://13.233.76.8:5001"; // Updated to match user request as primary cloud URL too
 
     if (isProduction) return renderUrl;
 
