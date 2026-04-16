@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:rxdart/rxdart.dart';
 
 import 'package:apnt/config/backend_config.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +10,7 @@ import 'package:http/http.dart' as http;
 import '../models/print_order_model.dart';
 import '../utils/app_exceptions.dart';
 import 'local_storage_service.dart';
+import 'backend_service.dart';
 import 'package:rxdart/rxdart.dart';
 
 class FirestoreService {
@@ -308,20 +310,37 @@ class FirestoreService {
   ================================================= */
 
   Stream<List<PrintOrderModel>> getUserOrders() {
-    final String? userEmail = _auth.currentUser?.email;
-    if (userEmail == null) {
-      return Stream.value([]);
+    final user = _auth.currentUser;
+    if (user == null) return Stream.value([]);
+
+    final String uid = user.uid;
+    final String? email = user.email;
+
+    final List<Stream<List<PrintOrderModel>>> streams = [
+      _ordersCollection
+          .where('userId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+    ];
+
+    if (email != null && email.isNotEmpty) {
+      streams.add(
+        _ordersCollection
+            .where('userId', isEqualTo: email)
+            .orderBy('createdAt', descending: true)
+            .snapshots()
+            .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
     }
 
-    return _ordersCollection
-        .where('userId', isEqualTo: userEmail)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs
-                .map((doc) =>
-                    PrintOrderModel.fromFirestore(doc))
-                .toList());
+    return Rx.combineLatest(streams, (List<List<PrintOrderModel>> results) {
+      final all = results.expand((list) => list).toList();
+      final uniqueIds = <String>{};
+      final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
+      unique.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return unique;
+    }).asBroadcastStream();
   }
 
   /* =================================================
@@ -330,64 +349,94 @@ class FirestoreService {
 
   Stream<List<PrintOrderModel>> getActiveOrders() {
     final user = _auth.currentUser;
-    final String userEmail = user?.email ?? 'guest_user';
-
-    debugPrint("🔍 FirestoreService: getActiveOrders - Fetching for email: $userEmail");
+    if (user == null) return Stream.value([]);
     
-    // Stream 1: Kiosk Orders
-    final kioskStream = _ordersCollection
-        .where('userId', isEqualTo: userEmail)
-        .where('status', isEqualTo: 'ACTIVE')
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList());
+    final String uid = user.uid;
+    final String? email = user.email;
+    const List<String> statusList = ['ACTIVE', 'ACTIVE', 'completed', 'COMPLETED', 'printing', 'PRINTING', 'ready', 'READY'];
 
-    // Stream 2: Xerox Shop Orders
-    final xeroxStream = _firestore.collection('xerox_orders')
-        .where('userId', isEqualTo: userEmail)
-        .where('status', whereIn: ['ACTIVE', 'completed', 'printing', 'ready'])
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList());
+    // 🏎️ 1. Fetch Streams (Multiple lookups to support transition)
+    final List<Stream<List<PrintOrderModel>>> streams = [
+      // Kiosk (UID)
+      _ordersCollection
+          .where('userId', isEqualTo: uid)
+          .where('status', isEqualTo: 'ACTIVE')
+          .snapshots()
+          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList()),
+      
+      // Xerox (UID)
+      _firestore.collection('xerox_orders')
+          .where('userId', isEqualTo: uid)
+          .where('status', whereIn: statusList)
+          .snapshots()
+          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList()),
+    ];
 
-    return CombineLatestStream.combine2<List<PrintOrderModel>, List<PrintOrderModel>, List<PrintOrderModel>>(
-      kioskStream,
-      xeroxStream,
-      (kiosk, xerox) {
-        // Merge both lists
-        final merged = [...kiosk, ...xerox];
-        
-        // Remove duplicates by orderId (just in case)
-        final uniqueMap = <String, PrintOrderModel>{};
-        for (var o in merged) {
-          uniqueMap[o.orderId] = o;
-        }
+    if (email != null && email.isNotEmpty) {
+      streams.add(
+        _ordersCollection
+            .where('userId', isEqualTo: email)
+            .where('status', isEqualTo: 'ACTIVE')
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
+      streams.add(
+        _firestore.collection('xerox_orders')
+            .where('userId', isEqualTo: email)
+            .where('status', whereIn: statusList)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
+    }
 
-        final now = DateTime.now();
-        // Filter by expiry and sort by creation time
-        final filtered = uniqueMap.values.where((o) => o.expiresAt.isAfter(now)).toList();
-        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        
-        return filtered;
-      },
-    );
+    return Rx.combineLatest(streams, (List<List<PrintOrderModel>> results) {
+      final all = results.expand((list) => list).toList();
+      final uniqueIds = <String>{};
+      final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
+      
+      final now = DateTime.now();
+      final filtered = unique.where((o) => o.expiresAt.isAfter(now)).toList();
+      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return filtered;
+    }).asBroadcastStream();
   }
 
   Stream<List<PrintOrderModel>> getActiveXeroxOrders() {
     final user = _auth.currentUser;
-    final String userEmail = user?.email ?? 'guest_user';
-
-    debugPrint("🔍 FirestoreService: getActiveXeroxOrders - Fetching for email: $userEmail");
+    if (user == null) return Stream.value([]);
     
-    return _firestore.collection('xerox_orders')
-        .where('userId', isEqualTo: userEmail)
-        .where('status', whereIn: ['ACTIVE', 'completed', 'printing', 'ready'])
-        .snapshots()
-        .map((snapshot) {
-      final orders = snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList();
+    final String uid = user.uid;
+    final String? email = user.email;
+    const List<String> statusList = ['ACTIVE', 'ACTIVE', 'completed', 'COMPLETED', 'printing', 'PRINTING', 'ready', 'READY'];
+
+    final List<Stream<List<PrintOrderModel>>> streams = [
+      _firestore.collection('xerox_orders')
+          .where('userId', isEqualTo: uid)
+          .where('status', whereIn: statusList)
+          .snapshots()
+          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+    ];
+
+    if (email != null && email.isNotEmpty) {
+      streams.add(
+        _firestore.collection('xerox_orders')
+            .where('userId', isEqualTo: email)
+            .where('status', whereIn: statusList)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
+    }
+
+    return Rx.combineLatest(streams, (List<List<PrintOrderModel>> results) {
+      final all = results.expand((list) => list).toList();
+      final uniqueIds = <String>{};
+      final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
+      
       final now = DateTime.now();
-      final filtered = orders.where((o) => o.expiresAt.isAfter(now)).toList();
+      final filtered = unique.where((o) => o.expiresAt.isAfter(now)).toList();
       filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return filtered;
-    });
+    }).asBroadcastStream();
   }
 
   /* =================================================
@@ -420,9 +469,9 @@ class FirestoreService {
       }
 
       // 🥈 Fallback: Manual aggregation if user doc doesn't have fields yet
-      final String? userEmail = _auth.currentUser?.email;
+      final user = _auth.currentUser;
       final querySnapshot = await _ordersCollection
-          .where('userId', isEqualTo: userEmail)
+          .where('userId', isEqualTo: user?.uid)
           .get();
 
       double totalAmount = 0.0;
@@ -586,6 +635,22 @@ class FirestoreService {
     }
 
     try {
+      // 🕵️ Get order details FIRST before deleting record to have publicIds
+      final orderDoc = await getOrder(orderId, printMode: printMode);
+      if (orderDoc != null && orderDoc.publicIds.isNotEmpty) {
+        // 🚀 FORCE Cloudinary cleanup BEFORE Firebase deletion
+        try {
+          await BackendService().deleteOrderFiles(
+            orderId: orderId, 
+            publicIds: orderDoc.publicIds
+          ).timeout(const Duration(seconds: 15));
+          debugPrint("🗑️ Cloudinary Purge Request Success for $orderId");
+        } catch (e) {
+          debugPrint("⚠️ Cloudinary Purge Request failed/timeout: $e");
+          // Proceed anyway to avoid stuck records after attempt
+        }
+      }
+
       await Future.wait(futures);
       debugPrint('✅ Order $orderId fully cascade-deleted');
     } on FirebaseException catch (e) {

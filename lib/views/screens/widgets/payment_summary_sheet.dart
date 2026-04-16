@@ -170,7 +170,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                   _buildSimpleRow('Destination', widget.printSettings['shopName']),
                   const SizedBox(height: 12),
                 ],
-                _buildSimpleRow('Base Price', '₹3/page'),
+                _buildSimpleRow('Base Price', '₹2/page'),
                 const SizedBox(height: 12),
                 _buildSimpleRow('Subtotal', '₹${widget.totalPrice.toStringAsFixed(0)}'),
                 const Padding(
@@ -512,7 +512,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  "This print order will automatically expire 12 hours after creation.",
+                  "This print order will automatically expire 24 hours after creation.",
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 10,

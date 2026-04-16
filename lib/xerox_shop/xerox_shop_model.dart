@@ -92,7 +92,7 @@ class XeroxShopModel {
       distance: 'Nearby', 
       imageUrl: map['imageUrl'] ?? '',
       isOpen: map['isOpen'] ?? true, // Manual override from DB
-      pricePerBWPage: (map['pricePerBWPage'] ?? map['priceBW'] ?? 3.0).toDouble(),
+      pricePerBWPage: (map['pricePerBWPage'] ?? map['priceBW'] ?? 2.0).toDouble(),
       pricePerColorPage: (map['pricePerColorPage'] ?? map['priceColor'] ?? 10.0).toDouble(),
       activePrinters: map['activePrinters'] ?? 0,
       ownerName: map['ownerName'] ?? 'Shop Keeper',

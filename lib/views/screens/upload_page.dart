@@ -217,35 +217,15 @@ class _UploadPageState extends State<UploadPage> {
             final freshOrder = await FirestoreService().getOrder(targetOrder.orderId, printMode: 'xeroxShop');
 
             if (freshOrder != null) {
-              if (!freshOrder.isPrintingCompleted) {
-                if (mounted) Navigator.pop(context); // Close loading dialog
-                // 🛑 Block access if not printed yet
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                    title: const Row(
-                      children: [
-                        Icon(Icons.hourglass_empty_rounded, color: Colors.orange),
-                        SizedBox(width: 12),
-                        Text('Not Ready'),
-                      ],
-                    ),
-                    content: const Text(
-                      'Order not printed yet. Please wait for the shop to finish printing before scanning.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
-                );
-                return;
+              // ✅ 1. Inform the user if it's not printed yet, but DON'T block them
+              if (!freshOrder.isPrintingCompleted && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("ℹ️ Note: Order not marked as printed yet by shopkeeper."),
+                    backgroundColor: Colors.orange,
+                ));
               }
 
-              // ✅ Persist scan status permanently
+              // ✅ 2. Persist scan status permanently (Reveals Code)
               await FirestoreService().markOrderScanned(
                 orderId: targetOrder.orderId,
                 shopId: targetOrder.shopId,
@@ -253,7 +233,7 @@ class _UploadPageState extends State<UploadPage> {
               
               if (mounted) {
                 Navigator.pop(context); // Close loading dialog
-                // 🚀 Navigate to dedicated Pickup Page
+                // 🚀 Navigate to dedicated Pickup Page (Now reveals code)
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => PickupPage(order: freshOrder)),

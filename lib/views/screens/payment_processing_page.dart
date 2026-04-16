@@ -303,7 +303,7 @@ class _PaymentProcessingPageState
 
       NotificationService().notifyOrderCreated(
         finalPickupCode, 
-        freshOrder?.expiresAt ?? DateTime.now().add(const Duration(hours: 12)),
+        freshOrder?.expiresAt ?? DateTime.now().add(const Duration(hours: 24)),
         isXerox: widget.printSettings['printMode'] == 'xeroxShop',
       );
 
@@ -569,7 +569,7 @@ class _PaymentProcessingPageState
                 children: [
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.timer_outlined, size: 14, color: AppColors.primaryBlue), const SizedBox(width: 8), Text("ORDER VALIDITY", style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: AppColors.primaryBlue, letterSpacing: 1.0))]),
                   const SizedBox(height: 6),
-                  Text("This print order will automatically expire 12 hours after creation.", textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primaryBlack.withValues(alpha: 0.8), height: 1.3)),
+                  Text("This print order will automatically expire 24 hours after creation.", textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primaryBlack.withValues(alpha: 0.8), height: 1.3)),
                 ],
               ),
             ).animate().fadeIn(delay: 400.ms),

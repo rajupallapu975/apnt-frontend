@@ -8,6 +8,9 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firestore_service.dart';
 // 🛡️ Safe platform abstraction for JS calls
 import '../utils/notification_helper.dart' if (dart.library.js) '../utils/notification_helper_web.dart' as web_js;
@@ -58,6 +61,7 @@ class NotificationService extends ChangeNotifier {
   List<NotificationItem> get notifications => _notifications;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
+  final Set<String> _lastActivePickupCodes = {};
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
@@ -85,6 +89,7 @@ class NotificationService extends ChangeNotifier {
     }
 
     await loadNotifications();
+    await _loadSentAlerts();
     
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -96,10 +101,27 @@ class NotificationService extends ChangeNotifier {
 
     try {
       if (!kIsWeb) {
+        // 🚀 Initialize for Android/iOS (Using stable 17.x signature)
         await _localNotifications.initialize(
-          settings: initializationSettings,
-          onDidReceiveNotificationResponse: (details) {},
+          initializationSettings,
+          onDidReceiveNotificationResponse: (details) {
+             debugPrint("🔔 Notification Tapped: ${details.payload}");
+          },
         );
+
+        // 🛡️ Create High-Importance Channel (Matching Expiry Success)
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          'order_notifications',
+          'Order Status Updates',
+          description: 'Real-time alerts for print completion',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+        );
+
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(channel);
       }
       // Request permissions (Unified Web/Mobile)
       await requestPermission();
@@ -109,6 +131,54 @@ class NotificationService extends ChangeNotifier {
 
     _startExpiryChecker();
     initOrderListeners();
+
+    // 🚀 Initialize FCM (Background/Killed logic)
+    if (!kIsWeb) {
+      _setupFCM(); 
+    }
+  }
+
+  Future<void> _setupFCM() async {
+    final messaging = FirebaseMessaging.instance;
+    
+    // 🔔 Request Permissions
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
+
+    // 📡 🛡️ AUTH-AWARE TOKEN SYNC
+    // We listen to auth changes so if user logs in LATER, we still get their token
+    FirebaseAuth.instance.authStateChanges().listen((user) async {
+       if (user != null) {
+          try {
+            final token = await messaging.getToken();
+            if (token != null) {
+              await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+                'fcmToken': token,
+                'email': user.email, // 🛡️ Sync email for backend fallback lookups
+                'tokenUpdatedAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+              debugPrint("🚀 FCM: Token successfully linked to UID: ${user.uid}");
+            }
+          } catch (e) {
+            debugPrint("⚠️ FCM: Token sync failed: $e");
+          }
+       }
+    });
+
+    // 🔥 Foreground Listener
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+       if (message.notification != null) {
+         addNotification(
+           title: message.notification!.title ?? "New Update", 
+           body: message.notification!.body ?? "Check your orders.",
+           type: 'info'
+         );
+       }
+    });
+
+    // 📩 Handle notification tap (when app was opened from notification)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        debugPrint("🎯 User tapped on a notification!");
+    });
   }
 
   StreamSubscription? _orderSubscription;
@@ -120,16 +190,21 @@ class NotificationService extends ChangeNotifier {
   }
 
   void _checkOrdersStatusRealtime(List<PrintOrderModel> orders) {
+    final currentCodes = orders.map((o) => o.pickupCode).toSet();
+    
+    // 🛡️ 0. Detect REMOVAL (Scanned/Delivered/Deleted)
+    // If a code was active before but is gone now, we cancel its alerts
+    final removedCodes = _lastActivePickupCodes.difference(currentCodes);
+    for (var code in removedCodes) {
+       _cancelExpiryAlerts(code);
+    }
+    _lastActivePickupCodes.clear();
+    _lastActivePickupCodes.addAll(currentCodes);
+
     for (var order in orders) {
-      // 🛡️ 1. Detect COMPLETION (Real-time)
-      if (order.status == OrderStatus.completed || order.isPrintingCompleted) {
-        final completionKey = 'comp_${order.orderId}';
-        if (!_sentAlerts.contains(completionKey)) {
-          notifyOrderCompleted(order);
-          _sentAlerts.add(completionKey);
-        }
-        continue;
-      }
+      // 🛡️ COMPLETION ALERTS: [DISABLED] 
+      // Handled exclusively by Backend FCM to ensure 100% single-fire delivery.
+      continue;
     }
   }
 
@@ -213,21 +288,23 @@ class NotificationService extends ChangeNotifier {
   Future<void> _showSystemNotification({required String title, required String body}) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-      'thinkink_alerts',
-      'ThinkInk Alerts',
-      channelDescription: 'Order updates and expiry warnings',
+      'order_notifications',
+      'Order Status Updates',
+      channelDescription: 'Real-time alerts for print completion and pickup codes',
       importance: Importance.max,
       priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
       showWhen: true,
     );
     const NotificationDetails platformChannelSpecifics =
         NotificationDetails(android: androidPlatformChannelSpecifics);
 
     await _localNotifications.show(
-      id: DateTime.now().millisecondsSinceEpoch % 100000,
-      title: title,
-      body: body,
-      notificationDetails: platformChannelSpecifics,
+      DateTime.now().millisecondsSinceEpoch % 100000,
+      title,
+      body,
+      platformChannelSpecifics,
     );
   }
 
@@ -248,6 +325,19 @@ class NotificationService extends ChangeNotifier {
     await prefs.setString('user_notifications', data);
   }
 
+  Future<void> _loadSentAlerts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getStringList('sent_alerts');
+    if (data != null) {
+      _sentAlerts.addAll(data);
+    }
+  }
+
+  Future<void> _saveSentAlerts() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('sent_alerts', _sentAlerts.toList());
+  }
+
   void markAsRead() {
     for (var n in _notifications) { n.isRead = true; }
     saveNotifications();
@@ -263,10 +353,13 @@ class NotificationService extends ChangeNotifier {
   void notifyOrderCompleted(PrintOrderModel order) {
     final String orderNum = (order.customId ?? order.orderId).toLowerCase().replaceFirst('order_', '');
     
+    // 🛡️ [SILENCED] - FCM Push already shows the system alert. 
+    // We only add to the in-app history now to avoid duplicates.
     addNotification(
-      title: 'Greetings! Print Complete! 🎉',
-      body: 'the printing of order $orderNum is completed so collect your prints at your shop',
+      title: 'Print Complete! 🎉',
+      body: 'Your order $orderNum is ready for pickup! Visit again!',
       type: 'success',
+      showLocal: false, // 🛡️ Ensure no system tray duplicate
     );
 
     // 🛡️ Cancel any scheduled expiry alerts for this order
@@ -276,8 +369,8 @@ class NotificationService extends ChangeNotifier {
   Future<void> _cancelExpiryAlerts(String pickupCode) async {
     if (kIsWeb) return;
     try {
-      await _localNotifications.cancel(id: pickupCode.hashCode + 100); // 1h warning
-      await _localNotifications.cancel(id: pickupCode.hashCode + 0);   // expiry alert
+      await _localNotifications.cancel(pickupCode.hashCode + 100); // 1h warning
+      await _localNotifications.cancel(pickupCode.hashCode + 0);   // expiry alert
       debugPrint("🔕 Cancelled scheduled expiry alerts for pickup code: $pickupCode");
     } catch (e) {
       debugPrint("Error cancelling notifications: $e");
@@ -329,11 +422,11 @@ class NotificationService extends ChangeNotifier {
     required DateTime scheduledDate,
   }) async {
     await _localNotifications.zonedSchedule(
-      id: id,
-      title: title,
-      body: body,
-      scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
-      notificationDetails: const NotificationDetails(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           'thinkink_expiry',
           'Expiry Warnings',
@@ -341,7 +434,8 @@ class NotificationService extends ChangeNotifier {
           priority: Priority.high,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
@@ -359,14 +453,8 @@ class NotificationService extends ChangeNotifier {
     final now = DateTime.now();
 
     for (var order in orders) {
-      // 🛡️ SKIP EXPIRED NOTIFICATION IF COMPLETED
+      // 🛡️ SKIP COMPLETED: Handled by FCM
       if (order.status == OrderStatus.completed || order.isPrintingCompleted) {
-        // Real-time listener handles the notification, but we double check here
-        final completionKey = 'comp_${order.orderId}';
-        if (!_sentAlerts.contains(completionKey)) {
-          notifyOrderCompleted(order);
-          _sentAlerts.add(completionKey);
-        }
         continue;
       }
 
@@ -396,5 +484,6 @@ class NotificationService extends ChangeNotifier {
       showLocal: false, 
     );
     _sentAlerts.add(key);
+    _saveSentAlerts();
   }
 }

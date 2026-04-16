@@ -87,7 +87,19 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   int get _totalPrice {
     int total = 0;
     for (final p in pageConfigs) {
-      total += (p.isColor ? 10 : 3) * p.pageCount * p.copies;
+      if (p.isColor) {
+        // Color is still ₹10/page
+        total += 10 * p.pageCount * p.copies;
+      } else {
+        // B&W: ₹2 per single-side, ₹3 per double-side sheet
+        if (p.isDoubleSided && p.pageCount >= 2) {
+          int doubleSidedSheets = (p.pageCount / 2).floor();
+          int remainingSinglePages = p.pageCount % 2;
+          total += (doubleSidedSheets * 3 + remainingSinglePages * 2) * p.copies;
+        } else {
+          total += 2 * p.pageCount * p.copies;
+        }
+      }
     }
     return total;
   }
@@ -385,7 +397,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     _mobileColorTile(
                       colorIndicator: _bwCircle(),
                       label: 'B & W',
-                      price: '₹3/page',
+                      price: '₹2/page',
                       selected: !cfg.isColor,
                       onTap: () => setState(() => cfg.isColor = false),
                     ),
@@ -630,7 +642,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _webColorTile('Black & White', '₹3/page', !cfg.isColor, _bwCircle(), () => setState(() => cfg.isColor = false)),
+              _webColorTile('Black & White', '₹2/page', !cfg.isColor, _bwCircle(), () => setState(() => cfg.isColor = false)),
               const SizedBox(width: 12),
               _webColorTile('Color', '₹10/page', cfg.isColor, _colorCircle(), () => setState(() => cfg.isColor = true)),
             ],
@@ -802,7 +814,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           const Divider(color: AppColors.border),
           const SizedBox(height: 12),
 
-          _summaryLine('Base Price', '₹$unitPrice/page', muted: true),
+          _summaryLine('Rate', cfg.isColor ? '₹10/page' : (cfg.isDoubleSided ? '₹3/sheet (Double)' : '₹2/page'), muted: true),
           _summaryLine('Subtotal', '₹$_totalPrice', muted: true),
 
           const SizedBox(height: 12),
@@ -871,7 +883,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             ],
           ),
           const SizedBox(height: 16),
-          _priceGuideRow('B&W Print', '₹3/page'),
+          _priceGuideRow('B&W Print', '₹2/page'),
+          _priceGuideRow('Double Sided', '₹3/sheet'),
           _priceGuideRow('Color Print', '₹10/page'),
         ],
       ),

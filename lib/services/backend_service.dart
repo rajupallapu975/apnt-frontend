@@ -32,7 +32,7 @@ class BackendService {
       Map<String, dynamic> printSettings) async {
 
     final user = _auth.currentUser;
-    final String userId = user?.email ?? "guest_user";
+    final String userId = user?.uid ?? "guest_user";
 
     final response = await http.post(
       Uri.parse(BackendConfig.createOrderUrl),
@@ -41,7 +41,8 @@ class BackendService {
       },
       body: jsonEncode({
         "printSettings": printSettings,
-        "userId": userId,   // ✅ SEND EMAIL OR GUEST
+        "userId": userId,   // ✅ SEND UUID OR GUEST
+        "userEmail": user?.email ?? "Guest User",
       }),
     );
 
@@ -95,7 +96,7 @@ class BackendService {
     String? customId, // Sequential ID (order_1)
   }) async {
     final user = _auth.currentUser;
-    final String userId = user?.email ?? "guest_user";
+    final String userId = user?.uid ?? "guest_user";
 
     try {
       final response = await http.post(
@@ -107,6 +108,7 @@ class BackendService {
           "razorpay_signature": razorpaySignature,
           "printSettings": printSettings,
           "userId": userId,
+          "userEmail": user?.email ?? "Guest User",
           "amount": amount,
           "totalPages": totalPages,
           "printMode": printMode, // Pass mode to backend
