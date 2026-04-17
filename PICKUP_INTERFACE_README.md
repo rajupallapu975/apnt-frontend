@@ -31,7 +31,7 @@ First, make sure your backend server is running:
 python mock_backend.py
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://13.233.76.8:5001`
 
 ### 2. Open the Interface
 
@@ -110,7 +110,7 @@ observer.start()
 The interface connects to the backend endpoint:
 
 ```
-POST http://localhost:5000/get-order
+POST http://13.233.76.8:5001/get-order
 ```
 
 **Request Body:**
@@ -146,7 +146,7 @@ POST http://localhost:5000/get-order
 ### Trigger Print Endpoint
 
 ```
-POST http://localhost:5000/trigger-print
+POST http://13.233.76.8:5001/trigger-print
 ```
 
 **Request Body:**

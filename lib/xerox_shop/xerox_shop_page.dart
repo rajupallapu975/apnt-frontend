@@ -120,7 +120,38 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
               ),
             )
           else if (viewModel.shops.isEmpty)
-            _buildEmptyState()
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Icon(Icons.store_outlined, size: 60, color: AppColors.textTertiary.withValues(alpha: 0.3)),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No Shops Available',
+                      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                        viewModel.errorMessage ?? 'Check your connection or try again later.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () => viewModel.fetchShops(),
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('RETRY'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
           else
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),

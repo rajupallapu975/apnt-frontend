@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../viewmodels/upload_viewmodel.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../utils/app_colors.dart';
 import '../../widgets/common/modern_card.dart';
 import '../../models/print_order_model.dart';
@@ -49,6 +50,37 @@ class _UploadPageState extends State<UploadPage> {
         _checkPWAInstallation();
       }
     });
+  }
+
+  Future<void> _showLogoutConfirmation(BuildContext context) async {
+    final authVM = context.read<AuthViewModel>();
+    
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: Text("Sign Out?", style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: AppColors.textPrimary)),
+        content: const Text("Are you sure you want to end your ThinkInk session?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("CANCEL", style: GoogleFonts.inter(color: AppColors.textTertiary, fontWeight: FontWeight.w700)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              authVM.signOut();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text("SIGN OUT"),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkPWAInstallation() async {
@@ -373,6 +405,11 @@ class _UploadPageState extends State<UploadPage> {
           IconButton(
             icon: const Icon(Icons.person_outline_rounded, size: 24),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: AppColors.error, size: 22),
+            onPressed: () => _showLogoutConfirmation(context),
+            tooltip: 'Sign Out',
           ),
           const SizedBox(width: 8),
         ],

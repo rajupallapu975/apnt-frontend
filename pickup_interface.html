@@ -470,7 +470,7 @@
         // API call to backend
         async function mockApiCall(pickupCode) {
             try {
-                const response = await fetch('http://localhost:5000/get-order', {
+                const response = await fetch('http://13.233.76.8:5001/get-order', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -504,7 +504,7 @@
             printBtn.innerHTML = '<span class="spinner"></span>Triggering Print...';
 
             try {
-                const response = await fetch('http://localhost:5000/trigger-print', {
+                const response = await fetch('http://13.233.76.8:5001/trigger-print', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

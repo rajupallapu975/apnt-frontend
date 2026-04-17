@@ -51,8 +51,8 @@ auto-print/           → Raspberry Pi monitors this
 ### Backend URL
 ```javascript
 // In pickup_interface.html
-fetch('http://localhost:5000/get-order', ...)
-fetch('http://localhost:5000/trigger-print', ...)
+fetch('http://13.233.76.8:5001/get-order', ...)
+fetch('http://13.233.76.8:5001/trigger-print', ...)
 ```
 
 ### Auto-Print Path

@@ -189,7 +189,7 @@ You'll see:
 ============================================================
 🚀 MOCK BACKEND SERVER STARTING
 ============================================================
-Server: http://localhost:5000
+Server: http://13.233.76.8:5001
 Upload Directory: D:\psfc\apnt\uploads
 Auto-Print Directory: D:\psfc\apnt\auto-print
 
@@ -262,7 +262,7 @@ All animations can be customized in the `<style>` section.
 
 ### "Unable to connect to server"
 - ✅ Make sure `python mock_backend.py` is running
-- ✅ Check that you're using `http://localhost:5000`
+- ✅ Check that you're using `http://13.233.76.8:5001`
 - ✅ Verify no firewall is blocking port 5000
 
 ### "Invalid pickup code"

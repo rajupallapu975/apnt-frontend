@@ -5,22 +5,15 @@ import 'package:flutter/foundation.dart';
 class BackendConfig {
   /// Get the base URL for the backend based on the current platform
   /// Set this to false for Local Development, true for Render (Prod)
-  static const bool isProduction = false; 
+  static const bool isProduction = true; 
 
   /// Get the base URL for the backend based on current context
   static String get baseUrl {
-    // ⚠️ UPDATE THIS IP to your LAPTOP'S CURRENT IP if testing locally on a real device
-    const String laptopIp = "13.233.76.8";
-    const String localUrl = "http://$laptopIp:5001";
-    const String renderUrl = "http://13.233.76.8:5001"; // Updated to match user request as primary cloud URL too
+    // 🛡️ AWS Production Backend URL
+    const String liveUrl = "http://13.233.76.8:5001"; 
 
-    if (isProduction) return renderUrl;
-
-    if (kIsWeb) {
-      return "http://localhost:5000";
-    } else {  
-      return localUrl;
-    }
+    // Always return liveUrl for all deployments (Web and App)
+    return liveUrl;
   }
 
   
