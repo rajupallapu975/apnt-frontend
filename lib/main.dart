@@ -49,22 +49,22 @@ void main() async {
   // 🔔 FCM Background Handler registration
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // 🏪 Initialize ThinkInk Admin as a secondary app
+  // 🏪 Initialize Zikrint Admin as a secondary app
   try {
     await Firebase.initializeApp(
-      name: "thinkink_admin",
+      name: "zikrint_admin",
       options: const FirebaseOptions(
-        apiKey: "AIzaSyCG9N9vDUPmWyId1ZgkiPa7O5vXLp-2l1M",
-        authDomain: "thinkink-admin.firebaseapp.com",
-        projectId: "thinkink-admin",
-        storageBucket: "thinkink-admin.firebasestorage.app",
-        messagingSenderId: "1071627103248",
-        appId: "1:1071627103248:web:a67da5bcbf4d1ad29bae95",
+        apiKey: "AIzaSyAM_UmfDJyCSObGjyb2-Cp0titzv068CLM",
+        authDomain: "zikrint-admin.firebaseapp.com",
+        projectId: "zikrint-admin",
+        storageBucket: "zikrint-admin.firebasestorage.app",
+        messagingSenderId: "71044416645",
+        appId: "1:71044416645:web:20135d3480fc6e3ab7d5ec",
       ),
     );
-    debugPrint("🚀 ThinkInk Admin Secondary App Initialized");
+    debugPrint("🚀 Zikrint Admin Secondary App Initialized");
   } catch (e) {
-    debugPrint("⚠️ ThinkInk Admin Init Error: $e");
+    debugPrint("⚠️ Zikrint Admin Init Error: $e");
   }
 
   // 🔔 Initialize Notifications
@@ -106,7 +106,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'ThinkInk',
+      title: 'Zikrint',
       theme: AppTheme.lightTheme,
       home: const AuthWrapper(),
     );

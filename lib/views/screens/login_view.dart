@@ -71,7 +71,7 @@ class LoginView extends StatelessWidget {
 
                   // 🖋️ Typography Hierarchy
                   Text(
-                    'THINK INK',
+                    'ZIKRINT',
                     style: Theme.of(context).textTheme.displayLarge?.copyWith(
                       letterSpacing: -2,
                     ),

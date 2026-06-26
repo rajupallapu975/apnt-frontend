@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>ThinkInk</string>
+	<string>Zikrint</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>ThinkInk</string>
+	<string>Zikrint</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -43,23 +43,23 @@
 
 	<!-- Camera (image_picker, camera plugin) -->
 	<key>NSCameraUsageDescription</key>
-	<string>ThinkInk needs camera access to capture documents and images for printing.</string>
+	<string>Zikrint needs camera access to capture documents and images for printing.</string>
 
 	<!-- Photo Library Read (image_picker) -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>ThinkInk needs access to your photo library to select images and documents for printing.</string>
+	<string>Zikrint needs access to your photo library to select images and documents for printing.</string>
 
 	<!-- Photo Library Add (image_picker - saving) -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>ThinkInk needs permission to save photos to your library.</string>
+	<string>Zikrint needs permission to save photos to your library.</string>
 
 	<!-- Microphone (camera plugin may require it) -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ThinkInk needs microphone access for video recording features.</string>
+	<string>Zikrint needs microphone access for video recording features.</string>
 
 	<!-- File access (file_picker) -->
 	<key>NSDocumentsFolderUsageDescription</key>
-	<string>ThinkInk needs access to your documents to select files for printing.</string>
+	<string>Zikrint needs access to your documents to select files for printing.</string>
 
 	<!-- ========== UI Configuration ========== -->
 	<key>UILaunchStoryboardName</key>

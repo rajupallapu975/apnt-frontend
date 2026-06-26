@@ -80,7 +80,7 @@ class PaymentSuccessPage extends StatelessWidget {
                     Text(
                       isXerox
                           ? 'Your documents have been sent to the Xerox Shop.'
-                          : 'Your documents are ready for printing. Use the code below at any Think Ink kiosk.',
+                          : 'Your documents are ready for printing. Use the code below at any Zikrint kiosk.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
@@ -266,7 +266,7 @@ class PaymentSuccessPage extends StatelessWidget {
                             const SizedBox(width: 16),
                             Expanded(
                               child: Text(
-                                'Enter this code on the Think Ink kiosk keypad to start printing.',
+                                'Enter this code on the Zikrint kiosk keypad to start printing.',
                                 style: GoogleFonts.inter(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,

@@ -60,7 +60,7 @@ class _UploadPageState extends State<UploadPage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         title: Text("Sign Out?", style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: AppColors.textPrimary)),
-        content: const Text("Are you sure you want to end your ThinkInk session?"),
+        content: const Text("Are you sure you want to end your Zikrint session?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -108,7 +108,7 @@ class _UploadPageState extends State<UploadPage> {
               Text('INSTALL APP', style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: 1)),
             ],
           ),
-          content: const Text('Install ThinkInk on your home screen for a fast, app-like experience and easy access.'),
+          content: const Text('Install Zikrint on your home screen for a fast, app-like experience and easy access.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -216,9 +216,9 @@ class _UploadPageState extends State<UploadPage> {
     if (result != null && mounted) {
       // ── Order Verification Flow (scan order's shop QR) ──────────────────────
       if (targetOrder != null) {
-        // Normalize: strip the thinkink-shop: prefix if present
-        final String scannedShopId = result.startsWith('thinkink-shop:')
-            ? result.replaceFirst('thinkink-shop:', '')
+        // Normalize: strip the zikrint-shop: prefix if present
+        final String scannedShopId = result.startsWith('zikrint-shop:')
+            ? result.replaceFirst('zikrint-shop:', '')
             : result;
 
         // Show loading while we check Firebase
@@ -311,9 +311,9 @@ class _UploadPageState extends State<UploadPage> {
       // General Shop Scan Flow
       final xeroxVM = context.read<XeroxShopViewModel>();
 
-      // Normalize the scanned result (strip the thinkink-shop: prefix)
-      final String normalizedResult = result.startsWith('thinkink-shop:')
-          ? result.replaceFirst('thinkink-shop:', '')
+      // Normalize the scanned result (strip the zikrint-shop: prefix)
+      final String normalizedResult = result.startsWith('zikrint-shop:')
+          ? result.replaceFirst('zikrint-shop:', '')
           : result;
 
       // Only fetch from backend if we haven't loaded shops yet
@@ -390,7 +390,7 @@ class _UploadPageState extends State<UploadPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'THINK INK',
+          'ZIKRINT',
           style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: 1, fontSize: 18),
         ),
         actions: [

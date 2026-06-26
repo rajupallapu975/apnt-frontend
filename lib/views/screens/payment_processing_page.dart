@@ -125,7 +125,7 @@ class _PaymentProcessingPageState
       _paymentHandler ??= RazorpayHandler();
 
       final user = FirebaseAuth.instance.currentUser;
-      final userEmail = user?.email ?? 'customer_${DateTime.now().millisecondsSinceEpoch}@thinkink.com';
+      final userEmail = user?.email ?? 'customer_${DateTime.now().millisecondsSinceEpoch}@zikrint.com';
       String? userPhone = widget.prefillPhone ?? authVM.phoneNumber;
       userPhone ??= '0000000000'; 
       final String userName = user?.displayName ?? 'Valued Customer';
@@ -137,7 +137,7 @@ class _PaymentProcessingPageState
         'key': razorpayData['key'].toString(),
         'amount': razorpayData['amount'],
         'currency': 'INR',
-        'name': 'Think Ink',
+        'name': 'Zikrint',
         'description': 'Print Job #${rzpId.split('_').last.toUpperCase()}',
         'order_id': rzpId,
         'method': 'upi',
@@ -574,7 +574,7 @@ class _PaymentProcessingPageState
               ),
             ).animate().fadeIn(delay: 400.ms),
             const SizedBox(height: 72),
-            Text('THINK INK • SECURE PRINTING', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.textTertiary.withValues(alpha: 0.6), letterSpacing: 3)).animate().fadeIn(delay: 800.ms),
+            Text('ZIKRINT • SECURE PRINTING', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.textTertiary.withValues(alpha: 0.6), letterSpacing: 3)).animate().fadeIn(delay: 800.ms),
           ],
         ),
       ),

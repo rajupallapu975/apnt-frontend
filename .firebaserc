@@ -2,7 +2,7 @@
   "projects": {
     "default": "think-ink",
     "test": "think-ink",
-    "thinkink": "think-ink"
+    "zikrint": "think-ink"
   },
   "targets": {},
   "etags": {}

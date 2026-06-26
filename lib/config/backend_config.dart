@@ -10,7 +10,7 @@ class BackendConfig {
   /// Get the base URL for the backend based on current context
   static String get baseUrl {
     // 🛡️ AWS Production Backend URL
-    const String liveUrl = "http://13.233.76.8:5001"; 
+    const String liveUrl = "https://zikrint.duckdns.org"; 
 
     // Always return liveUrl for all deployments (Web and App)
     return liveUrl;

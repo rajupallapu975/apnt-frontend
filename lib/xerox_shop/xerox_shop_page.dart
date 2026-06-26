@@ -185,8 +185,8 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
       try {
         final shop = viewModel.shops.firstWhere(
           (s) {
-            final String normalizedResult = result.startsWith('thinkink-shop:') 
-                ? result.replaceFirst('thinkink-shop:', '') 
+            final String normalizedResult = result.startsWith('zikrint-shop:') 
+                ? result.replaceFirst('zikrint-shop:', '') 
                 : result;
             return s.id == normalizedResult || s.name.toLowerCase() == normalizedResult.toLowerCase();
           },

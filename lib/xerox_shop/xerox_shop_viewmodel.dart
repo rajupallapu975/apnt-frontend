@@ -63,7 +63,10 @@ class XeroxShopViewModel extends ChangeNotifier {
             .timeout(const Duration(seconds: 15));
 
         if (data.isNotEmpty) {
-          _shops = data.map((json) => XeroxShopModel.fromMap(json, json['id'] ?? '')).toList();
+          _shops = data
+              .map((json) => XeroxShopModel.fromMap(json, json['id'] ?? ''))
+              .where((shop) => shop.isOpen)
+              .toList();
           fetchSuccess = true;
           debugPrint("✅ Fetched ${_shops.length} shops from Backend");
           break; 
@@ -118,7 +121,7 @@ class XeroxShopViewModel extends ChangeNotifier {
       if (snapshot.docs.isEmpty) {
         debugPrint("⚠️ Primary shops collection is empty. Checking Secondary Admin Project...");
         try {
-          final adminApp = Firebase.app('thinkink_admin');
+          final adminApp = Firebase.app('zikrint_admin');
           final adminFirestore = FirebaseFirestore.instanceFor(app: adminApp);
           snapshot = await adminFirestore.collection('shops').get().timeout(const Duration(seconds: 10));
           debugPrint("✅ Secondary Fetch Success: ${snapshot.docs.length} shops found in Admin project");
@@ -129,9 +132,10 @@ class XeroxShopViewModel extends ChangeNotifier {
         }
       }
 
-      _shops = snapshot.docs.map((doc) {
-        return XeroxShopModel.fromMap(doc.data(), doc.id);
-      }).toList();
+      _shops = snapshot.docs
+          .map((doc) => XeroxShopModel.fromMap(doc.data(), doc.id))
+          .where((shop) => shop.isOpen)
+          .toList();
 
       debugPrint("✅ Final Shop Fetch Count: ${_shops.length} shops total");
     } catch (e) {

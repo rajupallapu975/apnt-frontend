@@ -229,7 +229,7 @@ class FirestoreService {
       // ✅ Also update shops/{shopId}/orders/{orderId} (admin DB sync)
       if (shopId != null && shopId.isNotEmpty) {
         try {
-          final adminApp = Firebase.app('thinkink_admin');
+          final adminApp = Firebase.app('zikrint_admin');
           final adminFirestore = FirebaseFirestore.instanceFor(app: adminApp);
 
           await adminFirestore

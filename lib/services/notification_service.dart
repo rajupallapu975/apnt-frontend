@@ -428,7 +428,7 @@ class NotificationService extends ChangeNotifier {
       tz.TZDateTime.from(scheduledDate, tz.local),
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'thinkink_expiry',
+          'zikrint_expiry',
           'Expiry Warnings',
           importance: Importance.high,
           priority: Priority.high,
