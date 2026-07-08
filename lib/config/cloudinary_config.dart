@@ -10,4 +10,8 @@ class CloudinaryConfig {
   // Backup Cloudinary (Failover Account)
   static const String cloudNameC = 'irtchxuf';
   static const String uploadPresetC = 'printer_unsigned';
+
+  // Backup Cloudinary 2 (Failover Account)
+  static const String cloudNameD = 'xinscuby';
+  static const String uploadPresetD = 'printer_unsigned';
 }

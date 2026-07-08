@@ -117,26 +117,45 @@ class CloudinaryStorageService {
               extension: extension,
               originalName: originalName,
             );
-          } catch (backupErr) {
-            debugPrint('❌ Backup Cloudinary Upload also failed ($activeCloudName): $backupErr');
-            if (isXerox) {
-              debugPrint('🔄 Xerox fallback: trying Account A as a secondary backup...');
-              activeCloudName = CloudinaryConfig.cloudName;
-              activeUploadPreset = CloudinaryConfig.uploadPreset;
-              try {
-                return await _executeSingleUpload(
-                  bytes: bytesToUse,
-                  cloudName: activeCloudName,
-                  uploadPreset: activeUploadPreset,
-                  resourceType: resourceType,
-                  fullPublicId: fullPublicId,
-                  basePublicId: basePublicId,
-                  extension: extension,
-                  originalName: originalName,
-                );
-              } catch (_) {}
+          } catch (backupErrC) {
+            debugPrint('❌ Backup Cloudinary Account C Upload also failed ($activeCloudName): $backupErrC');
+            debugPrint('🔄 Switching to Backup Cloudinary Account D (Account D)...');
+
+            activeCloudName = CloudinaryConfig.cloudNameD;
+            activeUploadPreset = CloudinaryConfig.uploadPresetD;
+
+            try {
+              return await _executeSingleUpload(
+                bytes: bytesToUse,
+                cloudName: activeCloudName,
+                uploadPreset: activeUploadPreset,
+                resourceType: resourceType,
+                fullPublicId: fullPublicId,
+                basePublicId: basePublicId,
+                extension: extension,
+                originalName: originalName,
+              );
+            } catch (backupErrD) {
+              debugPrint('❌ Backup Cloudinary Account D Upload also failed ($activeCloudName): $backupErrD');
+              if (isXerox) {
+                debugPrint('🔄 Xerox fallback: trying Account A as a secondary backup...');
+                activeCloudName = CloudinaryConfig.cloudName;
+                activeUploadPreset = CloudinaryConfig.uploadPreset;
+                try {
+                  return await _executeSingleUpload(
+                    bytes: bytesToUse,
+                    cloudName: activeCloudName,
+                    uploadPreset: activeUploadPreset,
+                    resourceType: resourceType,
+                    fullPublicId: fullPublicId,
+                    basePublicId: basePublicId,
+                    extension: extension,
+                    originalName: originalName,
+                  );
+                } catch (_) {}
+              }
+              throw backupErrD;
             }
-            throw backupErr;
           }
         }
       });

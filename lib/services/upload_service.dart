@@ -113,11 +113,13 @@ class UploadService {
             );
             controller.add(UploadProgress(progress: 1.0, url: url));
             controller.close();
-          } catch (backupErr) {
-            debugPrint('❌ Backup Cloudinary Upload also failed in stream: $backupErr');
-            debugPrint('🔄 Trying Account A as a final backup...');
-            activeCloudName = CloudinaryConfig.cloudName;
-            activeUploadPreset = CloudinaryConfig.uploadPreset;
+          } catch (backupErrC) {
+            debugPrint('❌ Backup Cloudinary Account C Upload also failed in stream: $backupErrC');
+            debugPrint('🔄 Switching to Backup Cloudinary Account D (Account D)...');
+
+            activeCloudName = CloudinaryConfig.cloudNameD;
+            activeUploadPreset = CloudinaryConfig.uploadPresetD;
+
             try {
               final String url = await _executeUploadWithProgress(
                 fileModel: fileModel,
@@ -130,9 +132,27 @@ class UploadService {
               );
               controller.add(UploadProgress(progress: 1.0, url: url));
               controller.close();
-            } catch (err) {
-              controller.add(UploadProgress(progress: 0.0, error: err.toString()));
-              controller.close();
+            } catch (backupErrD) {
+              debugPrint('❌ Backup Cloudinary Account D Upload also failed in stream: $backupErrD');
+              debugPrint('🔄 Trying Account A as a final backup...');
+              activeCloudName = CloudinaryConfig.cloudName;
+              activeUploadPreset = CloudinaryConfig.uploadPreset;
+              try {
+                final String url = await _executeUploadWithProgress(
+                  fileModel: fileModel,
+                  cloudName: activeCloudName,
+                  uploadPreset: activeUploadPreset,
+                  resourceType: resourceType,
+                  fullPublicId: fullPublicId,
+                  basePublicId: basePublicId,
+                  controller: controller,
+                );
+                controller.add(UploadProgress(progress: 1.0, url: url));
+                controller.close();
+              } catch (err) {
+                controller.add(UploadProgress(progress: 0.0, error: err.toString()));
+                controller.close();
+              }
             }
           }
         }
