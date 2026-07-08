@@ -83,8 +83,7 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
 
   Widget _buildCompletedCard(PrintOrderModel order) {
     final dateFormat = DateFormat('MMM dd, yyyy • hh:mm a');
-    final String displayId = order.customId?.toUpperCase() ?? 
-        'ORDER #${order.orderId.substring(order.orderId.length > 6 ? order.orderId.length - 6 : 0).toUpperCase()}';
+    final String displayId = order.displayId;
     
     return ModernCard(
       margin: const EdgeInsets.only(bottom: 16),

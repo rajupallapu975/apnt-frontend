@@ -90,7 +90,7 @@ class OrderDetailsSheet extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        (order.customId ?? order.pickupCode).toUpperCase(), 
+                        order.displayId,
                         style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary, letterSpacing: 1),
                       ),
                     ],

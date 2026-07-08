@@ -1036,9 +1036,7 @@ class _UploadPageState extends State<UploadPage> {
 
   // ─── Order Card ──────────────────────────────────────────────────────────────
   Widget _buildOrderCard(PrintOrderModel order) {
-    final String displayId = order.customId != null 
-        ? order.customId!.toUpperCase().replaceAll('_', ' ') 
-        : 'JOB #${order.orderId.length > 6 ? order.orderId.substring(order.orderId.length - 6).toUpperCase() : order.orderId.toUpperCase()}';
+    final String displayId = order.displayId;
     // 🔐 Code is ONLY revealed after a successful QR scan (scanned) or legacy reveal
     final bool isVerified = order.scanned || order.codeRevealed;
 

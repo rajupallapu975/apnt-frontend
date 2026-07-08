@@ -120,7 +120,7 @@ class _PickupPageState extends State<PickupPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      widget.order.customId?.toUpperCase() ?? 'NEW ORDER',
+                      widget.order.displayId,
                       style: GoogleFonts.inter(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,

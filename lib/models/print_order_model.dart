@@ -62,6 +62,19 @@ class PrintOrderModel {
     orderStatus == 'done';
   final PrintMode printMode;
 
+  String get displayId {
+    if (customId != null && customId!.isNotEmpty) {
+      final cleanId = customId!
+          .toUpperCase()
+          .replaceAll('ORDER_', '')
+          .replaceAll('ORDER', '')
+          .replaceAll('_', ' ')
+          .trim();
+      return 'ORDER $cleanId';
+    }
+    return 'ORDER #${orderId.length > 6 ? orderId.substring(orderId.length - 6).toUpperCase() : orderId.toUpperCase()}';
+  }
+
   PrintOrderModel({
     required this.orderId,
     required this.pickupCode,
