@@ -120,6 +120,40 @@ void main() async {
     debugPrint("⚠️ Zikrinter Project Init Error: $e");
   }
 
+  // 🏪 Initialize Customer Project 2 (Backup 1) as a secondary app
+  try {
+    await Firebase.initializeApp(
+      name: "zikrint-944a4",
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyD34jkVSpxyjHBY_CVoyP2e8xgJdJv6ucw",
+        appId: "1:484986026046:android:bd7da1c8d0dfc217b1796f",
+        messagingSenderId: "484986026046",
+        projectId: "zikrint-944a4",
+      ),
+    );
+    debugPrint("🚀 Customer Project 2 (Backup 1) Initialized");
+  } catch (e) {
+    debugPrint("⚠️ Customer Project 2 Init Error: $e");
+  }
+
+  await Future.delayed(const Duration(milliseconds: 300));
+
+  // 🏪 Initialize Customer Project 3 (Backup 2) as a secondary app
+  try {
+    await Firebase.initializeApp(
+      name: "think-ink",
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyCZW5G6byY78K9o4a_YW0GqsPwr_t0gstA",
+        appId: "1:802839616382:android:e6a312bfff81a52c4c312f",
+        messagingSenderId: "802839616382",
+        projectId: "think-ink",
+      ),
+    );
+    debugPrint("🚀 Customer Project 3 (Backup 2) Initialized");
+  } catch (e) {
+    debugPrint("⚠️ Customer Project 3 Init Error: $e");
+  }
+
   // 🔔 Initialize Notifications
   final notificationService = NotificationService();
   await notificationService.init();

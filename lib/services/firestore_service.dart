@@ -19,6 +19,23 @@ class FirestoreService {
   final FirebaseAuth _auth =
       FirebaseAuth.instance;
 
+  static FirebaseFirestore getFirestore(String? projectId) {
+    if (projectId == null || projectId.isEmpty || projectId == 'psfc-43b5a') {
+      return FirebaseFirestore.instance;
+    }
+    try {
+      final app = Firebase.app(projectId);
+      return FirebaseFirestore.instanceFor(app: app);
+    } catch (e) {
+      debugPrint('⚠️ Error getting Firestore instance for project $projectId: $e');
+      return FirebaseFirestore.instance;
+    }
+  }
+
+  FirebaseFirestore _getFirestoreForProject(String? projectId) {
+    return getFirestore(projectId);
+  }
+
   CollectionReference get _ordersCollection =>
       _firestore.collection('orders');
 
@@ -144,6 +161,7 @@ class FirestoreService {
   Future<void> markOrderScanned({
     required String orderId,
     String? shopId,
+    String? projectId,
   }) async {
     try {
       debugPrint("📡 Calling Backend /mark-delivered for scan: $orderId at $shopId");
@@ -162,7 +180,7 @@ class FirestoreService {
       } else {
         debugPrint("⚠️ Backend Delivery Sync failed (${response.statusCode}). Falling back to primary only...");
         // 🏗️ Fallback: At least update primary if mirror failed
-        await _firestore.collection('xerox_orders').doc(orderId).update({
+        await _getFirestoreForProject(projectId).collection('xerox_orders').doc(orderId).update({
           'scanned': true,
           'isPicked': true,
           'status': 'completed',
@@ -180,6 +198,7 @@ class FirestoreService {
   Future<void> completeOrderPickup({
     required String orderId,
     String? shopId,
+    String? projectId,
   }) async {
     try {
       debugPrint("📡 Calling Backend /mark-delivered for pickup: $orderId at $shopId");
@@ -198,7 +217,7 @@ class FirestoreService {
       } else {
         debugPrint("⚠️ Backend Delivery Sync failed (${response.statusCode}). Falling back to primary only...");
         // 🏗️ Fallback: At least update primary
-        await _firestore.collection('xerox_orders').doc(orderId).update({
+        await _getFirestoreForProject(projectId).collection('xerox_orders').doc(orderId).update({
           'isPicked': true,
           'orderDone': true,
           'status': 'completed',
@@ -217,10 +236,11 @@ class FirestoreService {
   Future<void> markCodeRevealed({
     required String orderId,
     String? shopId,
+    String? projectId,
   }) async {
     try {
       // ✅ Update customer-facing xerox_orders collection
-      await _firestore.collection('xerox_orders').doc(orderId).update({
+      await _getFirestoreForProject(projectId).collection('xerox_orders').doc(orderId).update({
         'codeRevealed': true,
         'codeRevealedAt': FieldValue.serverTimestamp(),
       });
@@ -363,13 +383,37 @@ class FirestoreService {
           .snapshots()
           .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList()),
       
-      // Xerox (UID)
+      // Xerox (UID) - Project 1
       _firestore.collection('xerox_orders')
           .where('userId', isEqualTo: uid)
           .where('status', whereIn: statusList)
           .snapshots()
           .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList()),
     ];
+
+    // Xerox (UID) - Project 2
+    final db2 = _getFirestoreForProject('zikrint-944a4');
+    if (db2 != _firestore) {
+      streams.add(
+        db2.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .where('status', whereIn: statusList)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
+    }
+
+    // Xerox (UID) - Project 3
+    final db3 = _getFirestoreForProject('think-ink');
+    if (db3 != _firestore) {
+      streams.add(
+        db3.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .where('status', whereIn: statusList)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
+    }
 
     if (email != null && email.isNotEmpty) {
       streams.add(
@@ -386,6 +430,24 @@ class FirestoreService {
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
       );
+      if (db2 != _firestore) {
+        streams.add(
+          db2.collection('xerox_orders')
+              .where('userId', isEqualTo: email)
+              .where('status', whereIn: statusList)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+        );
+      }
+      if (db3 != _firestore) {
+        streams.add(
+          db3.collection('xerox_orders')
+              .where('userId', isEqualTo: email)
+              .where('status', whereIn: statusList)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+        );
+      }
     }
 
     return Rx.combineLatest(streams, (List<List<PrintOrderModel>> results) {
@@ -415,6 +477,28 @@ class FirestoreService {
           .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
     ];
 
+    final db2 = _getFirestoreForProject('zikrint-944a4');
+    if (db2 != _firestore) {
+      streams.add(
+        db2.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .where('status', whereIn: statusList)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
+    }
+
+    final db3 = _getFirestoreForProject('think-ink');
+    if (db3 != _firestore) {
+      streams.add(
+        db3.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .where('status', whereIn: statusList)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+      );
+    }
+
     if (email != null && email.isNotEmpty) {
       streams.add(
         _firestore.collection('xerox_orders')
@@ -423,6 +507,24 @@ class FirestoreService {
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
       );
+      if (db2 != _firestore) {
+        streams.add(
+          db2.collection('xerox_orders')
+              .where('userId', isEqualTo: email)
+              .where('status', whereIn: statusList)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+        );
+      }
+      if (db3 != _firestore) {
+        streams.add(
+          db3.collection('xerox_orders')
+              .where('userId', isEqualTo: email)
+              .where('status', whereIn: statusList)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+        );
+      }
     }
 
     return Rx.combineLatest(streams, (List<List<PrintOrderModel>> results) {
@@ -532,11 +634,15 @@ class FirestoreService {
   ================================================= */
 
   Future<PrintOrderModel?> getOrder(
-      String orderId, {String printMode = 'autonomous'}) async {
+      String orderId, {
+      String printMode = 'autonomous',
+      String? projectId,
+  }) async {
     try {
       final collection = printMode == 'xeroxShop' ? 'xerox_orders' : 'orders';
+      final firestore = _getFirestoreForProject(projectId);
       final doc =
-          await _firestore.collection(collection).doc(orderId).get();
+          await firestore.collection(collection).doc(orderId).get();
 
       if (!doc.exists) return null;
 

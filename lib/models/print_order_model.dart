@@ -35,6 +35,7 @@ class PrintOrderModel {
   final bool codeRevealed; // Legacy, keep for now but use 'scanned' mostly
 
   final String? customId; // Sequential ID (order_1, order_2)
+  final String projectId;
 
   // Cover Page details
   final bool generateCoverPage;
@@ -96,6 +97,7 @@ class PrintOrderModel {
     this.isPicked = false,
     this.orderDone = false,
     this.customId,
+    this.projectId = 'psfc-43b5a',
     this.generateCoverPage = false,
     this.coverPageCharge = 0.0,
     this.coverPageUrl,
@@ -160,6 +162,7 @@ class PrintOrderModel {
       serviceName: data['serviceName']?.toString(),
       razorpayPaymentId: data['razorpayPaymentId']?.toString(),
       paymentStatus: data['paymentStatus']?.toString(),
+      projectId: data['projectId']?.toString() ?? 'psfc-43b5a',
     );
   }
 
@@ -201,6 +204,7 @@ class PrintOrderModel {
       serviceName: data['serviceName']?.toString(),
       razorpayPaymentId: data['razorpayPaymentId']?.toString(),
       paymentStatus: data['paymentStatus']?.toString(),
+      projectId: data['projectId']?.toString() ?? 'psfc-43b5a',
     );
   }
 
@@ -333,6 +337,7 @@ class PrintOrderModel {
       'serviceName': serviceName,
       'razorpayPaymentId': razorpayPaymentId,
       'paymentStatus': paymentStatus,
+      'projectId': projectId,
     };
   }
 
@@ -362,6 +367,7 @@ class PrintOrderModel {
     String? serviceName,
     String? razorpayPaymentId,
     String? paymentStatus,
+    String? projectId,
   }) {
     return PrintOrderModel(
       orderId: orderId ?? this.orderId,
@@ -389,6 +395,7 @@ class PrintOrderModel {
       serviceName: serviceName ?? this.serviceName,
       razorpayPaymentId: razorpayPaymentId ?? this.razorpayPaymentId,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      projectId: projectId ?? this.projectId,
     );
   }
 }

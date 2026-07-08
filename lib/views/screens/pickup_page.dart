@@ -26,7 +26,7 @@ class _PickupPageState extends State<PickupPage> {
   void initState() {
     super.initState();
     // 📡 Real-time sync: Watch the order for external completion
-    _orderStream = FirebaseFirestore.instance
+    _orderStream = FirestoreService.getFirestore(widget.order.projectId)
         .collection('xerox_orders')
         .doc(widget.order.orderId)
         .snapshots();
@@ -38,6 +38,7 @@ class _PickupPageState extends State<PickupPage> {
       await FirestoreService().completeOrderPickup(
         orderId: widget.order.orderId,
         shopId: widget.order.shopId,
+        projectId: widget.order.projectId,
       );
 
       // 💾 Update Local Storage IMMEDIATELY for Instant History update
@@ -55,6 +56,7 @@ class _PickupPageState extends State<PickupPage> {
         publicIds: widget.order.publicIds,
         localFilePaths: widget.order.localFilePaths,
         customId: widget.order.customId,
+        projectId: widget.order.projectId,
         isPicked: true,
         orderDone: true,
       );

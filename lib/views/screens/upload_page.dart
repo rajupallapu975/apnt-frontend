@@ -272,7 +272,11 @@ class _UploadPageState extends State<UploadPage> {
           
           if (verified) {
             // 🆕 Fetch the latest order state to check orderStatus
-            final freshOrder = await FirestoreService().getOrder(targetOrder.orderId, printMode: 'xeroxShop');
+            final freshOrder = await FirestoreService().getOrder(
+              targetOrder.orderId, 
+              printMode: 'xeroxShop',
+              projectId: targetOrder.projectId,
+            );
 
             if (freshOrder != null) {
               // ✅ 1. Inform the user if it's not printed yet, but DON'T block them
@@ -287,6 +291,7 @@ class _UploadPageState extends State<UploadPage> {
               await FirestoreService().markOrderScanned(
                 orderId: targetOrder.orderId,
                 shopId: targetOrder.shopId,
+                projectId: targetOrder.projectId,
               );
               
               if (mounted) {

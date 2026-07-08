@@ -293,12 +293,14 @@ class _PaymentProcessingPageState
 
       PrintOrderModel? freshOrder;
       try {
+        final String? responseProjectId = verifyResult['projectId'];
         freshOrder = await FirestoreService().getOrder(
           finalOrderId, 
-          printMode: widget.printSettings['printMode'] ?? 'autonomous'
+          printMode: widget.printSettings['printMode'] ?? 'autonomous',
+          projectId: responseProjectId,
         );
       } catch (e) {
-        debugPrint("🤫 Warning: Document fetch failed (maybe rules?). Processing locally...");
+        debugPrint("🤫 Warning: Document fetch failed (maybe rules?). Processing locally... $e");
       }
 
       if (freshOrder != null) {

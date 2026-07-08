@@ -11,6 +11,8 @@ import '../../../widgets/common/status_badge.dart';
 import '../../../widgets/common/primary_button.dart';
 import '../../../xerox_shop/xerox_shop_viewmodel.dart';
 import '../../../xerox_shop/xerox_shop_model.dart';
+import '../../../services/firestore_service.dart';
+
 class OrderDetailsSheet extends StatelessWidget {
   final PrintOrderModel order;
   const OrderDetailsSheet({super.key, required this.order});
@@ -19,7 +21,7 @@ class OrderDetailsSheet extends StatelessWidget {
     final dateFormat = DateFormat('MMM dd, yyyy • hh:mm a');
     // 🚀 LIVE STREAM: Listen specifically to this order to reveal code instantly
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: FirestoreService.getFirestore(order.projectId)
           .collection(order.isXerox ? 'xerox_orders' : 'orders')
           .doc(order.orderId)
           .snapshots(),
