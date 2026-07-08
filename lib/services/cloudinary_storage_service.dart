@@ -83,43 +83,61 @@ class CloudinaryStorageService {
         final bool isPdf = extension == '.pdf';
         final bool isDoc = extension == '.doc' || extension == '.docx';
         final String resourceType = isPdf ? 'image' : (isDoc ? 'raw' : 'auto');
-        final String uploadUrl = 'https://api.cloudinary.com/v1_1/$currentCloudName/$resourceType/upload';
 
-        debugPrint('📤 Uploading $originalName as $resourceType to $fullPublicId (account: $currentCloudName)...');
-        
-        final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
-        request.fields['upload_preset'] = currentUploadPreset;
-        request.fields['public_id'] = fullPublicId;
+        // 🛡️ Failover Account Selection
+        String activeCloudName = currentCloudName;
+        String activeUploadPreset = currentUploadPreset;
 
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'file',
-            bytesToUse,
-            filename: '$basePublicId$extension',
-            contentType: _getMediaType(originalName),
-          ),
-        );
+        try {
+          return await _executeSingleUpload(
+            bytes: bytesToUse,
+            cloudName: activeCloudName,
+            uploadPreset: activeUploadPreset,
+            resourceType: resourceType,
+            fullPublicId: fullPublicId,
+            basePublicId: basePublicId,
+            extension: extension,
+            originalName: originalName,
+          );
+        } catch (primaryErr) {
+          debugPrint('⚠️ Primary Cloudinary Upload Failed ($activeCloudName): $primaryErr');
+          debugPrint('🔄 Switching to Backup Cloudinary Account (Account C)...');
 
-        final streamedResponse = await request.send();
-        final response = await http.Response.fromStream(streamedResponse);
+          activeCloudName = CloudinaryConfig.cloudNameC;
+          activeUploadPreset = CloudinaryConfig.uploadPresetC;
 
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          final Map<String, dynamic> data = jsonDecode(response.body);
-          final String? secureUrl = data['secure_url'];
-          final String? pId = data['public_id'];
-
-          if (secureUrl == null || pId == null) {
-            throw Exception('Upload succeeded but secure_url or public_id missing');
+          try {
+            return await _executeSingleUpload(
+              bytes: bytesToUse,
+              cloudName: activeCloudName,
+              uploadPreset: activeUploadPreset,
+              resourceType: resourceType,
+              fullPublicId: fullPublicId,
+              basePublicId: basePublicId,
+              extension: extension,
+              originalName: originalName,
+            );
+          } catch (backupErr) {
+            debugPrint('❌ Backup Cloudinary Upload also failed ($activeCloudName): $backupErr');
+            if (isXerox) {
+              debugPrint('🔄 Xerox fallback: trying Account A as a secondary backup...');
+              activeCloudName = CloudinaryConfig.cloudName;
+              activeUploadPreset = CloudinaryConfig.uploadPreset;
+              try {
+                return await _executeSingleUpload(
+                  bytes: bytesToUse,
+                  cloudName: activeCloudName,
+                  uploadPreset: activeUploadPreset,
+                  resourceType: resourceType,
+                  fullPublicId: fullPublicId,
+                  basePublicId: basePublicId,
+                  extension: extension,
+                  originalName: originalName,
+                );
+              } catch (_) {}
+            }
+            throw backupErr;
           }
-
-          debugPrint('✅ Uploaded: $secureUrl');
-          return {
-            'url': secureUrl,
-            'publicId': pId,
-            'bytes': (data['bytes'] as num?)?.toInt() ?? bytesToUse.length,
-          };
-        } else {
-          throw Exception('Cloudinary upload failed: ${response.body}');
         }
       });
 
@@ -140,6 +158,53 @@ class CloudinaryStorageService {
     } catch (e) {
       debugPrint('❌ ERROR IN UPLOAD_FILES: $e');
       throw Exception('Cloudinary upload failed: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> _executeSingleUpload({
+    required Uint8List bytes,
+    required String cloudName,
+    required String uploadPreset,
+    required String resourceType,
+    required String fullPublicId,
+    required String basePublicId,
+    required String extension,
+    required String originalName,
+  }) async {
+    final String uploadUrl = 'https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload';
+    final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
+    request.fields['upload_preset'] = uploadPreset;
+    request.fields['public_id'] = fullPublicId;
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: '$basePublicId$extension',
+        contentType: _getMediaType(originalName),
+      ),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final Map<String, dynamic> data = jsonDecode(response.body);
+      final String? secureUrl = data['secure_url'];
+      final String? pId = data['public_id'];
+
+      if (secureUrl == null || pId == null) {
+        throw Exception('Upload succeeded but secure_url or public_id missing');
+      }
+
+      debugPrint('✅ Uploaded: $secureUrl');
+      return {
+        'url': secureUrl,
+        'publicId': pId,
+        'bytes': (data['bytes'] as num?)?.toInt() ?? bytes.length,
+      };
+    } else {
+      throw Exception('Cloudinary upload failed (Status ${response.statusCode}): ${response.body}');
     }
   }
 }

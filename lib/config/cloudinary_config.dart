@@ -5,5 +5,9 @@ class CloudinaryConfig {
 
   // Secondary Cloudinary (Xerox Shop)
   static const String cloudNameB = 'doymq9qhk';
-  static const String uploadPresetB = 'printer_unsigned'; // Assume same for now or ask
+  static const String uploadPresetB = 'printer_unsigned';
+
+  // Backup Cloudinary (Failover Account)
+  static const String cloudNameC = 'irtchxuf';
+  static const String uploadPresetC = 'printer_unsigned';
 }

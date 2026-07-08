@@ -74,66 +74,67 @@ class UploadService {
         final isDoc = ext == '.doc' || ext == '.docx';
         final resourceType = isPdf ? 'image' : (isDoc ? 'raw' : 'auto');
 
-        final cloudName = CloudinaryConfig.cloudNameB;
-        final uploadPreset = CloudinaryConfig.uploadPresetB;
         final folderPath = 'xerox_orders';
         final basePublicId = '${pickupCode}_${DateTime.now().millisecondsSinceEpoch}';
         final fullPublicId = '$folderPath/$pickupCode/$basePublicId';
 
-        final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload');
-        
-        final request = MultipartRequestWithProgress(
-          'POST',
-          uri,
-          onProgress: (bytes, total) {
-            final progress = total > 0 ? (bytes / total) : 0.0;
-            // Cap at 0.99 until response succeeds
-            controller.add(UploadProgress(progress: progress >= 1.0 ? 0.99 : progress));
-          },
-        );
+        // Try primary Account B first
+        String activeCloudName = CloudinaryConfig.cloudNameB;
+        String activeUploadPreset = CloudinaryConfig.uploadPresetB;
 
-        request.fields['upload_preset'] = uploadPreset;
-        request.fields['public_id'] = fullPublicId;
-
-        final mimeType = isPdf 
-            ? MediaType('application', 'pdf')
-            : (isDoc ? MediaType('application', 'octet-stream') : MediaType('image', ext.replaceAll('.', '')));
-
-        if (kIsWeb && fileModel.bytes != null) {
-          request.files.add(http.MultipartFile.fromBytes(
-            'file',
-            fileModel.bytes!,
-            filename: fileModel.name,
-            contentType: mimeType,
-          ));
-        } else if (fileModel.path.isNotEmpty) {
-          request.files.add(await http.MultipartFile.fromPath(
-            'file',
-            fileModel.path,
-            contentType: mimeType,
-          ));
-        } else if (fileModel.bytes != null) {
-          request.files.add(http.MultipartFile.fromBytes(
-            'file',
-            fileModel.bytes!,
-            filename: fileModel.name,
-            contentType: mimeType,
-          ));
-        } else {
-          throw Exception('No file data available to upload.');
-        }
-
-        final response = await request.send();
-        final responseString = await response.stream.bytesToString();
-        
-        if (response.statusCode == 200) {
-          final data = jsonDecode(responseString);
-          final String url = data['secure_url'] ?? '';
+        try {
+          final String url = await _executeUploadWithProgress(
+            fileModel: fileModel,
+            cloudName: activeCloudName,
+            uploadPreset: activeUploadPreset,
+            resourceType: resourceType,
+            fullPublicId: fullPublicId,
+            basePublicId: basePublicId,
+            controller: controller,
+          );
           controller.add(UploadProgress(progress: 1.0, url: url));
           controller.close();
-        } else {
-          controller.add(UploadProgress(progress: 0.0, error: 'Server error ${response.statusCode}: $responseString'));
-          controller.close();
+        } catch (primaryErr) {
+          debugPrint('⚠️ Primary Cloudinary Upload failed in stream: $primaryErr');
+          debugPrint('🔄 Switching to Backup Cloudinary Account (Account C)...');
+
+          activeCloudName = CloudinaryConfig.cloudNameC;
+          activeUploadPreset = CloudinaryConfig.uploadPresetC;
+
+          try {
+            final String url = await _executeUploadWithProgress(
+              fileModel: fileModel,
+              cloudName: activeCloudName,
+              uploadPreset: activeUploadPreset,
+              resourceType: resourceType,
+              fullPublicId: fullPublicId,
+              basePublicId: basePublicId,
+              controller: controller,
+            );
+            controller.add(UploadProgress(progress: 1.0, url: url));
+            controller.close();
+          } catch (backupErr) {
+            debugPrint('❌ Backup Cloudinary Upload also failed in stream: $backupErr');
+            debugPrint('🔄 Trying Account A as a final backup...');
+            activeCloudName = CloudinaryConfig.cloudName;
+            activeUploadPreset = CloudinaryConfig.uploadPreset;
+            try {
+              final String url = await _executeUploadWithProgress(
+                fileModel: fileModel,
+                cloudName: activeCloudName,
+                uploadPreset: activeUploadPreset,
+                resourceType: resourceType,
+                fullPublicId: fullPublicId,
+                basePublicId: basePublicId,
+                controller: controller,
+              );
+              controller.add(UploadProgress(progress: 1.0, url: url));
+              controller.close();
+            } catch (err) {
+              controller.add(UploadProgress(progress: 0.0, error: err.toString()));
+              controller.close();
+            }
+          }
         }
       } catch (e) {
         controller.add(UploadProgress(progress: 0.0, error: e.toString()));
@@ -142,5 +143,70 @@ class UploadService {
     }();
 
     return controller.stream;
+  }
+
+  Future<String> _executeUploadWithProgress({
+    required FileModel fileModel,
+    required String cloudName,
+    required String uploadPreset,
+    required String resourceType,
+    required String fullPublicId,
+    required String basePublicId,
+    required StreamController<UploadProgress> controller,
+  }) async {
+    final ext = path.extension(fileModel.name).toLowerCase();
+    final isPdf = ext == '.pdf';
+    final isDoc = ext == '.doc' || ext == '.docx';
+    
+    final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload');
+    final request = MultipartRequestWithProgress(
+      'POST',
+      uri,
+      onProgress: (bytes, total) {
+        final progress = total > 0 ? (bytes / total) : 0.0;
+        controller.add(UploadProgress(progress: progress >= 1.0 ? 0.99 : progress));
+      },
+    );
+
+    request.fields['upload_preset'] = uploadPreset;
+    request.fields['public_id'] = fullPublicId;
+
+    final mimeType = isPdf 
+        ? MediaType('application', 'pdf')
+        : (isDoc ? MediaType('application', 'octet-stream') : MediaType('image', ext.replaceAll('.', '')));
+
+    if (kIsWeb && fileModel.bytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        fileModel.bytes!,
+        filename: fileModel.name,
+        contentType: mimeType,
+      ));
+    } else if (fileModel.path.isNotEmpty) {
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        fileModel.path,
+        contentType: mimeType,
+      ));
+    } else if (fileModel.bytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        fileModel.bytes!,
+        filename: fileModel.name,
+        contentType: mimeType,
+      ));
+    } else {
+      throw Exception('No file data available to upload.');
+    }
+
+    final response = await request.send();
+    final responseString = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(responseString);
+      return data['secure_url'] ?? '';
+    } else {
+      throw Exception('Cloudinary upload failed (Status ${response.statusCode}): $responseString');
+    }
   }
 }
