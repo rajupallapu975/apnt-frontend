@@ -18,7 +18,16 @@ import '../views/screens/qr_scanner_page.dart';
 class XeroxShopPage extends StatefulWidget {
   final List<FileModel> files;
   final String? initiallySelectedShopId;
-  const XeroxShopPage({super.key, required this.files, this.initiallySelectedShopId});
+  final String? serviceId;
+  final String? serviceName;
+
+  const XeroxShopPage({
+    super.key, 
+    required this.files, 
+    this.initiallySelectedShopId,
+    this.serviceId,
+    this.serviceName,
+  });
 
   @override
   State<XeroxShopPage> createState() => _XeroxShopPageState();
@@ -337,23 +346,44 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => UploadSourceSheet(
+      builder: (sheetContext) => UploadSourceSheet(
         onCamera: () async {
-          Navigator.pop(context);
+          Navigator.pop(sheetContext);
           await uploadVM.pickFromCamera();
           if (!mounted || !context.mounted) return;
+          if (uploadVM.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error),
+            );
+            uploadVM.clearError();
+            return;
+          }
           _handlePickedFromSheet(context, shop, uploadVM);
         },
         onGallery: () async {
-          Navigator.pop(context);
+          Navigator.pop(sheetContext);
           await uploadVM.pickFromGallery();
           if (!mounted || !context.mounted) return;
+          if (uploadVM.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error),
+            );
+            uploadVM.clearError();
+            return;
+          }
           _handlePickedFromSheet(context, shop, uploadVM);
         },
         onFiles: () async {
-          Navigator.pop(context);
+          Navigator.pop(sheetContext);
           await uploadVM.pickFromFiles();
           if (!mounted || !context.mounted) return;
+          if (uploadVM.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error),
+            );
+            uploadVM.clearError();
+            return;
+          }
           _handlePickedFromSheet(context, shop, uploadVM);
         },
       ),
@@ -377,6 +407,8 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
           shopId: shop.id,
           shopName: shop.name,
           shopPhone: shop.phoneNumber,
+          serviceId: widget.serviceId,
+          serviceName: widget.serviceName,
         ),
       ),
     );
@@ -408,87 +440,169 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
               ),
             ),
             const SizedBox(height: 24),
-            Row(
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(Icons.store_rounded, color: AppColors.primaryBlue, size: 40),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        shop.name,
-                        style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.primaryBlack),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        shop.address,
-                        style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: shop.activePrinters > 0 
-                            ? AppColors.success.withValues(alpha: 0.1) 
-                            : AppColors.textTertiary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(Icons.store_rounded, color: AppColors.primaryBlue, size: 40),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                shop.name,
+                                style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.primaryBlack),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                shop.address,
+                                style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: shop.activePrinters > 0 
+                                    ? AppColors.success.withValues(alpha: 0.1) 
+                                    : AppColors.textTertiary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.bolt_rounded, 
+                                      size: 14, 
+                                      color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${shop.activePrinters} PRINTERS ACTIVE',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10, 
+                                        fontWeight: FontWeight.w900, 
+                                        color: shop.activePrinters > 0 ? AppColors.success : AppColors.textSecondary
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    _detailHeading('SHOPKEEPER DETAILS'),
+                    _detailRow(Icons.person_outline_rounded, 'Owner', shop.ownerName ?? 'Not Available'),
+                    _detailRow(Icons.phone_outlined, 'Contact', shop.phoneNumber ?? 'Not Available'),
+                    _detailRow(Icons.email_outlined, 'Email', shop.email ?? 'Not Available'),
+                    
+                    const SizedBox(height: 24),
+                    _detailHeading('WORKING HOURS'),
+                    _detailRow(Icons.access_time_rounded, 'Timings', '${shop.openingTime} - ${shop.closingTime}'),
+                    
+                    const SizedBox(height: 24),
+                    (() {
+                      final docXeroxConfig = shop.zikrinterServices['ZHwQd18Vy08TZkyBFXjB'] as Map<String, dynamic>?;
+                      final bool hasDocXerox = docXeroxConfig != null && docXeroxConfig['isEnabled'] == true;
+
+                      if (hasDocXerox) {
+                        final double bwSingle = (docXeroxConfig['bw_singleSidePrice'] ?? 2.0).toDouble();
+                        final double bwDouble = (docXeroxConfig['bw_doubleSidePrice'] ?? 3.0).toDouble();
+                        final double bwBulk = (docXeroxConfig['bw_bulkPrintingPrice'] ?? 1.5).toDouble();
+
+                        final double colorSingle = (docXeroxConfig['color_singleSidePrice'] ?? docXeroxConfig['singleSidePrice'] ?? 10.0).toDouble();
+                        final double colorDouble = (docXeroxConfig['color_doubleSidePrice'] ?? docXeroxConfig['doubleSidePrice'] ?? 15.0).toDouble();
+                        final double colorBulk = (docXeroxConfig['color_bulkPrintingPrice'] ?? docXeroxConfig['bulkPrintingPrice'] ?? 8.0).toDouble();
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              Icons.bolt_rounded, 
-                              size: 14, 
-                              color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${shop.activePrinters} PRINTERS ACTIVE',
-                              style: GoogleFonts.inter(
-                                fontSize: 10, 
-                                fontWeight: FontWeight.w900, 
-                                color: shop.activePrinters > 0 ? AppColors.success : AppColors.textSecondary
+                            _detailHeading('DOCUMENTS (XEROX) FARE PRICING'),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text('B&W Print', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
+                                      Text('Color Print', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
+                                    ],
+                                  ),
+                                  const Divider(height: 16),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            _priceLine('Single Sided', bwSingle),
+                                            _priceLine('Double Sided', bwDouble),
+                                            _priceLine('Bulk Print', bwBulk),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 20),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            _priceLine('Single Sided', colorSingle),
+                                            _priceLine('Double Sided', colorDouble),
+                                            _priceLine('Bulk Print', colorBulk),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ],
-                  ),
+                        );
+                      } else {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _detailHeading('PRICING'),
+                            Row(
+                              children: [
+                                _priceCard('Black & White', '₹${shop.pricePerBWPage.toStringAsFixed(0)}'),
+                                const SizedBox(width: 16),
+                                _priceCard('Colored Print', '₹${shop.pricePerColorPage.toStringAsFixed(0)}'),
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+                    })(),
+                  ],
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 32),
-            
-            _detailHeading('SHOPKEEPER DETAILS'),
-            _detailRow(Icons.person_outline_rounded, 'Owner', shop.ownerName ?? 'Not Available'),
-            _detailRow(Icons.phone_outlined, 'Contact', shop.phoneNumber ?? 'Not Available'),
-            _detailRow(Icons.email_outlined, 'Email', shop.email ?? 'Not Available'),
-            
-            const SizedBox(height: 24),
-            _detailHeading('WORKING HOURS'),
-            _detailRow(Icons.access_time_rounded, 'Timings', '${shop.openingTime} - ${shop.closingTime}'),
-            
-            const SizedBox(height: 24),
-            _detailHeading('PRICING'),
-            Row(
-              children: [
-                _priceCard('Black & White', '₹${shop.pricePerBWPage.toStringAsFixed(0)}'),
-                const SizedBox(width: 16),
-                _priceCard('Colored Print', '₹${shop.pricePerColorPage.toStringAsFixed(0)}'),
-              ],
-            ),
-            
-            const Spacer(),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -511,6 +625,19 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _priceLine(String label, double price) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          Text('₹${price.toStringAsFixed(1)}', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primaryBlue)),
+        ],
       ),
     );
   }

@@ -38,6 +38,46 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
   bool _showPasscodeField = false;
   final TextEditingController _passcodeController = TextEditingController();
 
+  double get _shopSubtotal {
+    final settings = widget.printSettings;
+    return (settings['shopSubtotal'] as num? ?? settings['subtotal'] as num? ?? widget.totalPrice).toDouble();
+  }
+
+  double get _platformFee {
+    final settings = widget.printSettings;
+    return (settings['commission'] as num? ?? settings['commissionAmount'] as num? ?? 0.0).toDouble();
+  }
+
+  double get _amountSaved {
+    final settings = widget.printSettings;
+    return (settings['amountSaved'] as num? ?? 0.0).toDouble();
+  }
+
+  double get _originalShopSubtotal {
+    final settings = widget.printSettings;
+    return (settings['originalShopSubtotal'] as num? ?? _shopSubtotal).toDouble();
+  }
+
+  double get _originalFinalAmount {
+    final settings = widget.printSettings;
+    return (settings['originalFinalAmount'] as num? ?? widget.totalPrice).toDouble();
+  }
+
+  bool get _isBulkApplied {
+    final settings = widget.printSettings;
+    return settings['isBulkApplied'] == true;
+  }
+
+  bool get _generateCoverPage {
+    final settings = widget.printSettings;
+    return settings['generateCoverPage'] == true;
+  }
+
+  double get _coverPageCharge {
+    final settings = widget.printSettings;
+    return (settings['coverPageCharge'] as num? ?? 0.0).toDouble();
+  }
+
 
   @override
   void initState() {
@@ -157,6 +197,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
           const SizedBox(height: 24),
 
           // 📄 Pricing Details
+          // 📄 Pricing Details
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -170,31 +211,116 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                   _buildSimpleRow('Destination', widget.printSettings['shopName']),
                   const SizedBox(height: 12),
                 ],
-                _buildSimpleRow('Base Price', '₹2/page'),
+                if (widget.printSettings['paperSize'] != null) ...[
+                  _buildSimpleRow('Paper Size', widget.printSettings['paperSize'].toString().toUpperCase()),
+                  const SizedBox(height: 12),
+                ],
+                _buildSimpleRow('Layout Side', widget.printSettings['doubleSide'] == true ? 'Double Sided' : 'Single Sided'),
                 const SizedBox(height: 12),
-                _buildSimpleRow('Subtotal', '₹${widget.totalPrice.toStringAsFixed(0)}'),
+                _buildSimpleRow(
+                  'Pages Breakdown',
+                  'B&W: ${widget.printSettings['totalBwPagesWithCopies'] ?? 0} | Color: ${widget.printSettings['totalColorPagesWithCopies'] ?? 0}',
+                ),
+                const SizedBox(height: 12),
+
+                // 1. Printing Cost (Original) - strikethrough if bulk applied
+                if (_isBulkApplied) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Printing Cost',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        '₹${_originalShopSubtotal.toStringAsFixed(2)}',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 2. Bulk Discount
+                  _buildSimpleRow(
+                    'Bulk Discount',
+                    '-₹${_amountSaved.toStringAsFixed(2)}',
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // 3. Printing Cost (Final)
+                _buildSimpleRow(
+                  'Printing Cost',
+                  '₹${_shopSubtotal.toStringAsFixed(2)}',
+                ),
+
+                // 3b. Cover Page Charge
+                if (_generateCoverPage) ...[
+                  const SizedBox(height: 12),
+                  _buildSimpleRow(
+                    'Cover Page Charge',
+                    '₹${_coverPageCharge.toStringAsFixed(2)}',
+                  ),
+                ],
+
+                // 4. Platform Fee
+                if (_platformFee > 0) ...[
+                  const SizedBox(height: 12),
+                  _buildSimpleRow(
+                    'Platform Fee',
+                    '₹${_platformFee.toStringAsFixed(2)}',
+                  ),
+                ],
+
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Divider(height: 1),
                 ),
+
+                // 5. Grand Total
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Total',
+                      'Grand Total',
                       style: GoogleFonts.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: AppColors.primaryBlack,
                       ),
                     ),
-                    Text(
-                      '₹${widget.totalPrice.toStringAsFixed(0)}',
-                      style: GoogleFonts.inter(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.primaryBlue,
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (_isBulkApplied)
+                          Text(
+                            '₹${_originalFinalAmount.toStringAsFixed(0)}',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textSecondary,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                        Text(
+                          '₹${widget.totalPrice.toStringAsFixed(0)}',
+                          style: GoogleFonts.inter(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primaryBlue,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -563,6 +689,8 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
       ],
     );
   }
+
+  // _buildSimpleRowWithStrikethrough removed (superseded by _buildRow in the new pricing layout)
 
   Widget _securityRow(IconData icon, String text) {
     return Row(

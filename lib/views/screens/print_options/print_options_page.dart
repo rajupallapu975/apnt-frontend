@@ -9,6 +9,8 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../payment_processing_page.dart';
 import '../widgets/payment_summary_sheet.dart';
@@ -22,6 +24,9 @@ import '../../../services/image_processing_service.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import '../../../utils/order_utils.dart';
 import '../../../services/firestore_service.dart';
+import '../../../services/pricing_service.dart';
+import 'package:http/http.dart' as http;
+import '../../../config/backend_config.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config model
@@ -51,6 +56,9 @@ class PrintOptionsPage extends StatefulWidget {
   final String? shopId;
   final String? shopName;
   final String? shopPhone;
+  final String? serviceId;
+  final String? serviceName;
+  final String? selectedPaperSize;
   
   const PrintOptionsPage({
     super.key, 
@@ -59,6 +67,9 @@ class PrintOptionsPage extends StatefulWidget {
     this.shopId,
     this.shopName,
     this.shopPhone,
+    this.serviceId,
+    this.serviceName,
+    this.selectedPaperSize,
   });
 
   @override
@@ -84,25 +95,37 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     return t;
   }
 
-  int get _totalPrice {
-    int total = 0;
-    for (final p in pageConfigs) {
-      if (p.isColor) {
-        // Color is still ₹10/page
-        total += 10 * p.pageCount * p.copies;
-      } else {
-        // B&W: ₹2 per single-side, ₹3 per double-side sheet
-        if (p.isDoubleSided && p.pageCount >= 2) {
-          int doubleSidedSheets = (p.pageCount / 2).floor();
-          int remainingSinglePages = p.pageCount % 2;
-          total += (doubleSidedSheets * 3 + remainingSinglePages * 2) * p.copies;
-        } else {
-          total += 2 * p.pageCount * p.copies;
-        }
-      }
-    }
-    return total;
+  Map<String, dynamic>? shopData;
+  Map<String, dynamic>? globalServiceParams;
+  String commissionType = 'percentage';
+  double commissionValue = 0.0;
+
+  bool _isCustomService = false;
+  List<Map<String, dynamic>> _customParameters = [];
+  Map<String, dynamic> _customValues = {};
+  List<String> _supportedPaperSizes = ['A4'];
+  String _selectedPaperSize = 'A4';
+
+  PricingCalculationResult get _pricingResult {
+    return PricingService.calculate(
+      fileConfigs: pageConfigs.map((c) => {
+        'pageCount': c.pageCount,
+        'copies': c.copies,
+        'isColor': c.isColor,
+        'isDoubleSided': c.isDoubleSided,
+        'paperSize': _selectedPaperSize,
+      }).toList(),
+      shopData: shopData ?? {},
+      globalServiceParams: globalServiceParams,
+      commissionType: commissionType,
+      commissionValue: commissionValue,
+      serviceId: widget.serviceId,
+    );
   }
+
+  double get _totalPrice => _pricingResult.shopSubtotal;
+  double get _totalCommission => _pricingResult.commissionAmount;
+  double get _payablePrice => _pricingResult.finalAmount;
 
   // ── Init ───────────────────────────────────────────────────────────────────
   @override
@@ -119,6 +142,87 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       }
       return cfg;
     });
+    _loadShopPricing();
+  }
+
+  Future<void> _loadShopPricing() async {
+    if (widget.shopId == null) return;
+    try {
+      final response = await http.get(Uri.parse('${BackendConfig.baseUrl}/api/shop/services?shopId=${widget.shopId}'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && mounted) {
+          final shop = data['shop'] as Map<String, dynamic>? ?? {};
+          final services = data['services'] as List<dynamic>? ?? [];
+          
+          final String targetServiceId = widget.serviceId ?? 'ZHwQd18Vy08TZkyBFXjB';
+          final service = services.firstWhere((s) => s['id'] == targetServiceId, orElse: () => null);
+
+          if (service != null) {
+            final params = service['parameters'] as Map<String, dynamic>? ?? {};
+
+            String type = service['commissionType'] ?? 'percentage';
+            double val = (service['commissionValue'] ?? 0.0).toDouble();
+
+            if (service['commissionValue'] == null) {
+              final colorSingle = params['color_singleSide'] ?? params['singleSide'] ?? {};
+              final bwSingle = params['bw_singleSide'] ?? {};
+              
+              type = colorSingle['commissionType'] ?? bwSingle['commissionType'] ?? type;
+              val = (colorSingle['commission'] ?? bwSingle['commission'] ?? val).toDouble();
+            }
+
+            final bool isCustom = targetServiceId != 'ZHwQd18Vy08TZkyBFXjB';
+            final rawCustom = service['customParameters'] as List<dynamic>? ?? [];
+            final List<Map<String, dynamic>> customParams = rawCustom.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+            customParams.sort((a, b) => (a['displayOrder'] as num? ?? 0).compareTo(b['displayOrder'] as num? ?? 0));
+
+            final Map<String, dynamic> initialValues = {};
+            for (final cp in customParams) {
+              final String name = cp['name'] ?? '';
+              final String defVal = cp['defaultValue'] ?? '';
+              final String inputType = cp['inputType'] ?? '';
+              if (name.isNotEmpty) {
+                if (inputType == 'switch') {
+                  initialValues[name] = (defVal.toLowerCase() == 'true' || defVal == '1');
+                } else if (inputType == 'counter') {
+                  initialValues[name] = int.tryParse(defVal) ?? 1;
+                } else if (inputType == 'checkbox') {
+                  initialValues[name] = <String>[];
+                } else {
+                  initialValues[name] = defVal;
+                }
+              }
+            }
+
+            final List<dynamic> rawSizes = service['paperSizes'] as List<dynamic>? ?? [];
+            final List<String> pSizes = rawSizes.isNotEmpty 
+                ? List<String>.from(rawSizes) 
+                : ['A4'];
+            
+            if (widget.selectedPaperSize != null && !pSizes.any((s) => s.toLowerCase() == widget.selectedPaperSize!.toLowerCase())) {
+              pSizes.add(widget.selectedPaperSize!);
+            }
+
+            setState(() {
+              shopData = shop;
+              globalServiceParams = params;
+              commissionType = type;
+              commissionValue = val;
+              _isCustomService = isCustom;
+              _customParameters = customParams;
+              _customValues = initialValues;
+              _supportedPaperSizes = pSizes;
+              _selectedPaperSize = widget.selectedPaperSize != null && pSizes.any((s) => s.toLowerCase() == widget.selectedPaperSize!.toLowerCase())
+                  ? pSizes.firstWhere((s) => s.toLowerCase() == widget.selectedPaperSize!.toLowerCase())
+                  : (pSizes.contains('A4') ? 'A4' : pSizes.first);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading shop pricing from backend: $e");
+    }
   }
 
   Future<void> _loadPdfMetadata(int index, FileModel model) async {
@@ -338,7 +442,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   // ── Mobile body ────────────────────────────────────────────────────────────
   Widget _buildMobileBody() {
     final cfg = _current;
+    final pricing = XeroxPricing.fromShopData(shopData ?? {}, globalServiceParams, serviceId: widget.serviceId);
     final divider = Divider(height: 1, thickness: 1, color: AppColors.border.withValues(alpha: 0.4), indent: 24, endIndent: 24);
+
+    final String sizeKey = _selectedPaperSize.toLowerCase();
+    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
+    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
     
     return SingleChildScrollView(
       child: Column(
@@ -389,7 +498,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     _mobileColorTile(
                       colorIndicator: _colorCircle(),
                       label: 'Coloured',
-                      price: '₹10/page',
+                      price: '₹${currentColorPrice.toStringAsFixed(0)}/page',
                       selected: cfg.isColor,
                       onTap: () => setState(() => cfg.isColor = true),
                     ),
@@ -397,7 +506,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     _mobileColorTile(
                       colorIndicator: _bwCircle(),
                       label: 'B & W',
-                      price: '₹2/page',
+                      price: '₹${currentBwPrice.toStringAsFixed(0)}/page',
                       selected: !cfg.isColor,
                       onTap: () => setState(() => cfg.isColor = false),
                     ),
@@ -442,6 +551,45 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             ),
           ),
 
+          divider,
+
+          // Paper Size
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Choosed paper size',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: AppColors.primaryBlue, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        _selectedPaperSize.toUpperCase(),
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           if (cfg.pageCount >= 2)
             Column(
               children: [
@@ -471,6 +619,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   ),
                 ),
               ],
+            ),
+
+          if (_isCustomService)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _buildCustomParametersSection(),
             ),
 
           // Proper bottom spacing before the bottom bar
@@ -592,6 +746,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               onPageChanged: (i) => setState(() => _currentPageIndex = i),
               onEdit: _handleEditOrOpen,
               onRemove: _removeFile,
+              paperSize: _selectedPaperSize,
             ),
           ),
         ],
@@ -602,6 +757,11 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   // ── Web: Settings card ─────────────────────────────────────────────────────
   Widget _buildSettingsCard() {
     final cfg = _current;
+    final pricing = XeroxPricing.fromShopData(shopData ?? {}, globalServiceParams, serviceId: widget.serviceId);
+
+    final String sizeKey = _selectedPaperSize.toLowerCase();
+    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
+    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
 
     return ModernCard(
       padding: const EdgeInsets.all(32),
@@ -642,9 +802,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _webColorTile('Black & White', '₹2/page', !cfg.isColor, _bwCircle(), () => setState(() => cfg.isColor = false)),
+              _webColorTile('Black & White', '₹${currentBwPrice.toStringAsFixed(0)}/page', !cfg.isColor, _bwCircle(), () => setState(() => cfg.isColor = false)),
               const SizedBox(width: 12),
-              _webColorTile('Color', '₹10/page', cfg.isColor, _colorCircle(), () => setState(() => cfg.isColor = true)),
+              _webColorTile('Color', '₹${currentColorPrice.toStringAsFixed(0)}/page', cfg.isColor, _colorCircle(), () => setState(() => cfg.isColor = true)),
             ],
           ),
 
@@ -660,6 +820,40 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               _webTile('Portrait', null, cfg.isPortrait, () => setState(() => cfg.isPortrait = true)),
               const SizedBox(width: 12),
               _webTile('Landscape', null, !cfg.isPortrait, () => setState(() => cfg.isPortrait = false)),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+          const Divider(color: AppColors.border),
+          const SizedBox(height: 24),
+
+          _webSettingLabel('Choosed paper size'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.15)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: AppColors.primaryBlue, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      _selectedPaperSize.toUpperCase(),
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
 
@@ -686,74 +880,34 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               ],
             ),
           ],
+          if (_isCustomService) _buildCustomParametersSection(),
         ],
       ),
     ).animate().fadeIn(delay: 150.ms, duration: 300.ms);
   }
 
-  // ── Payment Summary ────────────────────────────────────────────────────────
   Widget _buildPaymentSummaryCard() {
-    final cfg = _current;
-    final unitPrice = cfg.isColor ? 10 : 3;
     return ModernCard(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // Header
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.receipt_long_rounded, size: 16, color: AppColors.primaryBlue),
-              ),
+              const Icon(Icons.receipt_long_rounded, color: AppColors.primaryBlue),
               const SizedBox(width: 8),
-              Text('Payment Summary',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15)),
+              Text('Order Summary',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16,
+                      color: AppColors.textPrimary)),
             ],
           ),
           const SizedBox(height: 20),
 
-          // ── Prominent total pages display ──
+          // Print Mode Info Box
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('TOTAL PAGES',
-                        style: GoogleFonts.inter(
-                            fontSize: 10, fontWeight: FontWeight.w800,
-                            color: AppColors.primaryBlue, letterSpacing: 1.2)),
-                    const SizedBox(height: 2),
-                    Text('$_totalPages ${_totalPages == 1 ? 'page' : 'pages'}',
-                        style: GoogleFonts.inter(
-                            fontSize: 22, fontWeight: FontWeight.w900,
-                            color: AppColors.primaryBlue)),
-                  ],
-                ),
-                const Spacer(),
-                const Icon(Icons.description_outlined, color: AppColors.primaryBlue, size: 32),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Print Mode Display ──
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: widget.printMode == PrintMode.autonomous 
                   ? AppColors.primaryBlue.withValues(alpha: 0.04)
@@ -807,25 +961,21 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
           const SizedBox(height: 16),
 
-          _summaryLine('Copies', '× ${cfg.copies}'),
-          _summaryLine('Color Mode', cfg.isColor ? 'Color' : 'B&W'),
+          if (widget.shopName != null) ...[
+            _summaryLine('Selected Shop', widget.shopName!),
+            const SizedBox(height: 8),
+          ],
+          
+          _summaryLine('Total Pages', '$_totalPages ${_totalPages == 1 ? 'page' : 'pages'}'),
 
-          const SizedBox(height: 12),
-          const Divider(color: AppColors.border),
-          const SizedBox(height: 12),
-
-          _summaryLine('Rate', cfg.isColor ? '₹10/page' : (cfg.isDoubleSided ? '₹3/sheet (Double)' : '₹2/page'), muted: true),
-          _summaryLine('Subtotal', '₹$_totalPrice', muted: true),
-
-          const SizedBox(height: 12),
           const Divider(color: AppColors.border),
           const SizedBox(height: 12),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 17)),
-              Text('₹$_totalPrice',
+              Text('Total Price', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 17)),
+              Text('₹${_payablePrice.toStringAsFixed(0)}',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 26, color: AppColors.primaryBlue)),
             ],
           ),
@@ -849,7 +999,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     children: [
                       const Icon(Icons.print_rounded, size: 18),
                       const SizedBox(width: 8),
-                      Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
+                      Text('Pay ₹${_payablePrice.toStringAsFixed(0)}',
                           style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
                     ],
                   ),
@@ -864,10 +1014,16 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           _trustRow(Icons.confirmation_num_outlined, 'Pickup code will be generated after payment'),
         ],
       ),
-    ).animate().fadeIn(delay: 200.ms, duration: 300.ms);
+    );
   }
 
   Widget _buildPricingGuide() {
+    final pricing = XeroxPricing.fromShopData(shopData ?? {}, globalServiceParams, serviceId: widget.serviceId);
+    final String sizeKey = _selectedPaperSize.toLowerCase();
+    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
+    final double currentDoubleBwPrice = pricing.doubleBwPrices[sizeKey] ?? pricing.doubleBwPrices['a4'] ?? 4.0;
+    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
+
     return ModernCard(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -883,9 +1039,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             ],
           ),
           const SizedBox(height: 16),
-          _priceGuideRow('B&W Print', '₹2/page'),
-          _priceGuideRow('Double Sided', '₹3/sheet'),
-          _priceGuideRow('Color Print', '₹10/page'),
+          _priceGuideRow('B&W Print', '₹${currentBwPrice.toStringAsFixed(1)}/page'),
+          _priceGuideRow('Double Sided', '₹${currentDoubleBwPrice.toStringAsFixed(1)}/sheet'),
+          _priceGuideRow('Color Print', '₹${currentColorPrice.toStringAsFixed(1)}/page'),
         ],
       ),
     );
@@ -1344,6 +1500,23 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   Future<void> _handlePayment() async {
     try {
       setState(() => _isLoading = true);
+      
+      // 1. Verify shop online status before initiating order/payment
+      final isOnline = await BackendService().checkShopStatus(widget.shopId ?? '');
+      if (!isOnline) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("This shop has gone offline. Please select another shop to proceed."),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
       int totalPg = 0;
       for (var pc in pageConfigs) {
         totalPg += pc.pageCount * pc.copies;
@@ -1368,6 +1541,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         'shopId': widget.shopId,
         'shopName': widget.shopName, // Pass the destination shop name
         'shopPhone': widget.shopPhone, // Track shop contact
+        'serviceId': widget.serviceId ?? 'ZHwQd18Vy08TZkyBFXjB',
+        'serviceName': widget.serviceName ?? 'Documents (Xerox)',
+        'customParameters': _customValues,
         'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
         'files': List.generate(pageConfigs.length, (i) {
           final model = pickedFiles[i];
@@ -1379,16 +1555,44 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             'orientation': cfg.isPortrait ? 'PORTRAIT' : 'LANDSCAPE',
             'copies': cfg.copies,
             'doubleSided': cfg.isDoubleSided,
-            'paperSize': 'A4',
+            'paperSize': _selectedPaperSize,
             'fileSizeKB': (model.size / 1024).toStringAsFixed(1),
             'url': '', 
             'publicId': '',
+            'price': _pricingResult.fileCosts[i],
           };
         }),
-        'paperSize': 'A4',
+        'paperSize': _selectedPaperSize,
+        'subtotal': _totalPrice,
+        'commission': _totalCommission,
+        'shopSubtotal': _pricingResult.shopSubtotal,
+        'commissionType': _pricingResult.commissionType,
+        'commissionValue': _pricingResult.commissionValue,
+        'commissionAmount': _pricingResult.commissionAmount,
+        'finalAmount': _pricingResult.finalAmount,
+        'totalBwPages': _pricingResult.totalBwPages,
+        'totalBwPagesWithCopies': _pricingResult.totalBwPagesWithCopies,
+        'bwPricingMode': _pricingResult.bwPricingMode,
+        'bwPricePerPage': _pricingResult.bwPricePerPage,
+        'bwCost': _pricingResult.bwCost,
+        'bwOriginalCost': _pricingResult.bwOriginalCost,
+        'isBwBulkApplied': _pricingResult.isBwBulkApplied,
+        'totalColorPages': _pricingResult.totalColorPages,
+        'totalColorPagesWithCopies': _pricingResult.totalColorPagesWithCopies,
+        'colorPricingMode': _pricingResult.colorPricingMode,
+        'colorPricePerPage': _pricingResult.colorPricePerPage,
+        'colorCost': _pricingResult.colorCost,
+        'colorOriginalCost': _pricingResult.colorOriginalCost,
+        'isColorBulkApplied': _pricingResult.isColorBulkApplied,
+        'isBulkApplied': _pricingResult.isBulkApplied,
+        'originalShopSubtotal': _pricingResult.originalShopSubtotal,
+        'amountSaved': _pricingResult.amountSaved,
+        'originalFinalAmount': _pricingResult.originalFinalAmount,
+        'generateCoverPage': _pricingResult.generateCoverPage,
+        'coverPageCharge': _pricingResult.extraPageFee,
       };
 
-      final razorpayFuture = BackendService().createRazorpayOrder(_totalPrice.toDouble());
+      final razorpayFuture = BackendService().createRazorpayOrder(_payablePrice.toDouble());
       
       final processingFuture = Future.wait(
         List.generate(pickedFiles.length, (i) async {
@@ -1426,7 +1630,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         backgroundColor: Colors.transparent,
         builder: (context) => PaymentSummarySheet(
           totalPages: _totalPages,
-          totalPrice: _totalPrice.toDouble(),
+          totalPrice: _payablePrice.toDouble(),
           printSettings: printSettings,
           razorpayFuture: razorpayFuture,
           processingFuture: processingFuture,
@@ -1450,7 +1654,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     filenames: pickedFiles.map((e) => e.name).toList(),
                     printSettings: printSettings,
                     expectedPages: totalPg,
-                    expectedPrice: _totalPrice.toDouble(),
+                    expectedPrice: _payablePrice.toDouble(),
                     autoStartPayment: true,
                     prefillPhone: phone,
                     preCreatedOrder: razorpayData,
@@ -1632,6 +1836,225 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         SnackBar(content: Text('The file must be below 10 MB. Omitted: ${oversizedFiles.join(", ")}')),
       );
     }
+  }
+
+  Widget _buildCustomParametersSection() {
+    if (_customParameters.isEmpty) return const SizedBox.shrink();
+
+    final divider = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Divider(color: AppColors.border.withValues(alpha: 0.4)),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        divider,
+        Row(
+          children: [
+            const Icon(Icons.tune_rounded, size: 18, color: AppColors.primaryBlue),
+            const SizedBox(width: 8),
+            Text(
+              'Service Configuration',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _customParameters.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 20),
+          itemBuilder: (context, index) {
+            final cp = _customParameters[index];
+            final String name = cp['name'] ?? '';
+            final String type = cp['inputType'] ?? 'text';
+            final List<String> options = List<String>.from(cp['options'] ?? []);
+            final bool isRequired = cp['isRequired'] as bool? ?? false;
+
+            if (type == 'dropdown') {
+              return DropdownButtonFormField<String>(
+              initialValue: _customValues[name] as String?,
+                decoration: InputDecoration(
+                  labelText: name + (isRequired ? ' *' : ''),
+                  border: const OutlineInputBorder(),
+                ),
+                items: options.map((opt) {
+                  return DropdownMenuItem<String>(
+                    value: opt,
+                    child: Text(opt),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() => _customValues[name] = val);
+                },
+                validator: (val) {
+                  if (isRequired && (val == null || val.isEmpty)) {
+                    return '$name is required';
+                  }
+                  return null;
+                },
+              );
+            } else if (type == 'radio') {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name + (isRequired ? ' *' : ''), style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: options.map((opt) {
+                      final isSelected = _customValues[name] == opt;
+                      return ChoiceChip(
+                        label: Text(opt),
+                        selected: isSelected,
+                        selectedColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                        checkmarkColor: AppColors.primaryBlue,
+                        onSelected: (val) {
+                          if (val) {
+                            setState(() => _customValues[name] = opt);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              );
+            } else if (type == 'checkbox') {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name + (isRequired ? ' *' : ''), style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: options.map((opt) {
+                      final List<String> list = List<String>.from(_customValues[name] ?? []);
+                      final isChecked = list.contains(opt);
+                      return FilterChip(
+                        label: Text(opt),
+                        selected: isChecked,
+                        selectedColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                        checkmarkColor: AppColors.primaryBlue,
+                        onSelected: (val) {
+                          setState(() {
+                            if (val == true) {
+                              list.add(opt);
+                            } else {
+                              list.remove(opt);
+                            }
+                            _customValues[name] = list;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              );
+            } else if (type == 'switch') {
+              return SwitchListTile.adaptive(
+                title: Text(name, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+                value: _customValues[name] as bool? ?? false,
+                contentPadding: EdgeInsets.zero,
+                activeTrackColor: AppColors.primaryBlue,
+                activeThumbColor: Colors.white,
+                onChanged: (val) {
+                  setState(() => _customValues[name] = val);
+                },
+              );
+            } else if (type == 'counter') {
+              final int count = _customValues[name] as int? ?? 1;
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(name, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove, size: 16),
+                          onPressed: count > 1 ? () => setState(() => _customValues[name] = count - 1) : null,
+                        ),
+                        Text('$count', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 16),
+                          onPressed: () => setState(() => _customValues[name] = count + 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            } else if (type == 'file') {
+              final String fileName = _customValues[name] as String? ?? 'No file selected';
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name + (isRequired ? ' *' : ''), style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+                        const SizedBox(height: 4),
+                        Text(fileName, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.upload_file, size: 16),
+                    label: const Text('Choose File'),
+                    onPressed: () async {
+                      final pickerResult = await FilePicker.platform.pickFiles();
+                      if (pickerResult != null && pickerResult.files.isNotEmpty) {
+                        setState(() {
+                          _customValues[name] = pickerResult.files.first.name;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              );
+            } else if (type == 'number') {
+              return TextFormField(
+                initialValue: _customValues[name] as String? ?? '',
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: name + (isRequired ? ' *' : ''),
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (val) => _customValues[name] = val,
+                validator: (val) {
+                  if (isRequired && (val == null || val.isEmpty)) {
+                    return '$name is required';
+                  }
+                  return null;
+                },
+              );
+            } else {
+              return TextFormField(
+                initialValue: _customValues[name] as String? ?? '',
+                decoration: InputDecoration(
+                  labelText: name + (isRequired ? ' *' : ''),
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (val) => _customValues[name] = val,
+                validator: (val) {
+                  if (isRequired && (val == null || val.isEmpty)) {
+                    return '$name is required';
+                  }
+                  return null;
+                },
+              );
+            }
+          },
+        ),
+      ],
+    );
   }
 }
 

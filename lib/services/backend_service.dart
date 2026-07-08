@@ -56,6 +56,22 @@ class BackendService {
     }
   }
 
+  Future<bool> checkShopStatus(String shopId) async {
+    try {
+      final response = await http.get(
+        Uri.parse("${BackendConfig.baseUrl}/api/shop/$shopId/status"),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true && data['isOpen'] == true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /* =================================================
      RAZORPAY: CREATE ORDER
   ================================================= */

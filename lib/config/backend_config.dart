@@ -12,7 +12,6 @@ class BackendConfig {
     // 🛡️ AWS Production Backend URL
     const String liveUrl = "https://zikrint.duckdns.org"; 
 
-    // Always return liveUrl for all deployments (Web and App)
     return liveUrl;
   }
 

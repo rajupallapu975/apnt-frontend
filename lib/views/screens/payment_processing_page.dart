@@ -208,6 +208,47 @@ class _PaymentProcessingPageState
         _progress = 0.45;
       });
 
+      // 🆔 GENERATE/GET PICKUP CODE
+      String finalPickupCode = (widget.printSettings['xeroxCode'] ?? '').toString();
+      if (finalPickupCode.isEmpty) {
+        // If not predefined, generate a pickup code for file grouping
+        finalPickupCode = 'KP${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}';
+      }
+
+      List<String> finalFileUrls = widget.initialFileUrls ?? [];
+      List<String> finalPublicIds = widget.initialPublicIds ?? [];
+
+      if (finalFileUrls.isEmpty) {
+        setState(() {
+          _status = "Uploading files...";
+          _progress = 0.5;
+        });
+
+        final cloudinaryResult = await CloudinaryStorageService().uploadFiles(
+          pickupCode: finalPickupCode,
+          files: widget.selectedFiles,
+          bytes: widget.selectedBytes,
+          filenames: widget.filenames,
+          printMode: widget.printSettings['printMode'] ?? 'autonomous',
+        );
+        finalFileUrls = cloudinaryResult['urls']!;
+        finalPublicIds = cloudinaryResult['publicIds']!;
+      }
+
+      // Update the urls inside printSettings list of files
+      final filesList = widget.printSettings['files'] as List<dynamic>? ?? [];
+      for (int i = 0; i < filesList.length; i++) {
+        if (i < finalFileUrls.length) {
+          filesList[i]['url'] = finalFileUrls[i];
+          filesList[i]['publicId'] = finalPublicIds[i];
+        }
+      }
+
+      setState(() {
+        _status = "Verifying payment...";
+        _progress = 0.75;
+      });
+
       // 🆔 FETCH USER ORDER COUNT FOR SEQUENTIAL NAMING (order_1)
       final stats = await FirestoreService().getUserStatistics();
       final currentOrderCount = (stats['totalOrders'] as num? ?? 0).toInt();
@@ -226,32 +267,6 @@ class _PaymentProcessingPageState
 
       final finalOrderId = verifyResult['orderId'];
       currentOrderId = finalOrderId;
-      
-      // 🆔 MATCH GENERATED 4-DIGIT UNIQUE CODE
-      String finalPickupCode = (verifyResult['pickupCode'] ?? '').toString();
-      if (widget.printSettings['printMode'] == 'xeroxShop') {
-        finalPickupCode = (widget.printSettings['xeroxCode'] ?? '').toString(); 
-      }
-
-      List<String> finalFileUrls = widget.initialFileUrls ?? [];
-      List<String> finalPublicIds = widget.initialPublicIds ?? [];
-
-      if (finalFileUrls.isEmpty) {
-        setState(() {
-          _status = "Uploading files...";
-          _progress = 0.6;
-        });
-
-        final cloudinaryResult = await CloudinaryStorageService().uploadFiles(
-          pickupCode: finalPickupCode,
-          files: widget.selectedFiles,
-          bytes: widget.selectedBytes,
-          filenames: widget.filenames,
-          printMode: widget.printSettings['printMode'] ?? 'autonomous',
-        );
-        finalFileUrls = cloudinaryResult['urls']!;
-        finalPublicIds = cloudinaryResult['publicIds']!;
-      }
 
       final storage = LocalStorageService();
       final List<String> savedLocalPaths = [];

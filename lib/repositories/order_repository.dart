@@ -1,5 +1,4 @@
-import 'package:flutter/foundation.dart';
-import 'package:rxdart/rxdart.dart';
+// rxdart and foundation are used via FirestoreService internally
 import '../models/print_order_model.dart';
 import '../services/firestore_service.dart';
 

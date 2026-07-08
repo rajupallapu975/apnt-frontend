@@ -21,11 +21,27 @@ import '../../services/notification_service.dart';
 import '../../services/pwa_service.dart';
 import '../../services/firestore_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'widgets/upload_source_sheet.dart';
 import 'qr_scanner_page.dart';
 import '../../xerox_shop/xerox_shop_model.dart';
 import '../../xerox_shop/xerox_shop_viewmodel.dart';
 import 'print_options/print_options_page.dart';
+import 'widgets/zikrinter_services_section.dart';
+import 'zikrinter_service_details_page.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../config/backend_config.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class FakeDocumentSnapshot {
+  final String id;
+  final Map<String, dynamic> _data;
+  FakeDocumentSnapshot(this.id, this._data);
+  Map<String, dynamic> data() => _data;
+}
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -38,11 +54,61 @@ class _UploadPageState extends State<UploadPage> {
   final OrderRepository _orderRepo = OrderRepository();
   final Set<String> _autoOpenedIds = {}; // Prevent multiple auto-opens per session
   late Stream<List<PrintOrderModel>> _ordersStream;
+  int _currentTabIndex = 0;
+
+  List<FakeDocumentSnapshot> _backendServicesList = [];
+  bool _isLoadingServices = true;
+  StreamSubscription? _versionSubscription;
+
+  void _listenToServiceVersion() {
+    _fetchServicesFromBackend();
+    _versionSubscription = FirebaseFirestore.instance
+        .collection('shops')
+        .doc('serviceVersion')
+        .snapshots()
+        .listen((doc) {
+      _fetchServicesFromBackend();
+    }, onError: (err) {
+      debugPrint("Error listening to serviceVersion: $err");
+    });
+  }
+
+  Future<void> _fetchServicesFromBackend() async {
+    try {
+      final response = await http.get(Uri.parse('${BackendConfig.baseUrl}/api/services'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && mounted) {
+          final List<dynamic> services = data['services'] ?? [];
+          setState(() {
+            _backendServicesList = services
+                .map((s) => FakeDocumentSnapshot(s['id'] ?? '', s as Map<String, dynamic>))
+                .toList();
+            _isLoadingServices = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching services: $e");
+      if (mounted) {
+        setState(() {
+          _isLoadingServices = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _versionSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
     _ordersStream = _orderRepo.getActiveOrders();
+    _listenToServiceVersion();
     // 🔔 Prompt for notifications on home entrance
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -150,47 +216,7 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
-  void _showSourceSheet(UploadViewModel uploadVM) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => UploadSourceSheet(
-        onCamera: () async {
-          Navigator.pop(context);
-          await uploadVM.pickFromCamera();
-          if (!context.mounted) return;
-          if (uploadVM.error != null) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error));
-            uploadVM.clearError();
-          }
-          if (uploadVM.files.isEmpty) return;
-          _handleUploadedFiles(uploadVM);
-        },
-        onGallery: () async {
-          Navigator.pop(context);
-          await uploadVM.pickFromGallery();
-          if (!context.mounted) return;
-          if (uploadVM.error != null) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error));
-            uploadVM.clearError();
-          }
-          if (uploadVM.files.isEmpty) return;
-          _handleUploadedFiles(uploadVM);
-        },
-        onFiles: () async {
-          Navigator.pop(context);
-          await uploadVM.pickFromFiles();
-          if (!context.mounted) return;
-          if (uploadVM.error != null) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(uploadVM.error!), backgroundColor: AppColors.error));
-            uploadVM.clearError();
-          }
-          if (uploadVM.files.isEmpty) return;
-          _handleUploadedFiles(uploadVM);
-        },
-      ),
-    );
-  }
+
 
   void _handleUploadedFiles(UploadViewModel uploadVM) {
     final files = List<FileModel>.from(uploadVM.files);
@@ -417,35 +443,127 @@ class _UploadPageState extends State<UploadPage> {
 
       body: uploadVM.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () async {
-                final xeroxVM = context.read<XeroxShopViewModel>();
-                await xeroxVM.fetchShops();
-                await Future.delayed(const Duration(milliseconds: 500));
-                if (mounted) setState(() {});
-              },
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeroSection(uploadVM),
-                    const SizedBox(height: 32),
-                    _buildActiveOrdersHeader(),
-                    const SizedBox(height: 16),
-                    _buildOrdersList(),
+          : IndexedStack(
+              index: _currentTabIndex,
+              children: [
+                RefreshIndicator(
+                  onRefresh: () async {
+                    final xeroxVM = context.read<XeroxShopViewModel>();
+                    await xeroxVM.fetchShops();
+                    await Future.delayed(const Duration(milliseconds: 500));
+                    if (mounted) setState(() {});
+                  },
+                  child: _isLoadingServices
+                      ? const Center(child: CircularProgressIndicator())
+                      : () {
+                          final allDocs = _backendServicesList;
+                          FakeDocumentSnapshot? primaryDoc;
+                          try {
+                            primaryDoc = allDocs.firstWhere((doc) {
+                              final data = doc.data();
+                              return data['isPrimary'] == true || data['isHero'] == true || data['serviceType'] == 'xerox';
+                            });
+                          } catch (_) {}
 
-                    if (uploadVM.pendingFiles.isNotEmpty) ...[
-                      const SizedBox(height: 24),
-                      _buildPendingTray(uploadVM),
-                    ],
+                          if (primaryDoc == null) {
+                            try {
+                              primaryDoc = allDocs.firstWhere((doc) {
+                                final data = doc.data();
+                                final name = (data['serviceName'] ?? data['name'] ?? '').toString().toLowerCase();
+                                return doc.id == 'ZHwQd18Vy08TZkyBFXjB' || name.contains('xerox') || name.contains('documents');
+                              });
+                            } catch (_) {}
+                          }
 
-                    const SizedBox(height: 24),
-                  ],
+                          final otherDocs = allDocs.where((doc) => doc.id != primaryDoc?.id).toList();
+
+                          otherDocs.sort((a, b) {
+                            final dataA = a.data();
+                            final dataB = b.data();
+                            
+                            final orderA = dataA['displayOrder'] as num?;
+                            final orderB = dataB['displayOrder'] as num?;
+                            if (orderA != null && orderB != null) {
+                              return orderA.compareTo(orderB);
+                            } else if (orderA != null) {
+                              return -1;
+                            } else if (orderB != null) {
+                              return 1;
+                            }
+                            return 0;
+                          });
+
+                          return SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (primaryDoc != null)
+                                  _buildDynamicHeroSection(uploadVM, primaryDoc)
+                                else
+                                  _buildHeroSection(uploadVM),
+                                  
+                                if (uploadVM.pendingFiles.isNotEmpty) ...[
+                                  const SizedBox(height: 24),
+                                  _buildPendingTray(uploadVM),
+                                ],
+                                const SizedBox(height: 24),
+                                ZikrinterServicesSection(services: otherDocs),
+                                const SizedBox(height: 24),
+                              ],
+                            ),
+                          );
+                        }(),
                 ),
-              ),
+                // Tab 2: Active Orders
+                RefreshIndicator(
+                  onRefresh: () async {
+                    final xeroxVM = context.read<XeroxShopViewModel>();
+                    await xeroxVM.fetchShops();
+                    await Future.delayed(const Duration(milliseconds: 500));
+                    if (mounted) setState(() {});
+                  },
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildActiveOrdersHeader(),
+                        const SizedBox(height: 16),
+                        _buildOrdersList(),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentTabIndex,
+        onTap: (index) {
+          setState(() {
+            _currentTabIndex = index;
+          });
+        },
+        selectedItemColor: AppColors.primaryBlue,
+        unselectedItemColor: AppColors.textSecondary,
+        selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 12),
+        unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.print_outlined),
+            activeIcon: Icon(Icons.print),
+            label: 'Services',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.receipt_long_outlined),
+            activeIcon: Icon(Icons.receipt_long),
+            label: 'Active Orders',
+          ),
+        ],
+      ),
     );
   }
 
@@ -471,7 +589,7 @@ class _UploadPageState extends State<UploadPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Documents',
+                  'Documents (Xerox)',
                   style: GoogleFonts.inter(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -480,12 +598,10 @@ class _UploadPageState extends State<UploadPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _bullet(bulletStyle, bulletColor, 'Price starting at ₹3/page'),
-                const SizedBox(height: 6),
-                _bullet(bulletStyle, bulletColor, 'Paper quality: 70 GSM'),
+                _bullet(bulletStyle, bulletColor, 'Price starting at ₹2/page'),
                 const SizedBox(height: 6),
                 _bullet(bulletStyle, bulletColor, 'Max 10MB per file'),
-                const SizedBox(height: 6),
+                const SizedBox(height: 12),
                 SizedBox(
                   height: 48,
                   child: ElevatedButton(
@@ -510,31 +626,197 @@ class _UploadPageState extends State<UploadPage> {
           // ── Right: Document Fan Illustration ──
           Expanded(
             flex: 2,
-            child: SizedBox(
-              height: 130,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Back card
-                  Transform.rotate(
-                    angle: 0.2,
-                    child: _illustrationCard(Icons.image_rounded, AppColors.success.withValues(alpha: 0.7), 'JPG'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 110,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Back card
+                      Transform.rotate(
+                        angle: 0.2,
+                        child: _illustrationCard(Icons.image_rounded, AppColors.success.withValues(alpha: 0.7), 'JPG'),
+                      ),
+                      // Middle card
+                      Transform.rotate(
+                        angle: -0.1,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 20),
+                          child: _illustrationCard(Icons.article_rounded, AppColors.primaryBlue.withValues(alpha: 0.8), 'DOC'),
+                        ),
+                      ),
+                      // Front card
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 8),
+                        child: _illustrationCard(Icons.picture_as_pdf_rounded, AppColors.error.withValues(alpha: 0.85), 'PDF'),
+                      ),
+                    ],
                   ),
-                  // Middle card
-                  Transform.rotate(
-                    angle: -0.1,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 20),
-                      child: _illustrationCard(Icons.article_rounded, AppColors.primaryBlue.withValues(alpha: 0.8), 'DOC'),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'A4 SIZE',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn().slideY(begin: -0.05, end: 0, duration: 400.ms);
+  }
+
+  Widget _buildDynamicHeroSection(UploadViewModel uploadVM, dynamic doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final serviceName = data['serviceName'] ?? data['name'] ?? 'Documents (Xerox)';
+    final startingPrice = (data['startingPrice'] ?? 2.0).toDouble();
+    final imageUrl = data['imageUrl'] ?? '';
+    
+    // We can extract custom bullet points if provided in Firestore, otherwise use defaults
+    final rawBullets = data['bulletPoints'] as List<dynamic>?;
+    final List<String> bullets = rawBullets != null
+        ? List<String>.from(rawBullets)
+        : [
+            'Price starting at ₹${startingPrice.toStringAsFixed(0)}/page',
+            'Max 10MB per file',
+          ];
+
+    const bulletColor = AppColors.primaryBlue;
+    final bulletStyle = GoogleFonts.inter(
+      fontSize: 15,
+      fontWeight: FontWeight.w500,
+      color: AppColors.textSecondary,
+      height: 1.5,
+    );
+
+    return ModernCard(
+      padding: const EdgeInsets.all(28),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ── Left: Text Content ──
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  serviceName,
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF2D3142),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...bullets.map((b) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _bullet(bulletStyle, bulletColor, b),
+                )),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ZikrinterServiceDetailsPage(
+                            serviceId: doc.id,
+                            serviceName: serviceName,
+                            description: data['description'] ?? '',
+                            imageUrl: imageUrl,
+                            images: List<String>.from(data['images'] ?? []),
+                            startingPrice: startingPrice,
+                            globalParams: {
+                              ...(data['parameters'] as Map<String, dynamic>? ?? {}),
+                              'paperSizes': data['paperSizes'],
+                            },
+                            actionButtonLabel: data['actionLabel'],
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                    child: Text(
+                      data['actionLabel'] ?? 'Upload Files',
+                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
                     ),
                   ),
-                  // Front card
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, top: 8),
-                    child: _illustrationCard(Icons.picture_as_pdf_rounded, AppColors.error.withValues(alpha: 0.85), 'PDF'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 20),
+          // ── Right: Image or Illustration ──
+          Expanded(
+            flex: 2,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                imageUrl.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          height: 110,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _b) => Shimmer.fromColors(
+                            baseColor: Colors.grey[300]!,
+                            highlightColor: Colors.grey[100]!,
+                            child: Container(color: Colors.white),
+                          ),
+                          errorWidget: (_, _b, _c) => const Icon(Icons.image, size: 48, color: Colors.grey),
+                        ),
+                      )
+                    : SizedBox(
+                        height: 110,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Transform.rotate(
+                              angle: 0.2,
+                              child: _illustrationCard(Icons.image_rounded, AppColors.success.withValues(alpha: 0.7), 'JPG'),
+                            ),
+                            Transform.rotate(
+                              angle: -0.1,
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 20),
+                                child: _illustrationCard(Icons.article_rounded, AppColors.primaryBlue.withValues(alpha: 0.8), 'DOC'),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8, top: 8),
+                              child: _illustrationCard(Icons.picture_as_pdf_rounded, AppColors.error.withValues(alpha: 0.85), 'PDF'),
+                            ),
+                          ],
+                        ),
+                      ),
+                const SizedBox(height: 8),
+                Text(
+                  'A4 SIZE',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    color: AppColors.textTertiary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -654,29 +936,7 @@ class _UploadPageState extends State<UploadPage> {
     ).animate().fadeIn(delay: 300.ms);
   }
 
-  Widget _actionChip({required String label, required IconData icon, required Color color, required VoidCallback onPressed}) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 10, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // _actionChip helper removed (unused — see chip widgets in _buildOrdersList for reference)
 
   // ─── Orders Stream ───────────────────────────────────────────────────────────
   Widget _buildOrdersList() {

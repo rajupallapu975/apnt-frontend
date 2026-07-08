@@ -19,7 +19,7 @@ class PrintOrderModel {
   final String pickupCode;
   final String userId;
   final DateTime createdAt;
-  final DateTime expiresAt;
+  final DateTime? expiresAt; // nullable — orders no longer expire automatically
   final OrderStatus status;
   final Map<String, dynamic> printSettings;
   final int totalPages;
@@ -37,6 +37,23 @@ class PrintOrderModel {
   final bool codeRevealed; // Legacy, keep for now but use 'scanned' mostly
 
   final String? customId; // Sequential ID (order_1, order_2)
+
+  // Cover Page details
+  final bool generateCoverPage;
+  final double coverPageCharge;
+  final String? coverPageUrl;
+  final String? coverPagePublicId;
+
+  // Extended pricing & splitting fields
+  final double? printingCost;
+  final double? platformCommission;
+  final double? shopkeeperEarnings;
+  final double? platformEarnings;
+  final Map<String, dynamic>? shopPricingUsed;
+  final String? serviceId;
+  final String? serviceName;
+  final String? razorpayPaymentId;
+  final String? paymentStatus;
   
   bool get isXerox => printMode == PrintMode.xeroxShop;
   /// True if admin has confirmed printing is complete
@@ -52,7 +69,7 @@ class PrintOrderModel {
     required this.pickupCode,
     required this.userId,
     required this.createdAt,
-    required this.expiresAt,
+    this.expiresAt,
     required this.status,
     required this.printMode,
     required this.printSettings,
@@ -69,13 +86,26 @@ class PrintOrderModel {
     this.isPicked = false,
     this.orderDone = false,
     this.customId,
+    this.generateCoverPage = false,
+    this.coverPageCharge = 0.0,
+    this.coverPageUrl,
+    this.coverPagePublicId,
+    this.printingCost,
+    this.platformCommission,
+    this.shopkeeperEarnings,
+    this.platformEarnings,
+    this.shopPricingUsed,
+    this.serviceId,
+    this.serviceName,
+    this.razorpayPaymentId,
+    this.paymentStatus,
   });
 
-  // Check if order is expired
-  bool get isExpired => (DateTime.now().isAfter(expiresAt) && status == OrderStatus.active) || status == OrderStatus.expired;
+  // Check if order is expired — only via explicit status, not time
+  bool get isExpired => status == OrderStatus.expired;
 
   // Check if order is active
-  bool get isActive => status == OrderStatus.active && !isExpired;
+  bool get isActive => status == OrderStatus.active;
 
   factory PrintOrderModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -86,9 +116,9 @@ class PrintOrderModel {
       createdAt: data['createdAt'] is Timestamp 
           ? (data['createdAt'] as Timestamp).toDate() 
           : (data['createdAt'] != null ? DateTime.parse(data['createdAt'].toString()) : DateTime.now()),
-      expiresAt: data['expiresAt'] is Timestamp 
-          ? (data['expiresAt'] as Timestamp).toDate() 
-          : (data['expiresAt'] != null ? DateTime.parse(data['expiresAt'].toString()) : DateTime(1970)),
+      expiresAt: data['expiresAt'] is Timestamp
+          ? (data['expiresAt'] as Timestamp).toDate()
+          : null, // no expiry if field absent
       status: OrderStatus.values.firstWhere(
         (e) => e.name == data['status'].toString().toLowerCase(),
         orElse: () {
@@ -113,6 +143,19 @@ class PrintOrderModel {
       isPicked: data['isPicked'] == true,
       orderDone: data['orderDone'] == true,
       customId: data['customId']?.toString(),
+      generateCoverPage: data['generateCoverPage'] == true,
+      coverPageCharge: data['coverPageCharge'] != null ? (data['coverPageCharge'] as num).toDouble() : 0.0,
+      coverPageUrl: data['coverPageUrl']?.toString(),
+      coverPagePublicId: data['coverPagePublicId']?.toString(),
+      printingCost: data['printingCost'] != null ? (data['printingCost'] as num).toDouble() : null,
+      platformCommission: data['platformCommission'] != null ? (data['platformCommission'] as num).toDouble() : null,
+      shopkeeperEarnings: data['shopkeeperEarnings'] != null ? (data['shopkeeperEarnings'] as num).toDouble() : null,
+      platformEarnings: data['platformEarnings'] != null ? (data['platformEarnings'] as num).toDouble() : null,
+      shopPricingUsed: data['shopPricingUsed'] is Map ? Map<String, dynamic>.from(data['shopPricingUsed'] as Map) : null,
+      serviceId: data['serviceId']?.toString(),
+      serviceName: data['serviceName']?.toString(),
+      razorpayPaymentId: data['razorpayPaymentId']?.toString(),
+      paymentStatus: data['paymentStatus']?.toString(),
     );
   }
 
@@ -122,7 +165,7 @@ class PrintOrderModel {
       pickupCode: data['pickupCode'] ?? '',
       userId: data['userId'] ?? '',
       createdAt: DateTime.parse(data['createdAt']),
-      expiresAt: DateTime.parse(data['expiresAt']),
+      expiresAt: data['expiresAt'] != null ? DateTime.parse(data['expiresAt']) : null,
       status: OrderStatus.values.firstWhere(
         (e) => e.name == data['status'],
         orElse: () => OrderStatus.active,
@@ -142,6 +185,19 @@ class PrintOrderModel {
       orderDone: data['orderDone'] == true,
       customId: data['customId']?.toString(),
       orderStatus: data['orderStatus']?.toString(),
+      generateCoverPage: data['generateCoverPage'] == true,
+      coverPageCharge: data['coverPageCharge'] != null ? (data['coverPageCharge'] as num).toDouble() : 0.0,
+      coverPageUrl: data['coverPageUrl']?.toString(),
+      coverPagePublicId: data['coverPagePublicId']?.toString(),
+      printingCost: data['printingCost'] != null ? (data['printingCost'] as num).toDouble() : null,
+      platformCommission: data['platformCommission'] != null ? (data['platformCommission'] as num).toDouble() : null,
+      shopkeeperEarnings: data['shopkeeperEarnings'] != null ? (data['shopkeeperEarnings'] as num).toDouble() : null,
+      platformEarnings: data['platformEarnings'] != null ? (data['platformEarnings'] as num).toDouble() : null,
+      shopPricingUsed: data['shopPricingUsed'] is Map ? Map<String, dynamic>.from(data['shopPricingUsed'] as Map) : null,
+      serviceId: data['serviceId']?.toString(),
+      serviceName: data['serviceName']?.toString(),
+      razorpayPaymentId: data['razorpayPaymentId']?.toString(),
+      paymentStatus: data['paymentStatus']?.toString(),
     );
   }
 
@@ -197,13 +253,18 @@ class PrintOrderModel {
     final List<dynamic> fList = printSettings['files'] ?? [];
     return fList.map((f) => f['fileName']?.toString() ?? 'File').toList().cast<String>();
   }
-
+  List<String> get displayFileUrls {
+    if (generateCoverPage && fileUrls.isNotEmpty) {
+      return fileUrls.sublist(1);
+    }
+    return fileUrls;
+  }
   Map<String, dynamic> toFirestore() {
     return {
       'pickupCode': pickupCode,
       'userId': userId,
       'createdAt': Timestamp.fromDate(createdAt),
-      'expiresAt': Timestamp.fromDate(expiresAt),
+      'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
       'status': status.name,
       'printSettings': printSettings,
       'totalPages': totalPages,
@@ -219,6 +280,19 @@ class PrintOrderModel {
       if (orderStatus != null) 'orderStatus': orderStatus,
       'printMode': isXerox ? 'xeroxShop' : 'autonomous',
       if (customId != null) 'customId': customId,
+      'generateCoverPage': generateCoverPage,
+      'coverPageCharge': coverPageCharge,
+      if (coverPageUrl != null) 'coverPageUrl': coverPageUrl,
+      if (coverPagePublicId != null) 'coverPagePublicId': coverPagePublicId,
+      if (printingCost != null) 'printingCost': printingCost,
+      if (platformCommission != null) 'platformCommission': platformCommission,
+      if (shopkeeperEarnings != null) 'shopkeeperEarnings': shopkeeperEarnings,
+      if (platformEarnings != null) 'platformEarnings': platformEarnings,
+      if (shopPricingUsed != null) 'shopPricingUsed': shopPricingUsed,
+      if (serviceId != null) 'serviceId': serviceId,
+      if (serviceName != null) 'serviceName': serviceName,
+      if (razorpayPaymentId != null) 'razorpayPaymentId': razorpayPaymentId,
+      if (paymentStatus != null) 'paymentStatus': paymentStatus,
     };
   }
 
@@ -228,7 +302,7 @@ class PrintOrderModel {
       'pickupCode': pickupCode,
       'userId': userId,
       'createdAt': createdAt.toIso8601String(),
-      'expiresAt': expiresAt.toIso8601String(),
+      'expiresAt': expiresAt?.toIso8601String(),
       'status': status.name,
       'printSettings': printSettings,
       'totalPages': totalPages,
@@ -240,6 +314,19 @@ class PrintOrderModel {
       'xeroxId': xeroxId,
       'codeRevealed': codeRevealed,
       'orderStatus': orderStatus,
+      'generateCoverPage': generateCoverPage,
+      'coverPageCharge': coverPageCharge,
+      'coverPageUrl': coverPageUrl,
+      'coverPagePublicId': coverPagePublicId,
+      'printingCost': printingCost,
+      'platformCommission': platformCommission,
+      'shopkeeperEarnings': shopkeeperEarnings,
+      'platformEarnings': platformEarnings,
+      'shopPricingUsed': shopPricingUsed,
+      'serviceId': serviceId,
+      'serviceName': serviceName,
+      'razorpayPaymentId': razorpayPaymentId,
+      'paymentStatus': paymentStatus,
     };
   }
 
@@ -261,6 +348,15 @@ class PrintOrderModel {
     String? xeroxId,
     bool? codeRevealed,
     String? orderStatus,
+    double? printingCost,
+    double? platformCommission,
+    double? shopkeeperEarnings,
+    double? platformEarnings,
+    Map<String, dynamic>? shopPricingUsed,
+    String? serviceId,
+    String? serviceName,
+    String? razorpayPaymentId,
+    String? paymentStatus,
   }) {
     return PrintOrderModel(
       orderId: orderId ?? this.orderId,
@@ -280,8 +376,15 @@ class PrintOrderModel {
       xeroxId: xeroxId ?? this.xeroxId,
       codeRevealed: codeRevealed ?? this.codeRevealed,
       orderStatus: orderStatus ?? this.orderStatus,
+      printingCost: printingCost ?? this.printingCost,
+      platformCommission: platformCommission ?? this.platformCommission,
+      shopkeeperEarnings: shopkeeperEarnings ?? this.shopkeeperEarnings,
+      platformEarnings: platformEarnings ?? this.platformEarnings,
+      shopPricingUsed: shopPricingUsed ?? this.shopPricingUsed,
+      serviceId: serviceId ?? this.serviceId,
+      serviceName: serviceName ?? this.serviceName,
+      razorpayPaymentId: razorpayPaymentId ?? this.razorpayPaymentId,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
     );
   }
 }
-
-

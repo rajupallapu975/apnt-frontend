@@ -14,6 +14,7 @@ class PrintPreviewCarousel extends StatelessWidget {
   final Function(int) onEdit;
   final Function(int) onRemove;
   final Function(int) onPageChanged;
+  final String paperSize;
 
   const PrintPreviewCarousel({
     super.key,
@@ -26,6 +27,7 @@ class PrintPreviewCarousel extends StatelessWidget {
     required this.onEdit,
     required this.onRemove,
     required this.onPageChanged,
+    required this.paperSize,
   });
 
   @override
@@ -40,7 +42,24 @@ class PrintPreviewCarousel extends StatelessWidget {
             final name = fileNames[index];
             final portrait = isPortraitList[index];
             final color = isColorList[index];
-            final a4Ratio = portrait ? 210 / 297 : 297 / 210;
+            
+            double widthDim = 210.0;
+            double heightDim = 297.0;
+            final cleanSize = paperSize.toUpperCase();
+            if (cleanSize == 'A3') {
+              widthDim = 297.0;
+              heightDim = 420.0;
+            } else if (cleanSize == 'A2') {
+              widthDim = 420.0;
+              heightDim = 594.0;
+            } else if (cleanSize == 'A1') {
+              widthDim = 594.0;
+              heightDim = 841.0;
+            } else if (cleanSize == 'LEGAL') {
+              widthDim = 215.9;
+              heightDim = 355.6;
+            }
+            final double paperRatio = portrait ? widthDim / heightDim : heightDim / widthDim;
             
             final file = files[index];
             final byteData = bytes[index];
@@ -138,7 +157,7 @@ class PrintPreviewCarousel extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
               child: Center(
                 child: AspectRatio(
-                  aspectRatio: a4Ratio,
+                  aspectRatio: paperRatio,
                   child: Stack(
                     children: [
                       // 📄 A4 PAPER (Invariant Background)

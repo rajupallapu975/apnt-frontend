@@ -15,6 +15,7 @@ class XeroxShopModel {
   final String? email;
   final String? openingTime;
   final String? closingTime;
+  final Map<String, dynamic> zikrinterServices;
 
   XeroxShopModel({
     required this.id,
@@ -32,10 +33,12 @@ class XeroxShopModel {
     this.email,
     this.openingTime,
     this.closingTime,
+    this.zikrinterServices = const {},
   });
 
   bool get isCurrentlyOpen {
-    if (openingTime == null || closingTime == null) return isOpen;
+    if (isOpen) return true;
+    if (openingTime == null || closingTime == null) return false;
     
     try {
       final now = DateTime.now();
@@ -100,6 +103,7 @@ class XeroxShopModel {
       email: map['email'],
       openingTime: map['openingTime'] ?? '09:00 AM',
       closingTime: map['closingTime'] ?? '09:00 PM',
+      zikrinterServices: map['zikrinterServices'] as Map<String, dynamic>? ?? const {},
     );
   }
 }

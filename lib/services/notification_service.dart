@@ -4,10 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -61,35 +58,10 @@ class NotificationService extends ChangeNotifier {
   List<NotificationItem> get notifications => _notifications;
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
-  final Set<String> _lastActivePickupCodes = {};
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    tz.initializeTimeZones();
-    try {
-      if (!kIsWeb) {
-        String timeZoneName = (await FlutterTimezone.getLocalTimezone()).toString();
-        
-        // 🛠️ FIX: Handle cases where platform returns decorated strings like "TimezoneInfo(Asia/Kolkata, ...)"
-        if (timeZoneName.contains('(')) {
-          final match = RegExp(r'\(([^,)]+)').firstMatch(timeZoneName);
-          if (match != null && match.groupCount >= 1) {
-            timeZoneName = match.group(1)!;
-          }
-        }
-        
-        try {
-          tz.setLocalLocation(tz.getLocation(timeZoneName));
-        } catch (e) {
-          tz.setLocalLocation(tz.getLocation('UTC'));
-        }
-      }
-    } catch (e) {
-      try { tz.setLocalLocation(tz.getLocation('UTC')); } catch (_) {}
-    }
-
     await loadNotifications();
-    await _loadSentAlerts();
     
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -129,7 +101,6 @@ class NotificationService extends ChangeNotifier {
       debugPrint("Notification Plugin initialization check failed: $e");
     }
 
-    _startExpiryChecker();
     initOrderListeners();
 
     // 🚀 Initialize FCM (Background/Killed logic)
@@ -190,22 +161,7 @@ class NotificationService extends ChangeNotifier {
   }
 
   void _checkOrdersStatusRealtime(List<PrintOrderModel> orders) {
-    final currentCodes = orders.map((o) => o.pickupCode).toSet();
-    
-    // 🛡️ 0. Detect REMOVAL (Scanned/Delivered/Deleted)
-    // If a code was active before but is gone now, we cancel its alerts
-    final removedCodes = _lastActivePickupCodes.difference(currentCodes);
-    for (var code in removedCodes) {
-       _cancelExpiryAlerts(code);
-    }
-    _lastActivePickupCodes.clear();
-    _lastActivePickupCodes.addAll(currentCodes);
-
-    for (var order in orders) {
-      // 🛡️ COMPLETION ALERTS: [DISABLED] 
-      // Handled exclusively by Backend FCM to ensure 100% single-fire delivery.
-      continue;
-    }
+    // Completion alerts are handled exclusively by Backend FCM.
   }
 
   Future<void> requestPermission() async {
@@ -325,18 +281,6 @@ class NotificationService extends ChangeNotifier {
     await prefs.setString('user_notifications', data);
   }
 
-  Future<void> _loadSentAlerts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getStringList('sent_alerts');
-    if (data != null) {
-      _sentAlerts.addAll(data);
-    }
-  }
-
-  Future<void> _saveSentAlerts() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('sent_alerts', _sentAlerts.toList());
-  }
 
   void markAsRead() {
     for (var n in _notifications) { n.isRead = true; }
@@ -353,7 +297,7 @@ class NotificationService extends ChangeNotifier {
   void notifyOrderCompleted(PrintOrderModel order) {
     final String orderNum = (order.customId ?? order.orderId).toLowerCase().replaceFirst('order_', '');
     
-    // 🛡️ [SILENCED] - FCM Push already shows the system alert. 
+    // 🛡️ [SILENCED] - FCM Push already shows the system alert.
     // We only add to the in-app history now to avoid duplicates.
     addNotification(
       title: 'Print Complete! 🎉',
@@ -361,20 +305,6 @@ class NotificationService extends ChangeNotifier {
       type: 'success',
       showLocal: false, // 🛡️ Ensure no system tray duplicate
     );
-
-    // 🛡️ Cancel any scheduled expiry alerts for this order
-    _cancelExpiryAlerts(order.pickupCode);
-  }
-
-  Future<void> _cancelExpiryAlerts(String pickupCode) async {
-    if (kIsWeb) return;
-    try {
-      await _localNotifications.cancel(pickupCode.hashCode + 100); // 1h warning
-      await _localNotifications.cancel(pickupCode.hashCode + 0);   // expiry alert
-      debugPrint("🔕 Cancelled scheduled expiry alerts for pickup code: $pickupCode");
-    } catch (e) {
-      debugPrint("Error cancelling notifications: $e");
-    }
   }
 
   void notifyOrderCreated(String pickupCode, DateTime expiresAt, {bool isXerox = false}) {
@@ -385,105 +315,5 @@ class NotificationService extends ChangeNotifier {
           : 'Your order is active. Proceed to the printer to scan and collect.',
       type: 'success',
     );
-    _scheduleExpiryAlerts(pickupCode, expiresAt, isXerox: isXerox);
-  }
-
-  Future<void> _scheduleExpiryAlerts(String pickupCode, DateTime expiresAt, {bool isXerox = false}) async {
-    if (kIsWeb) return;
-    final now = DateTime.now();
-    final String orderRef = isXerox ? 'Xerox order' : 'order ($pickupCode)';
-    
-    // 1 Hour Alert
-    final oneHourMark = expiresAt.subtract(const Duration(hours: 1));
-    if (oneHourMark.isAfter(now)) {
-      await _scheduleLocalNotification(
-        id: (pickupCode.hashCode + 100),
-        title: 'Final Expiry Warning',
-        body: 'Your $orderRef will expire in 1 hour.',
-        scheduledDate: oneHourMark,
-      );
-    }
-
-    // Exactly at expiry
-    if (expiresAt.isAfter(now)) {
-      await _scheduleLocalNotification(
-        id: (pickupCode.hashCode + 0),
-        title: 'Order Expired',
-        body: 'Your $orderRef has expired.',
-        scheduledDate: expiresAt,
-      );
-    }
-  }
-
-  Future<void> _scheduleLocalNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-  }) async {
-    await _localNotifications.zonedSchedule(
-      id,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'zikrint_expiry',
-          'Expiry Warnings',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-    );
-  }
-
-  Timer? _expiryTimer;
-  void _startExpiryChecker() {
-    _expiryTimer?.cancel();
-    _expiryTimer = Timer.periodic(const Duration(minutes: 15), (timer) {
-      _checkOrdersExpiry();
-    });
-  }
-
-  Future<void> _checkOrdersExpiry() async {
-    final fs = FirestoreService();
-    final orders = await fs.getActiveOrders().first; 
-    final now = DateTime.now();
-
-    for (var order in orders) {
-      // 🛡️ SKIP COMPLETED: Handled by FCM
-      if (order.status == OrderStatus.completed || order.isPrintingCompleted) {
-        continue;
-      }
-
-      final remaining = order.expiresAt.difference(now);
-      final minutes = remaining.inMinutes;
-
-      if (minutes <= 0) {
-        _triggerListAlert(order.orderId, 'now (Expired)', 'payment');
-        final expiredOrder = order.copyWith(status: OrderStatus.expired, reason: "Auto-Expired");
-        await fs.archiveOrderLocally(expiredOrder);
-        await fs.updateOrderStatus(orderId: order.orderId, status: 'EXPIRED');
-      }
-    }
-  }
-
-  final Set<String> _sentAlerts = {};
-  void _triggerListAlert(String orderId, String label, String type) {
-    final key = '${orderId}_$label';
-    if (_sentAlerts.contains(key)) return;
-    final String displayId = orderId.length > 6 ? orderId.substring(0, 6).toUpperCase() : orderId.toUpperCase();
-    addNotification(
-      title: label.contains('Expired') ? 'Order Expired' : 'Order Expiring Soon',
-      body: label.contains('Expired') 
-        ? 'Order #$displayId is no longer valid.'
-        : 'Order #$displayId expires in $label.',
-      type: type,
-      showLocal: false, 
-    );
-    _sentAlerts.add(key);
-    _saveSentAlerts();
   }
 }

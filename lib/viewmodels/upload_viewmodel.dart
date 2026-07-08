@@ -123,15 +123,25 @@ class UploadViewModel extends ChangeNotifier {
 
   Future<int?> _getPdfPageCount(String? path, Uint8List? bytes) async {
     try {
-      PdfDocument? doc;
-      if (kIsWeb && bytes != null) {
-        doc = await PdfDocument.openData(bytes);
-      } else if (path != null) {
-        doc = await PdfDocument.openFile(path);
-      }
-      int? count = doc?.pagesCount;
-      await doc?.close();
-      return count;
+      final Future<int?> countFuture = () async {
+        PdfDocument? doc;
+        if (kIsWeb && bytes != null) {
+          doc = await PdfDocument.openData(bytes);
+        } else if (path != null) {
+          doc = await PdfDocument.openFile(path);
+        }
+        int? count = doc?.pagesCount;
+        await doc?.close();
+        return count;
+      }();
+
+      return await countFuture.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint("⏳ Timeout counting PDF pages, defaulting to 1");
+          return 1;
+        },
+      );
     } catch (e) {
       debugPrint("Error counting PDF pages: $e");
       return 1; // Fallback

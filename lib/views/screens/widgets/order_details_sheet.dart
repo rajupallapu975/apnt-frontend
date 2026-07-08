@@ -102,14 +102,7 @@ class OrderDetailsSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              // ── Dates (Compact Row) ──
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _infoSegment('CREATED ON', dateFormat.format(order.createdAt), AppColors.textTertiary),
-                  _infoSegment('EXPIRES ON', dateFormat.format(order.expiresAt), AppColors.error),
-                ],
-              ),
+              _infoSegment('CREATED ON', dateFormat.format(order.createdAt), AppColors.textTertiary),
               const SizedBox(height: 16),
               
               // ── Xerox Print Status (Real-time from Firestore) ──
@@ -215,10 +208,10 @@ class OrderDetailsSheet extends StatelessWidget {
                   shrinkWrap: true,
                   padding: EdgeInsets.zero,
                   physics: const ClampingScrollPhysics(),
-                  itemCount: order.fileUrls.length,
+                  itemCount: order.displayFileUrls.length,
                   itemBuilder: (context, i) {
                     final fileName = order.filenames.length > i ? order.filenames[i] : 'File ${i + 1}';
-                    final url = order.fileUrls[i];
+                    // fileUrls[i] accessible via order.displayFileUrls[i] directly
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(12),
@@ -347,7 +340,7 @@ class OrderDetailsSheet extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _summaryLabel('FILES', '${order.fileUrls.length}'),
+                  _summaryLabel('FILES', '${order.displayFileUrls.length}'),
                   _summaryLabel('PAGES', '${order.totalPages}'),
                   _summaryLabel('TOTAL', '₹${order.totalPrice.toStringAsFixed(0)}'),
                 ],

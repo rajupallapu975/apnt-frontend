@@ -11,7 +11,7 @@ import '../models/print_order_model.dart';
 import '../utils/app_exceptions.dart';
 import 'local_storage_service.dart';
 import 'backend_service.dart';
-import 'package:rxdart/rxdart.dart';
+// rxdart already imported above
 
 class FirestoreService {
   final FirebaseFirestore _firestore =
@@ -394,8 +394,7 @@ class FirestoreService {
       final uniqueIds = <String>{};
       final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
       
-      final now = DateTime.now();
-      final filtered = unique.where((o) => o.expiresAt.isAfter(now)).toList();
+      final filtered = unique;
       filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return filtered;
     }).asBroadcastStream();
@@ -432,8 +431,7 @@ class FirestoreService {
       final uniqueIds = <String>{};
       final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
       
-      final now = DateTime.now();
-      final filtered = unique.where((o) => o.expiresAt.isAfter(now)).toList();
+      final filtered = unique;
       filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return filtered;
     }).asBroadcastStream();

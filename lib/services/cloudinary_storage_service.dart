@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -64,36 +63,23 @@ class CloudinaryStorageService {
 
     final List<String> uploadedUrls = [];
     final List<String> publicIds = [];
-    final Map<String, Map<String, String>> uploadedCache = {};
     int totalUploadedBytes = 0;
 
     try {
-      for (int i = 0; i < lockedBytes.length; i++) {
+      final uploadFutures = List.generate(lockedBytes.length, (i) async {
         final Uint8List bytesToUse = lockedBytes[i];
-        if (bytesToUse.isEmpty) continue;
+        if (bytesToUse.isEmpty) return null;
 
         // Robust name detection
         final String originalName = (filenames != null && filenames.length > i && filenames[i] != null)
             ? filenames[i]!
             : 'file_${i + 1}';
 
-        final String hash = md5.convert(bytesToUse).toString();
-
-        if (uploadedCache.containsKey(hash)) {
-          uploadedUrls.add(uploadedCache[hash]!['url']!);
-          publicIds.add(uploadedCache[hash]!['publicId']!);
-          continue;
-        }
-
         final extension = path.extension(originalName).toLowerCase();
         final String basePublicId = '${pickupCode}_${i + 1}';
         final String folderPath = isXerox ? 'xerox_orders' : 'autonomous_orders';
         final String fullPublicId = '$folderPath/$pickupCode/$basePublicId';
 
-        // 🚀 Resource type routing:
-        // - PDF → 'image' (required for most free-tier unsigned presets)
-        // - DOC/DOCX → 'raw'
-        // - everything else → 'auto'
         final bool isPdf = extension == '.pdf';
         final bool isDoc = extension == '.doc' || extension == '.docx';
         final String resourceType = isPdf ? 'image' : (isDoc ? 'raw' : 'auto');
@@ -126,14 +112,23 @@ class CloudinaryStorageService {
             throw Exception('Upload succeeded but secure_url or public_id missing');
           }
 
-          uploadedCache[hash] = {'url': secureUrl, 'publicId': pId};
-          uploadedUrls.add(secureUrl);
-          publicIds.add(pId);
-          totalUploadedBytes += (data['bytes'] as num?)?.toInt() ?? bytesToUse.length;
-
           debugPrint('✅ Uploaded: $secureUrl');
+          return {
+            'url': secureUrl,
+            'publicId': pId,
+            'bytes': (data['bytes'] as num?)?.toInt() ?? bytesToUse.length,
+          };
         } else {
           throw Exception('Cloudinary upload failed: ${response.body}');
+        }
+      });
+
+      final resultsList = await Future.wait(uploadFutures);
+      for (final res in resultsList) {
+        if (res != null) {
+          uploadedUrls.add(res['url'] as String);
+          publicIds.add(res['publicId'] as String);
+          totalUploadedBytes += res['bytes'] as int;
         }
       }
 
