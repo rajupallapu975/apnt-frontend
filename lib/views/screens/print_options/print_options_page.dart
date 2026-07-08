@@ -84,6 +84,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   late List<PagePrintConfig> pageConfigs;
   late List<Uint8List?> _thumbnails;
   bool _isLoading = false;
+  bool _isInitializing = true;
 
   PagePrintConfig get _current => pageConfigs[_currentPageIndex];
 
@@ -135,14 +136,37 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     _thumbnails = List.generate(pickedFiles.length, (i) => pickedFiles[i].bytes);
     pageConfigs = List.generate(pickedFiles.length, (i) {
       final model = pickedFiles[i];
-      final cfg = PagePrintConfig(pageCount: model.pageCount ?? 1);
-      final fileName = model.name.toLowerCase();
-      if (fileName.endsWith('.pdf') && model.pageCount == null) {
-        _loadPdfMetadata(i, model);
-      }
-      return cfg;
+      return PagePrintConfig(pageCount: model.pageCount ?? 1);
     });
-    _loadShopPricing();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    try {
+      // 1. Fetch shop pricing first
+      await _loadShopPricing();
+
+      // 2. Fetch all PDF metadata concurrently
+      final List<Future<void>> pdfFutures = [];
+      for (int i = 0; i < pickedFiles.length; i++) {
+        final model = pickedFiles[i];
+        final fileName = model.name.toLowerCase();
+        if (fileName.endsWith('.pdf') && model.pageCount == null) {
+          pdfFutures.add(_loadPdfMetadata(i, model));
+        }
+      }
+      if (pdfFutures.isNotEmpty) {
+        await Future.wait(pdfFutures);
+      }
+    } catch (e) {
+      debugPrint("Error initializing print options: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadShopPricing() async {
@@ -291,11 +315,52 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     return result ?? false;
   }
 
+  String _getDimensions(bool isPortrait) {
+    const Map<String, List<double>> sizeMap = {
+      'A4': [8.3, 11.7],
+      'A3': [11.7, 16.5],
+      'A2': [16.5, 23.4],
+      'A1': [23.4, 33.1],
+      'LEGAL': [8.5, 14.0],
+      'LETTER': [8.5, 11.0],
+      'A5': [5.8, 8.3],
+    };
+
+    final size = _selectedPaperSize.toUpperCase();
+    final dims = sizeMap[size] ?? [8.3, 11.7]; // default A4
+
+    if (isPortrait) {
+      return '${dims[0]} x ${dims[1]} in';
+    } else {
+      return '${dims[1]} x ${dims[0]} in';
+    }
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    if (pageConfigs.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_isInitializing || pageConfigs.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: AppColors.primaryBlue),
+              const SizedBox(height: 16),
+              Text(
+                'LOADING PRINT OPTIONS...',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primaryBlue,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final isWide = MediaQuery.of(context).size.width > 800;
@@ -533,7 +598,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     _mobileOrientationTile(
                       icon: Icons.stay_current_portrait_rounded,
                       label: 'Portrait',
-                      sublabel: '8.3 x 11.7 in',
+                      sublabel: _getDimensions(true),
                       selected: cfg.isPortrait,
                       onTap: () => setState(() => cfg.isPortrait = true),
                     ),
@@ -541,7 +606,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                     _mobileOrientationTile(
                       icon: Icons.stay_current_landscape_rounded,
                       label: 'Landscape',
-                      sublabel: '11.7 x 8.3 in',
+                      sublabel: _getDimensions(false),
                       selected: !cfg.isPortrait,
                       onTap: () => setState(() => cfg.isPortrait = false),
                     ),
@@ -817,9 +882,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _webTile('Portrait', null, cfg.isPortrait, () => setState(() => cfg.isPortrait = true)),
+              _webTile('Portrait', _getDimensions(true), cfg.isPortrait, () => setState(() => cfg.isPortrait = true)),
               const SizedBox(width: 12),
-              _webTile('Landscape', null, !cfg.isPortrait, () => setState(() => cfg.isPortrait = false)),
+              _webTile('Landscape', _getDimensions(false), !cfg.isPortrait, () => setState(() => cfg.isPortrait = false)),
             ],
           ),
 

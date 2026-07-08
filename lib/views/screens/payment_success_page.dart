@@ -11,7 +11,6 @@ class PaymentSuccessPage extends StatelessWidget {
   final String pickupCode;
   final String? xeroxId;
   final bool isXerox;
-  final DateTime? expiresAt;
 
   const PaymentSuccessPage({
     super.key,
@@ -19,25 +18,10 @@ class PaymentSuccessPage extends StatelessWidget {
     required this.pickupCode,
     this.xeroxId,
     this.isXerox = false,
-    this.expiresAt,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Format expiry time
-    final expiry = expiresAt ?? DateTime.now().add(const Duration(hours: 12));
-    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    final hour = expiry.hour > 12 ? expiry.hour - 12 : (expiry.hour == 0 ? 12 : expiry.hour);
-    final amPm = expiry.hour >= 12 ? 'PM' : 'AM';
-    final min = expiry.minute.toString().padLeft(2, '0');
-    final expiryStr = '${expiry.day} ${months[expiry.month - 1]} ${expiry.year}, $hour:$min $amPm';
-
-    final remaining = expiry.difference(DateTime.now());
-    final hoursLeft = remaining.inHours;
-    final minutesLeft = remaining.inMinutes % 60;
-    final timeLeftStr = hoursLeft > 0
-        ? '$hoursLeft hr${hoursLeft > 1 ? 's' : ''} ${minutesLeft > 0 ? '$minutesLeft min' : ''}'
-        : '$minutesLeft min';
 
     return PopScope(
       canPop: false,
@@ -208,48 +192,7 @@ class PaymentSuccessPage extends StatelessWidget {
 
                     const SizedBox(height: 16),
 
-                    // ⏰ Expiry Info
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF8E1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFFFE082)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.schedule_rounded, color: Color(0xFFF57F17), size: 20),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Order expires in $timeLeftStr',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFFF57F17),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  expiryStr,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFFF57F17).withValues(alpha: 0.8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ).animate().fadeIn(delay: 700.ms),
 
-                    const SizedBox(height: 16),
 
                     // ⌨️ Kiosk tip (Autonomous only)
                     if (!isXerox)

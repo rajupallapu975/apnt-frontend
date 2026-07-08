@@ -10,8 +10,8 @@ class BackendConfig {
   /// Get the base URL for the backend based on current context
   static String get baseUrl {
     // 🛡️ AWS Production Backend URL
-    const String liveUrl = "https://zikrint.duckdns.org"; 
-
+    //const String liveUrl = "https://zikrint.duckdns.org"; 
+    const String liveUrl = "http://192.168.1.206:5001"; // Or your PC's local IP address
     return liveUrl;
   }
 

@@ -281,7 +281,6 @@ class NotificationService extends ChangeNotifier {
     await prefs.setString('user_notifications', data);
   }
 
-
   void markAsRead() {
     for (var n in _notifications) { n.isRead = true; }
     saveNotifications();
@@ -307,7 +306,7 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
-  void notifyOrderCreated(String pickupCode, DateTime expiresAt, {bool isXerox = false}) {
+  void notifyOrderCreated(String pickupCode, {bool isXerox = false}) {
     addNotification(
       title: 'Order Status: Active',
       body: isXerox

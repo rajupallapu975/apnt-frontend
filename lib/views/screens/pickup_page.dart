@@ -46,7 +46,6 @@ class _PickupPageState extends State<PickupPage> {
         pickupCode: widget.order.pickupCode,
         userId: widget.order.userId,
         createdAt: widget.order.createdAt,
-        expiresAt: widget.order.expiresAt,
         status: OrderStatus.completed,
         printMode: widget.order.printMode,
         printSettings: widget.order.printSettings,

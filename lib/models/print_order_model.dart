@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum OrderStatus {
   active,
-  expired,
   completed,
   cancelled,
   failed,
@@ -19,7 +18,6 @@ class PrintOrderModel {
   final String pickupCode;
   final String userId;
   final DateTime createdAt;
-  final DateTime? expiresAt; // nullable — orders no longer expire automatically
   final OrderStatus status;
   final Map<String, dynamic> printSettings;
   final int totalPages;
@@ -69,7 +67,6 @@ class PrintOrderModel {
     required this.pickupCode,
     required this.userId,
     required this.createdAt,
-    this.expiresAt,
     required this.status,
     required this.printMode,
     required this.printSettings,
@@ -101,9 +98,6 @@ class PrintOrderModel {
     this.paymentStatus,
   });
 
-  // Check if order is expired — only via explicit status, not time
-  bool get isExpired => status == OrderStatus.expired;
-
   // Check if order is active
   bool get isActive => status == OrderStatus.active;
 
@@ -116,9 +110,6 @@ class PrintOrderModel {
       createdAt: data['createdAt'] is Timestamp 
           ? (data['createdAt'] as Timestamp).toDate() 
           : (data['createdAt'] != null ? DateTime.parse(data['createdAt'].toString()) : DateTime.now()),
-      expiresAt: data['expiresAt'] is Timestamp
-          ? (data['expiresAt'] as Timestamp).toDate()
-          : null, // no expiry if field absent
       status: OrderStatus.values.firstWhere(
         (e) => e.name == data['status'].toString().toLowerCase(),
         orElse: () {
@@ -165,7 +156,6 @@ class PrintOrderModel {
       pickupCode: data['pickupCode'] ?? '',
       userId: data['userId'] ?? '',
       createdAt: DateTime.parse(data['createdAt']),
-      expiresAt: data['expiresAt'] != null ? DateTime.parse(data['expiresAt']) : null,
       status: OrderStatus.values.firstWhere(
         (e) => e.name == data['status'],
         orElse: () => OrderStatus.active,
@@ -264,7 +254,6 @@ class PrintOrderModel {
       'pickupCode': pickupCode,
       'userId': userId,
       'createdAt': Timestamp.fromDate(createdAt),
-      'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
       'status': status.name,
       'printSettings': printSettings,
       'totalPages': totalPages,
@@ -302,7 +291,6 @@ class PrintOrderModel {
       'pickupCode': pickupCode,
       'userId': userId,
       'createdAt': createdAt.toIso8601String(),
-      'expiresAt': expiresAt?.toIso8601String(),
       'status': status.name,
       'printSettings': printSettings,
       'totalPages': totalPages,
@@ -336,7 +324,6 @@ class PrintOrderModel {
     String? pickupCode,
     String? userId,
     DateTime? createdAt,
-    DateTime? expiresAt,
     OrderStatus? status,
     PrintMode? printMode,
     Map<String, dynamic>? printSettings,
@@ -363,7 +350,6 @@ class PrintOrderModel {
       pickupCode: pickupCode ?? this.pickupCode,
       userId: userId ?? this.userId,
       createdAt: createdAt ?? this.createdAt,
-      expiresAt: expiresAt ?? this.expiresAt,
       status: status ?? this.status,
       printMode: printMode ?? this.printMode,
       printSettings: printSettings ?? this.printSettings,

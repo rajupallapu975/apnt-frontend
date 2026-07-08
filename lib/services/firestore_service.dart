@@ -272,7 +272,6 @@ class FirestoreService {
         'publicIds': publicIds,
         'localFilePaths': localFilePaths,
         'status': 'ACTIVE',
-        'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 12))),
       };
 
       // ✅ 1. Update the customer-facing collection
@@ -481,7 +480,7 @@ class FirestoreService {
         final data = doc.data() as Map<String, dynamic>;
         final status = data['status']?.toString().toUpperCase() ?? '';
         
-        if (status == 'COMPLETED' || status == 'ACTIVE' || status == 'EXPIRED') {
+        if (status == 'COMPLETED' || status == 'ACTIVE') {
           totalAmount += (data['totalPrice'] ?? 0.0).toDouble();
           totalOrders++;
           totalPages += (data['totalPages'] as num? ?? 0).toInt();
