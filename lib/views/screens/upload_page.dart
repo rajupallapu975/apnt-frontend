@@ -55,6 +55,7 @@ class _UploadPageState extends State<UploadPage> {
   final Set<String> _autoOpenedIds = {}; // Prevent multiple auto-opens per session
   late Stream<List<PrintOrderModel>> _ordersStream;
   int _currentTabIndex = 0;
+  late PageController _tabPageController;
 
   List<FakeDocumentSnapshot> _backendServicesList = [];
   bool _isLoadingServices = true;
@@ -63,11 +64,13 @@ class _UploadPageState extends State<UploadPage> {
   void _listenToServiceVersion() {
     _fetchServicesFromBackend();
     _versionSubscription = FirebaseFirestore.instance
-        .collection('shops')
-        .doc('serviceVersion')
+        .collection('app_config')
+        .doc('services_version')
         .snapshots()
-        .listen((doc) {
-      _fetchServicesFromBackend();
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        _fetchServicesFromBackend();
+      }
     }, onError: (err) {
       debugPrint("Error listening to serviceVersion: $err");
     });
@@ -101,12 +104,14 @@ class _UploadPageState extends State<UploadPage> {
   @override
   void dispose() {
     _versionSubscription?.cancel();
+    _tabPageController.dispose();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _tabPageController = PageController(initialPage: _currentTabIndex);
     _ordersStream = _orderRepo.getActiveOrders();
     _listenToServiceVersion();
     // 🔔 Prompt for notifications on home entrance
@@ -279,15 +284,41 @@ class _UploadPageState extends State<UploadPage> {
             );
 
             if (freshOrder != null) {
-              // ✅ 1. Inform the user if it's not printed yet, but DON'T block them
-              if (!freshOrder.isPrintingCompleted && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text("ℹ️ Note: Order not marked as printed yet by shopkeeper."),
-                    backgroundColor: Colors.orange,
-                ));
+              // 🚫 BLOCK pickup if order is not yet printed by shopkeeper
+              if (!freshOrder.isPrintingCompleted) {
+                if (mounted) {
+                  Navigator.pop(context); // Close loading dialog
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      backgroundColor: Colors.white,
+                      title: const Row(
+                        children: [
+                          Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 28),
+                          SizedBox(width: 12),
+                          Text('Not Printed Yet',
+                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)
+                          ),
+                        ],
+                      ),
+                      content: const Text(
+                        'Your order has not been printed yet.\n\nPlease wait for the shopkeeper to complete printing before scanning.',
+                        style: TextStyle(fontSize: 14, height: 1.6),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return; // ❌ Do NOT proceed to pickup or mark scanned
               }
 
-              // ✅ 2. Persist scan status permanently (Reveals Code)
+              // ✅ Order IS printed — mark scanned and navigate to pickup page
               await FirestoreService().markOrderScanned(
                 orderId: targetOrder.orderId,
                 shopId: targetOrder.shopId,
@@ -448,8 +479,13 @@ class _UploadPageState extends State<UploadPage> {
 
       body: uploadVM.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : IndexedStack(
-              index: _currentTabIndex,
+          : PageView(
+              controller: _tabPageController,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentTabIndex = index;
+                });
+              },
               children: [
                 RefreshIndicator(
                   onRefresh: () async {
@@ -499,7 +535,7 @@ class _UploadPageState extends State<UploadPage> {
                           });
 
                           return SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
+                            physics: const NeverScrollableScrollPhysics(),
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,6 +549,7 @@ class _UploadPageState extends State<UploadPage> {
                                   const SizedBox(height: 24),
                                   _buildPendingTray(uploadVM),
                                 ],
+                                _buildHorizontalActiveOrders(),
                                 const SizedBox(height: 24),
                                 ZikrinterServicesSection(services: otherDocs),
                                 const SizedBox(height: 24),
@@ -551,6 +588,11 @@ class _UploadPageState extends State<UploadPage> {
           setState(() {
             _currentTabIndex = index;
           });
+          _tabPageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
         },
         selectedItemColor: AppColors.primaryBlue,
         unselectedItemColor: AppColors.textSecondary,
@@ -1006,6 +1048,159 @@ class _UploadPageState extends State<UploadPage> {
               const SizedBox(height: 12),
               ...xeroxOrders.map((order) => _buildOrderCard(order)),
             ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHorizontalActiveOrders() {
+    return StreamBuilder<List<PrintOrderModel>>(
+      stream: _ordersStream,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.hasError) return const SizedBox.shrink();
+        final allOrders = snapshot.data!.where((o) => o.isActive || (o.status == OrderStatus.completed && !o.isPicked)).toList();
+        final xeroxOrders = allOrders.where((o) => o.printMode == PrintMode.xeroxShop).toList();
+        
+        if (xeroxOrders.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Active Orders',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF2D3142),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _currentTabIndex = 1;
+                    });
+                    _tabPageController.animateToPage(
+                      1,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                  child: Text(
+                    'See All',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryBlue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 96,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: xeroxOrders.length,
+                itemBuilder: (context, index) {
+                  final order = xeroxOrders[index];
+                  final String displayId = order.displayId;
+                  final isVerified = order.scanned || order.codeRevealed;
+                  final isDone = order.isPrintingCompleted;
+
+                  return GestureDetector(
+                    onTap: () => _showOrderDetails(order),
+                    child: Container(
+                      width: 180,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.015),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 3.5,
+                            decoration: BoxDecoration(
+                              color: isDone ? Colors.green : Colors.orange,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  displayId,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isDone ? Icons.check_circle_rounded : Icons.hourglass_bottom_rounded,
+                                      size: 10,
+                                      color: isDone ? Colors.green : Colors.orange,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        (order.orderStatus ?? 'PENDING').toUpperCase(),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDone ? Colors.green : Colors.orange,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  isVerified ? 'READY' : 'SCAN QR',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textTertiary,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         );
       },

@@ -240,7 +240,114 @@ class PricingService {
     required String commissionType,
     required double commissionValue,
     String? serviceId,
+    List<dynamic>? allShopServices,
   }) {
+    final isProjectBinding = serviceId?.toLowerCase().contains('project') == true ||
+        (globalServiceParams != null &&
+            (globalServiceParams['serviceType'] == 'project_binding' ||
+                (globalServiceParams['name'] ?? '').toString().toLowerCase().contains('project')));
+
+    if (isProjectBinding) {
+      int totalPagesWithCopies = 0;
+      double totalPrintingCost = 0.0;
+      double totalPrintingCommission = 0.0;
+      final List<double> fileCosts = [];
+
+      for (final file in fileConfigs) {
+        final int pageCount = (file['pageCount'] as num? ?? 1).toInt();
+        final int copies = (file['copies'] as num? ?? 1).toInt();
+        final bool isColor = file['isColor'] == true;
+        final bool isDoubleSided = file['isDoubleSided'] == true;
+        final String rawSize = (file['paperSize'] ?? 'A4').toString().toLowerCase();
+
+        // 1. Identify Target Service ID and mapping paper size key
+        final bool isBond = rawSize.contains('bond');
+        final String fileServiceId = isBond ? 'nyAKL7mMnGGkTx2Ow9HA' : 'ZHwQd18Vy08TZkyBFXjB';
+        final String filePaperSize = isBond ? 'a4' : rawSize;
+
+        // 2. Fetch global service parameters for commission
+        Map<String, dynamic>? fileGlobalParams;
+        if (allShopServices != null) {
+          final serviceDoc = allShopServices.firstWhere(
+            (s) => s['id'] == fileServiceId,
+            orElse: () => null,
+          );
+          if (serviceDoc != null) {
+            fileGlobalParams = serviceDoc['parameters'] as Map<String, dynamic>?;
+          }
+        }
+
+        // 3. Resolve target pricing configuration
+        final pricing = XeroxPricing.fromShopData(shopData, fileGlobalParams, serviceId: fileServiceId);
+
+        // 4. Calculate pricing for this file using target pricing config
+        final int chargeableSheets = isDoubleSided ? (pageCount / 2.0).ceil() : pageCount;
+        final int sheetsWithCopies = chargeableSheets * copies;
+        totalPagesWithCopies += sheetsWithCopies;
+
+        double printPrice = 0.0;
+        if (isColor) {
+          printPrice = isDoubleSided
+              ? (pricing.doubleColorPrices[filePaperSize] ?? pricing.doubleColorPrices['a4'] ?? 20.0)
+              : (pricing.normalColorPrices[filePaperSize] ?? pricing.normalColorPrices['a4'] ?? 10.0);
+        } else {
+          printPrice = isDoubleSided
+              ? (pricing.doubleBwPrices[filePaperSize] ?? pricing.doubleBwPrices['a4'] ?? 4.0)
+              : (pricing.normalBwPrices[filePaperSize] ?? pricing.normalBwPrices['a4'] ?? 2.0);
+        }
+
+        final double itemCost = sheetsWithCopies * printPrice;
+        fileCosts.add(itemCost);
+        totalPrintingCost += itemCost;
+
+        // 5. Calculate commission for this file configuration
+        final Map<String, dynamic> sizeConfigGlobal = fileGlobalParams?['paperSizes']?[filePaperSize] ?? {};
+        final String printCommType = sizeConfigGlobal['commissionType'] ?? 'percentage';
+        final double printCommValue = (sizeConfigGlobal['commission'] as num? ?? 0.0).toDouble();
+
+        double fileCommission = 0.0;
+        if (printCommType.toLowerCase() == 'percentage') {
+          fileCommission = itemCost * (printCommValue / 100.0);
+        } else {
+          fileCommission = sheetsWithCopies * printCommValue;
+        }
+        totalPrintingCommission += fileCommission;
+      }
+
+      final roundedCommission = totalPrintingCommission.ceilToDouble();
+
+      return PricingCalculationResult(
+        totalBwPages: 0,
+        totalBwPagesWithCopies: 0,
+        bwPricingMode: 'Normal',
+        bwPricePerPage: 0.0,
+        bwCost: 0.0,
+        bwOriginalCost: 0.0,
+        isBwBulkApplied: false,
+        totalColorPages: totalPagesWithCopies,
+        totalColorPagesWithCopies: totalPagesWithCopies,
+        colorPricingMode: 'Normal',
+        colorPricePerPage: totalPrintingCost / (totalPagesWithCopies > 0 ? totalPagesWithCopies : 1.0),
+        colorCost: totalPrintingCost,
+        colorOriginalCost: totalPrintingCost,
+        isColorBulkApplied: false,
+        shopSubtotal: totalPrintingCost,
+        originalShopSubtotal: totalPrintingCost,
+        amountSaved: 0.0,
+        isBulkApplied: false,
+        commissionType: 'connected',
+        commissionValue: 0.0,
+        commissionAmount: roundedCommission,
+        originalCommissionAmount: roundedCommission,
+        finalAmount: totalPrintingCost + roundedCommission,
+        originalFinalAmount: totalPrintingCost + roundedCommission,
+        finalAmountSaved: 0.0,
+        extraPageFee: 0.0,
+        fileCosts: fileCosts,
+        generateCoverPage: false,
+      );
+    }
+
     final pricing = XeroxPricing.fromShopData(shopData, globalServiceParams, serviceId: serviceId);
 
     int totalBwPages = 0;

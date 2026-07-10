@@ -215,71 +215,101 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                   _buildSimpleRow('Paper Size', widget.printSettings['paperSize'].toString().toUpperCase()),
                   const SizedBox(height: 12),
                 ],
-                _buildSimpleRow('Layout Side', widget.printSettings['doubleSide'] == true ? 'Double Sided' : 'Single Sided'),
-                const SizedBox(height: 12),
-                _buildSimpleRow(
-                  'Pages Breakdown',
-                  'B&W: ${widget.printSettings['totalBwPagesWithCopies'] ?? 0} | Color: ${widget.printSettings['totalColorPagesWithCopies'] ?? 0}',
-                ),
-                const SizedBox(height: 12),
+                () {
+                  final isProjectBinding = widget.printSettings['serviceType'] == 'project_binding';
+                  if (isProjectBinding) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSimpleRow(
+                          'Printing Cost',
+                          '₹${(widget.printSettings['printingCost'] as num? ?? 0.0).toStringAsFixed(2)}',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildSimpleRow(
+                          'Binding Cost (${widget.printSettings['bindingType'].toString().toUpperCase()})',
+                          '₹${(widget.printSettings['bindingCost'] as num? ?? 0.0).toStringAsFixed(2)}',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildSimpleRow(
+                          'Platform Fee',
+                          '₹${(widget.printSettings['platformCommission'] as num? ?? 0.0).toStringAsFixed(2)}',
+                        ),
+                      ],
+                    );
+                  }
 
-                // 1. Printing Cost (Original) - strikethrough if bulk applied
-                if (_isBulkApplied) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      _buildSimpleRow('Layout Side', widget.printSettings['doubleSide'] == true ? 'Double Sided' : 'Single Sided'),
+                      const SizedBox(height: 12),
+                      _buildSimpleRow(
+                        'Pages Breakdown',
+                        'B&W: ${widget.printSettings['totalBwPagesWithCopies'] ?? 0} | Color: ${widget.printSettings['totalColorPagesWithCopies'] ?? 0}',
+                      ),
+                      const SizedBox(height: 12),
+
+                      // 1. Printing Cost (Original) - strikethrough if bulk applied
+                      if (_isBulkApplied) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Printing Cost',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            Text(
+                              '₹${_originalShopSubtotal.toStringAsFixed(2)}',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // 2. Bulk Discount
+                        _buildSimpleRow(
+                          'Bulk Discount',
+                          '-₹${_amountSaved.toStringAsFixed(2)}',
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // 3. Printing Cost (Final)
+                      _buildSimpleRow(
                         'Printing Cost',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                        ),
+                        '₹${_shopSubtotal.toStringAsFixed(2)}',
                       ),
-                      Text(
-                        '₹${_originalShopSubtotal.toStringAsFixed(2)}',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                          decoration: TextDecoration.lineThrough,
+
+                      // 3b. Cover Page Charge
+                      if (_generateCoverPage) ...[
+                        const SizedBox(height: 12),
+                        _buildSimpleRow(
+                          'Cover Page Charge',
+                          '₹${_coverPageCharge.toStringAsFixed(2)}',
                         ),
-                      ),
+                      ],
+
+                      // 4. Platform Fee
+                      if (_platformFee > 0) ...[
+                        const SizedBox(height: 12),
+                        _buildSimpleRow(
+                          'Platform Fee',
+                          '₹${_platformFee.toStringAsFixed(2)}',
+                        ),
+                      ],
                     ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 2. Bulk Discount
-                  _buildSimpleRow(
-                    'Bulk Discount',
-                    '-₹${_amountSaved.toStringAsFixed(2)}',
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // 3. Printing Cost (Final)
-                _buildSimpleRow(
-                  'Printing Cost',
-                  '₹${_shopSubtotal.toStringAsFixed(2)}',
-                ),
-
-                // 3b. Cover Page Charge
-                if (_generateCoverPage) ...[
-                  const SizedBox(height: 12),
-                  _buildSimpleRow(
-                    'Cover Page Charge',
-                    '₹${_coverPageCharge.toStringAsFixed(2)}',
-                  ),
-                ],
-
-                // 4. Platform Fee
-                if (_platformFee > 0) ...[
-                  const SizedBox(height: 12),
-                  _buildSimpleRow(
-                    'Platform Fee',
-                    '₹${_platformFee.toStringAsFixed(2)}',
-                  ),
-                ],
+                  );
+                }(),
 
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),

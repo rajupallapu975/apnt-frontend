@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -8,9 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/print_order_model.dart';
 import '../../../utils/app_colors.dart';
 import '../../../widgets/common/status_badge.dart';
-import '../../../widgets/common/primary_button.dart';
 import '../../../xerox_shop/xerox_shop_viewmodel.dart';
-import '../../../xerox_shop/xerox_shop_model.dart';
 import '../../../services/firestore_service.dart';
 
 class OrderDetailsSheet extends StatelessWidget {
@@ -19,6 +17,12 @@ class OrderDetailsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM dd, yyyy • hh:mm a');
+    final xeroxVM = context.read<XeroxShopViewModel>();
+    if (order.isXerox && xeroxVM.shops.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        xeroxVM.fetchShops();
+      });
+    }
     // 🚀 LIVE STREAM: Listen specifically to this order to reveal code instantly
     return StreamBuilder<DocumentSnapshot>(
       stream: FirestoreService.getFirestore(order.projectId)
@@ -29,23 +33,21 @@ class OrderDetailsSheet extends StatelessWidget {
         // Fallback to the passed 'order' object if stream is loading/empty
         final data = snapshot.data?.data() as Map<String, dynamic>?;
         
-        // Use live data from Firestore if available, otherwise fallback to the initial 'order' state
-        final bool liveRevealed = data != null 
-            ? (data['codeRevealed'] == true || data['scanned'] == true) 
-            : (order.codeRevealed || order.scanned);
 
-        final String livePickupCode = data != null ? (data['pickupCode'] ?? order.pickupCode).toString() : order.pickupCode;
         final String? liveStatus = data != null ? data['orderStatus'] : order.orderStatus;
         
-        final bool showCode = !order.isXerox || liveRevealed;
         // Dynamically fetch phone number if available from the Shop ViewModel
         String? dynamicPhone = order.printSettings['shopPhone'];
+        String? dynamicAddress = order.printSettings['shopAddress'];
         if (order.isXerox && order.shopId != null) {
           try {
             final xeroxVM = context.watch<XeroxShopViewModel>();
             final matchedShop = xeroxVM.shops.firstWhere((s) => s.id == order.shopId);
             if (matchedShop.phoneNumber?.isNotEmpty == true) {
               dynamicPhone = matchedShop.phoneNumber;
+            }
+            if (matchedShop.address.isNotEmpty) {
+              dynamicAddress = matchedShop.address;
             }
           } catch (_) {}
         }
@@ -56,15 +58,16 @@ class OrderDetailsSheet extends StatelessWidget {
           formattedPhone = c.startsWith('+') ? c : '+91 $c';
         }
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               // Drag handle
               Center(
                 child: Container(
@@ -105,7 +108,83 @@ class OrderDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _infoSegment('CREATED ON', dateFormat.format(order.createdAt), AppColors.textTertiary),
-              const SizedBox(height: 16),
+              if (order.serviceName != null) ...[
+                const SizedBox(height: 12),
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instanceFor(app: Firebase.app('zikrinter'))
+                      .collection('zikrinter')
+                      .doc(order.serviceId ?? 'ZHwQd18Vy08TZkyBFXjB')
+                      .snapshots(),
+                  builder: (context, serviceSnap) {
+                    String? imageUrl;
+                    if (serviceSnap.hasData && serviceSnap.data!.exists) {
+                      final sData = serviceSnap.data!.data() as Map<String, dynamic>?;
+                      if (sData != null) {
+                        imageUrl = sData['imageUrl'] as String?;
+                        if (imageUrl == null || imageUrl.isEmpty) {
+                          final images = sData['images'];
+                          if (images is List && images.isNotEmpty) {
+                            imageUrl = images[0] as String?;
+                          }
+                        }
+                      }
+                    }
+                    
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.1)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: imageUrl != null && imageUrl.isNotEmpty
+                                  ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.print_rounded, color: AppColors.primaryBlue))
+                                  : const Icon(Icons.print_rounded, color: AppColors.primaryBlue),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "SELECTED SERVICE",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textTertiary,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  order.serviceName!.toUpperCase(),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.primaryBlue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                ),
+              ],
               
               // ── Xerox Print Status (Real-time from Firestore) ──
               if (order.isXerox) ...[
@@ -156,45 +235,80 @@ class OrderDetailsSheet extends StatelessWidget {
               ],
               const Divider(),
               const SizedBox(height: 16),
-              // ── Xerox Shop Details (Call & Info) ──
+              // ── Xerox Shop Details (Call & Address Card) ──
               if (order.isXerox) ...[
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: InkWell(
-                        onTap: () => _showShopDetails(context),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('XEROX SHOP', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: AppColors.textTertiary, letterSpacing: 1)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('XEROX SHOP', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w900, color: AppColors.textTertiary, letterSpacing: 1)),
+                          const SizedBox(height: 4),
+                          Text(order.shopName ?? 'Xerox Shop', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                          if (formattedPhone != null) ...[
+                            const SizedBox(height: 4),
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text(order.shopName ?? 'Xerox Shop', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-                                if (formattedPhone != null) ...[
-                                  const SizedBox(width: 6),
-                                  Container(width: 4, height: 4, decoration: const BoxDecoration(color: AppColors.textTertiary, shape: BoxShape.circle)),
-                                  const SizedBox(width: 6),
-                                  Text(formattedPhone, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
-                                ],
+                                const Icon(Icons.phone_rounded, size: 12, color: AppColors.textSecondary),
+                                const SizedBox(width: 4),
+                                Text(formattedPhone, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
                               ],
                             ),
                           ],
-                        ),
+                          if (dynamicAddress != null && dynamicAddress.isNotEmpty && dynamicAddress != 'N/A') ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.location_on_rounded, size: 12, color: AppColors.textSecondary),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    dynamicAddress,
+                                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    if (formattedPhone != null)
-                      IconButton(
-                        onPressed: () async {
-                          final Uri launchUri = Uri(scheme: 'tel', path: formattedPhone!.replaceAll(' ', ''));
-                          if (await canLaunchUrl(launchUri)) {
-                            await launchUrl(launchUri);
-                          }
-                        },
-                        icon: const Icon(Icons.call_rounded, color: AppColors.success, size: 22),
-                        style: IconButton.styleFrom(backgroundColor: AppColors.success.withValues(alpha: 0.1), padding: const EdgeInsets.all(10)),
-                      ),
+                    const SizedBox(width: 8),
+                    // Action Buttons (Call and Directions) next to each other
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (formattedPhone != null)
+                          IconButton(
+                            onPressed: () async {
+                              final Uri launchUri = Uri(scheme: 'tel', path: formattedPhone!.replaceAll(' ', ''));
+                              if (await canLaunchUrl(launchUri)) {
+                                await launchUrl(launchUri);
+                              }
+                            },
+                            icon: const Icon(Icons.call_rounded, color: AppColors.success, size: 20),
+                            style: IconButton.styleFrom(backgroundColor: AppColors.success.withValues(alpha: 0.1), padding: const EdgeInsets.all(8)),
+                          ),
+                        if (dynamicAddress != null && dynamicAddress.isNotEmpty && dynamicAddress != 'N/A') ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () async {
+                              final url = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(dynamicAddress!)}';
+                              if (await canLaunchUrl(Uri.parse(url))) {
+                                await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            icon: const Icon(Icons.directions_rounded, color: AppColors.primaryBlue, size: 20),
+                            style: IconButton.styleFrom(backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1), padding: const EdgeInsets.all(8)),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -276,66 +390,39 @@ class OrderDetailsSheet extends StatelessWidget {
               const SizedBox(height: 12),
               const Divider(),
               const SizedBox(height: 12),
-              // ── Pickup Code (Revealed via QR Scan) ──
-              AnimatedSize(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: order.isXerox ? AppColors.success.withValues(alpha: 0.05) : AppColors.primaryBlue.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: (order.isXerox ? AppColors.success : AppColors.primaryBlue).withValues(alpha: 0.15)),
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 400),
-                    transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: ScaleTransition(scale: animation, child: child)),
-                    child: !showCode ? 
-                      Column(
-                        key: const ValueKey('hidden'),
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.lock_person_rounded, size: 16, color: AppColors.textTertiary),
-                              const SizedBox(width: 8),
-                              Text('SCAN QR TO REVEAL CODE', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.textTertiary)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text('• • • • • •', style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.textTertiary, letterSpacing: 8)),
-                          const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              'Scan shop QR to reveal code and collect your documents.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w600, height: 1.5),
-                            ),
-                          ),
-                        ],
 
-                      ) :
-                      Column(
-                        key: const ValueKey('revealed'),
-                        children: [
-                          Text('PICKUP CODE', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: (order.isXerox ? AppColors.success : AppColors.primaryBlue), letterSpacing: 1.5)),
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(livePickupCode, style: GoogleFonts.inter(fontSize: 36, fontWeight: FontWeight.w900, color: (order.isXerox ? AppColors.success : AppColors.primaryBlue), letterSpacing: 8)),
-                              const SizedBox(width: 12),
-                              IconButton(
-                                onPressed: () => Clipboard.setData(ClipboardData(text: livePickupCode)),
-                                icon: Icon(Icons.copy_rounded, size: 18, color: (order.isXerox ? AppColors.success : AppColors.primaryBlue)),
-                              ),
-                            ],
-                          ),
-                       ],
+              // ── Print Instructions Guide ──
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'INSTRUCTIONS FOR PRINTING',
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textTertiary,
+                        letterSpacing: 1.2,
                       ),
-                  ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStepRow(1, 'Go to selected shop'),
+                    const SizedBox(height: 8),
+                    _buildStepRow(2, 'Scan the Zikrint QR'),
+                    const SizedBox(height: 8),
+                    _buildStepRow(3, 'Code is revealed'),
+                    const SizedBox(height: 8),
+                    _buildStepRow(4, 'Show the code to the shopkeeper'),
+                    const SizedBox(height: 8),
+                    _buildStepRow(5, 'Collect the prints'),
+                  ],
                 ),
               ),
               const SizedBox(height: 12),
@@ -347,18 +434,49 @@ class OrderDetailsSheet extends StatelessWidget {
                   _summaryLabel('TOTAL', '₹${order.totalPrice.toStringAsFixed(0)}'),
                 ],
               ),
-              const SizedBox(height: 16),
-              if (order.status == OrderStatus.active)
-                PrimaryButton(
-                  label: 'GO BACK',
-                  onPressed: () => Navigator.pop(context),
-                ),
             ],
           ),
-        );
+        ),
+      );
       }
     );
   }
+
+  Widget _buildStepRow(int stepNumber, String text) {
+    return Row(
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          decoration: const BoxDecoration(
+            color: AppColors.primaryBlue,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$stepNumber',
+            style: GoogleFonts.inter(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _infoSegment(String label, String value, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,127 +515,5 @@ class OrderDetailsSheet extends StatelessWidget {
       ],
     );
   }
-  void _showShopDetails(BuildContext context) {
-    final shopId = order.shopId;
-    if (shopId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shop identifier not found.')));
-      return;
-    }
-    final xeroxVM = context.read<XeroxShopViewModel>();
-    XeroxShopModel? shop;
-    try {
-      shop = xeroxVM.shops.firstWhere((s) => s.id == shopId);
-    } catch (_) {}
-    if (shop == null) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Loading Details'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              const Text('Fetching shop details...'),
-            ],
-          ),
-        ),
-      );
-      
-      xeroxVM.fetchShops().then((_) {
-        if (context.mounted) {
-           Navigator.pop(context); 
-           _showShopDetails(context); 
-        }
-      });
-      return;
-    }
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 10),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                shop!.name,
-                style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 18),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: shop.isCurrentlyOpen ? AppColors.success.withValues(alpha: 0.1) : AppColors.error.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                shop.isCurrentlyOpen ? 'OPEN' : 'CLOSED',
-                style: GoogleFonts.inter(
-                  fontSize: 10, 
-                  fontWeight: FontWeight.w900, 
-                  color: shop.isCurrentlyOpen ? AppColors.success : AppColors.error
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-             _detailRow(Icons.location_on_rounded, 'LOCATION', shop.address),
-             if (shop.phoneNumber != null && shop.phoneNumber!.isNotEmpty && shop.phoneNumber != 'N/A') ...[
-               const SizedBox(height: 16),
-               _detailRow(Icons.phone_rounded, 'MOBILE NUMBER', shop.phoneNumber!),
-             ],
-             const SizedBox(height: 16),
-             _detailRow(Icons.access_time_filled_rounded, 'HOURS', '${shop.openingTime} - ${shop.closingTime}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('CLOSE', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.textTertiary)),
-          ),
-          if (shop.phoneNumber != null && shop.phoneNumber != 'N/A')
-            ElevatedButton.icon(
-              onPressed: () => launchUrl(Uri.parse('tel:${shop!.phoneNumber}')),
-              icon: const Icon(Icons.call_rounded, size: 16),
-              label: const Text('CALL'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.success,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-  Widget _detailRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: AppColors.textTertiary),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.textTertiary, letterSpacing: 1),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+
 }

@@ -145,9 +145,11 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
   }
 
   String _getDimensions(String size) {
-    switch (size.toUpperCase()) {
-      case 'A4':
-        return '21.0 × 29.7 cm';
+    final s = size.toUpperCase();
+    if (s == 'A4' || s.contains('BOND')) {
+      return '21.0 × 29.7 cm';
+    }
+    switch (s) {
       case 'A3':
         return '29.7 × 42.0 cm';
       case 'A2':
@@ -162,9 +164,11 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
   }
 
   String _getInches(String size) {
-    switch (size.toUpperCase()) {
-      case 'A4':
-        return '8.3 × 11.7 in';
+    final s = size.toUpperCase();
+    if (s == 'A4' || s.contains('BOND')) {
+      return '8.3 × 11.7 in';
+    }
+    switch (s) {
       case 'A3':
         return '11.7 × 16.5 in';
       case 'A2':
@@ -831,75 +835,6 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     );
   }
 
-  Widget _buildShopsView() {
-    final shops = _shopsForSelectedSize;
-    return Container(
-      key: const ValueKey('shops_view'),
-      color: const Color(0xFFF8FAFC),
-      child: _isLoadingShops
-          ? const Center(child: CircularProgressIndicator())
-          : shops.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.storefront_rounded, size: 64, color: AppColors.textTertiary),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No shops support ${_selectedSize.toUpperCase()} for this service.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Select Shop',
-                            style: GoogleFonts.inter(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.primaryBlack,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Choose an online shop to submit your Xerox order',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        itemCount: shops.length,
-                        itemBuilder: (context, index) {
-                          final shop = XeroxShopModel.fromMap(shops[index], shops[index]['id']);
-                          return _buildShopCard(context, shop);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-    );
-  }
-
   Widget _buildShopCard(BuildContext context, XeroxShopModel shop) {
     final pricing = XeroxPricing.fromShopData({
       'zikrinterServices': shop.zikrinterServices,
@@ -992,7 +927,7 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -1089,8 +1024,23 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     }
 
     final zikrinterServices = _selectedShop!.zikrinterServices;
-    final config = zikrinterServices[widget.serviceId] as Map<String, dynamic>? ?? {};
-    final sizeKey = _selectedSize.toLowerCase();
+    final isProjectBinding = widget.serviceId.toLowerCase().contains('project') == true;
+
+    Map<String, dynamic> config;
+    String lookupSizeKey = _selectedSize.toLowerCase();
+
+    if (isProjectBinding) {
+      final isBond = lookupSizeKey.contains('bond');
+      final targetServiceId = isBond ? 'nyAKL7mMnGGkTx2Ow9HA' : 'ZHwQd18Vy08TZkyBFXjB';
+      config = zikrinterServices[targetServiceId] as Map<String, dynamic>? ?? {};
+      if (isBond) {
+        lookupSizeKey = 'a4';
+      }
+    } else {
+      config = zikrinterServices[widget.serviceId] as Map<String, dynamic>? ?? {};
+    }
+
+    final sizeKey = lookupSizeKey;
     
     double bwSingle = 0.0;
     double bwDouble = 0.0;
@@ -1312,6 +1262,129 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
       if (img.isNotEmpty && !allImages.contains(img)) allImages.add(img);
     }
 
+    if (_currentViewIndex == 1) {
+      // 🔄 Use scrollable RefreshIndicator with CustomScrollView for shops selection view
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: SafeArea(
+          top: true,
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await _loadAvailableShops();
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // Header Image Sliver
+                SliverToBoxAdapter(
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+                        child: ServiceImageCarousel(images: allImages, serviceId: widget.serviceId),
+                      ),
+                      Positioned(
+                        top: 12,
+                        left: 20,
+                        child: GestureDetector(
+                          onTap: () {
+                            _setViewIndex(0);
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.black.withValues(alpha: 0.4),
+                            ),
+                            child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Shops List Sliver
+                if (_isLoadingShops)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 80),
+                      child: Center(child: CircularProgressIndicator(color: AppColors.primaryBlue)),
+                    ),
+                  )
+                else if (_shopsForSelectedSize.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 80),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.storefront_rounded, size: 64, color: AppColors.textTertiary),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No shops support ${_selectedSize.toUpperCase()} for this service.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Select Shop',
+                            style: GoogleFonts.inter(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.primaryBlack,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Choose an online shop to submit your Xerox order',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final shopMap = _shopsForSelectedSize[index];
+                          final shop = XeroxShopModel.fromMap(shopMap, shopMap['id']);
+                          return _buildShopCard(context, shop);
+                        },
+                        childCount: _shopsForSelectedSize.length,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // For View Index 0 and 2, render the static layout
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
@@ -1369,9 +1442,7 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                 },
                 child: _currentViewIndex == 2
                     ? _buildServiceUploadView()
-                    : (_currentViewIndex == 1
-                        ? _buildShopsView()
-                        : _buildConfigurationView()),
+                    : _buildConfigurationView(),
               ),
             ),
           ],

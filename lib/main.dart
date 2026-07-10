@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 // flutter_local_notifications handled by NotificationService internally
 import 'firebase_options.dart';
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/upload_viewmodel.dart';
@@ -186,6 +187,15 @@ void main() async {
   }
 }
 
+class MyCustomScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -195,6 +205,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Zikrint',
       theme: AppTheme.lightTheme,
+      scrollBehavior: MyCustomScrollBehavior(),
       home: const AuthWrapper(),
     );
   }

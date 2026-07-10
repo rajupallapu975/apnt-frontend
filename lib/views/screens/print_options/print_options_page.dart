@@ -14,6 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../payment_processing_page.dart';
 import '../widgets/payment_summary_sheet.dart';
+import 'binding_selection_page.dart';
 import '../../../models/print_order_model.dart';
 import '../../../models/file_model.dart';
 import '../../../utils/app_colors.dart';
@@ -100,6 +101,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   Map<String, dynamic>? globalServiceParams;
   String commissionType = 'percentage';
   double commissionValue = 0.0;
+  List<dynamic> _allShopServices = [];
 
   bool _isCustomService = false;
   List<Map<String, dynamic>> _customParameters = [];
@@ -121,7 +123,35 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       commissionType: commissionType,
       commissionValue: commissionValue,
       serviceId: widget.serviceId,
+      allShopServices: _allShopServices,
     );
+  }
+
+  XeroxPricing _getResolvedPricing() {
+    final isProjectBinding = widget.serviceId?.toLowerCase().contains('project') == true ||
+        (globalServiceParams != null && globalServiceParams?['serviceType'] == 'project_binding');
+
+    if (isProjectBinding) {
+      final isBond = _selectedPaperSize.toLowerCase().contains('bond');
+      final targetServiceId = isBond ? 'nyAKL7mMnGGkTx2Ow9HA' : 'ZHwQd18Vy08TZkyBFXjB';
+      Map<String, dynamic>? targetGlobalParams;
+      if (_allShopServices.isNotEmpty) {
+        final serviceDoc = _allShopServices.firstWhere(
+          (s) => s['id'] == targetServiceId,
+          orElse: () => null,
+        );
+        if (serviceDoc != null) {
+          targetGlobalParams = serviceDoc['parameters'] as Map<String, dynamic>?;
+        }
+      }
+      return XeroxPricing.fromShopData(shopData ?? {}, targetGlobalParams, serviceId: targetServiceId);
+    }
+    return XeroxPricing.fromShopData(shopData ?? {}, globalServiceParams, serviceId: widget.serviceId);
+  }
+
+  String _getResolvedSizeKey() {
+    final isBond = _selectedPaperSize.toLowerCase().contains('bond');
+    return isBond ? 'a4' : _selectedPaperSize.toLowerCase();
   }
 
   double get _totalPrice => _pricingResult.shopSubtotal;
@@ -228,8 +258,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               pSizes.add(widget.selectedPaperSize!);
             }
 
-            setState(() {
+             setState(() {
               shopData = shop;
+              _allShopServices = services;
               globalServiceParams = params;
               commissionType = type;
               commissionValue = val;
@@ -507,10 +538,10 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   // ── Mobile body ────────────────────────────────────────────────────────────
   Widget _buildMobileBody() {
     final cfg = _current;
-    final pricing = XeroxPricing.fromShopData(shopData ?? {}, globalServiceParams, serviceId: widget.serviceId);
+    final pricing = _getResolvedPricing();
     final divider = Divider(height: 1, thickness: 1, color: AppColors.border.withValues(alpha: 0.4), indent: 24, endIndent: 24);
 
-    final String sizeKey = _selectedPaperSize.toLowerCase();
+    final String sizeKey = _getResolvedSizeKey();
     final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
     final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
     
@@ -822,9 +853,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   // ── Web: Settings card ─────────────────────────────────────────────────────
   Widget _buildSettingsCard() {
     final cfg = _current;
-    final pricing = XeroxPricing.fromShopData(shopData ?? {}, globalServiceParams, serviceId: widget.serviceId);
+    final pricing = _getResolvedPricing();
 
-    final String sizeKey = _selectedPaperSize.toLowerCase();
+    final String sizeKey = _getResolvedSizeKey();
     final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
     final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
 
@@ -1083,8 +1114,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   }
 
   Widget _buildPricingGuide() {
-    final pricing = XeroxPricing.fromShopData(shopData ?? {}, globalServiceParams, serviceId: widget.serviceId);
-    final String sizeKey = _selectedPaperSize.toLowerCase();
+    final pricing = _getResolvedPricing();
+    final String sizeKey = _getResolvedSizeKey();
     final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
     final double currentDoubleBwPrice = pricing.doubleBwPrices[sizeKey] ?? pricing.doubleBwPrices['a4'] ?? 4.0;
     final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
@@ -1142,30 +1173,77 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 flex: 2,
                 child: SizedBox(
                   height: 56,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : () => _handlePayment(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: _isLoading 
-                      ? const SizedBox(
-                          width: 24, 
-                          height: 24, 
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                        )
-                      : Row(
+                  child: () {
+                    final isProjectBinding = widget.serviceId?.toLowerCase().contains('project') == true ||
+                        widget.serviceName?.toLowerCase().contains('project') == true ||
+                        (globalServiceParams != null && globalServiceParams?['serviceType'] == 'project_binding');
+                    
+                    if (isProjectBinding) {
+                      return ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BindingSelectionPage(
+                                pickedFiles: pickedFiles,
+                                pageConfigs: pageConfigs,
+                                shopId: widget.shopId ?? '',
+                                shopName: widget.shopName ?? '',
+                                shopPhone: widget.shopPhone ?? '',
+                                serviceId: widget.serviceId ?? '',
+                                serviceName: widget.serviceName ?? '',
+                                selectedPaperSize: _selectedPaperSize,
+                                shopData: shopData ?? {},
+                                globalServiceParams: globalServiceParams ?? {},
+                                printingCost: _totalPrice,
+                                printingCommission: _totalCommission,
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.print_rounded, size: 20),
-                            const SizedBox(width: 8),
-                            Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
+                            Text('Continue',
                                 style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_forward_rounded, size: 20),
                           ],
                         ),
-                  ),
+                      );
+                    }
+
+                    return ElevatedButton(
+                      onPressed: _isLoading ? null : () => _handlePayment(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: _isLoading 
+                        ? const SizedBox(
+                            width: 24, 
+                            height: 24, 
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.print_rounded, size: 20),
+                              const SizedBox(width: 8),
+                              Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
+                                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
+                            ],
+                          ),
+                    );
+                  }(),
                 ),
               ),
             ],

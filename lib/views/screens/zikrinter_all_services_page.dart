@@ -1,129 +1,42 @@
-// lib/views/screens/widgets/zikrinter_services_section.dart
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../utils/app_colors.dart';
-import '../zikrinter_service_details_page.dart';
-import '../zikrinter_all_services_page.dart';
+import 'zikrinter_service_details_page.dart';
 
-class ZikrinterServicesSection extends StatelessWidget {
+class ZikrinterAllServicesPage extends StatelessWidget {
   final List<dynamic> services;
 
-  const ZikrinterServicesSection({super.key, required this.services});
+  const ZikrinterAllServicesPage({super.key, required this.services});
 
   @override
   Widget build(BuildContext context) {
-    if (services.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 12),
-        Text(
-          'Other Services',
-          style: GoogleFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF2D3142),
-            letterSpacing: -0.5,
-          ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: Text(
+          "All Services",
+          style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: AppColors.textPrimary),
         ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: GridView.builder(
+          padding: const EdgeInsets.all(24),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             childAspectRatio: 0.68,
           ),
-          itemCount: services.length > 5 ? 6 : services.length + 1,
+          itemCount: services.length,
           itemBuilder: (context, index) {
-            final isMoreCard = index == (services.length > 5 ? 5 : services.length);
-
-            if (isMoreCard) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.015),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ZikrinterAllServicesPage(services: services),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryBlue.withValues(alpha: 0.08),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.grid_view_rounded,
-                              color: AppColors.primaryBlue,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                          child: Text(
-                            'More Services',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 10,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'View All',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
             final doc = services[index];
             final data = doc.data() as Map<String, dynamic>? ?? {};
             final serviceName = data['serviceName'] ?? data['name'] ?? 'Printing Service';
@@ -208,10 +121,9 @@ class ZikrinterServicesSection extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                                color: AppColors.textPrimary,
-                              ),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                  color: AppColors.textPrimary),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -234,7 +146,7 @@ class ZikrinterServicesSection extends StatelessWidget {
             );
           },
         ),
-      ],
+      ),
     );
   }
 }

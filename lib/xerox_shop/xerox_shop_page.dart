@@ -86,99 +86,107 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: CustomScrollView(
-        slivers: [
-          // Header / Search Bar
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Select a Nearby Shop',
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.primaryBlack,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Browse through available print stations near you',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  _buildSearchBar(viewModel),
-                ],
-              ),
-            ),
-          ),
-          
-          if (viewModel.isLoading)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.only(top: 40),
-                child: Center(child: CircularProgressIndicator(color: AppColors.primaryBlue)),
-              ),
-            )
-          else if (viewModel.shops.isEmpty)
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await context.read<XeroxShopViewModel>().fetchShops();
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) setState(() {});
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // Header / Search Bar
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(32),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.store_outlined, size: 60, color: AppColors.textTertiary.withValues(alpha: 0.3)),
-                    const SizedBox(height: 16),
                     Text(
-                      'No Shops Available',
-                      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                      'Select a Nearby Shop',
+                      style: GoogleFonts.inter(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryBlack,
+                        letterSpacing: -0.5,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                        viewModel.errorMessage ?? 'Check your connection or try again later.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () => viewModel.fetchShops(),
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('RETRY'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      'Browse through available print stations near you',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    
+                    _buildSearchBar(viewModel),
                   ],
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final shop = viewModel.shops[index];
-                    return ShopCard(
-                      shop: shop,
-                      onDetails: () => _showShopDetails(context, shop),
-                      onTap: () => _handleShopSelection(context, shop),
-                    ).animate().fadeIn(delay: (index * 100).ms).slideY(begin: 0.1, end: 0);
-                  },
-                  childCount: viewModel.shops.length,
+            ),
+            
+            if (viewModel.isLoading)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 40),
+                  child: Center(child: CircularProgressIndicator(color: AppColors.primaryBlue)),
+                ),
+              )
+            else if (viewModel.shops.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      Icon(Icons.store_outlined, size: 60, color: AppColors.textTertiary.withValues(alpha: 0.3)),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No Shops Available',
+                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                          viewModel.errorMessage ?? 'Check your connection or try again later.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () => viewModel.fetchShops(),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('RETRY'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final shop = viewModel.shops[index];
+                      return ShopCard(
+                        shop: shop,
+                        onDetails: () => _showShopDetails(context, shop),
+                        onTap: () => _handleShopSelection(context, shop),
+                      ).animate().fadeIn(delay: (index * 100).ms).slideY(begin: 0.1, end: 0);
+                    },
+                    childCount: viewModel.shops.length,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

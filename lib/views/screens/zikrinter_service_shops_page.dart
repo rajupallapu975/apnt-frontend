@@ -41,6 +41,7 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
   final Map<String, DocumentSnapshot> _primaryDocs = {};
   final Map<String, DocumentSnapshot> _secondaryDocs = {};
   bool _isLoading = true;
+  Completer<void>? _refreshCompleter;
 
   // Selected shop ID for expanded details card
   String? _selectedShopId;
@@ -73,10 +74,16 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
             }
             _isLoading = false;
           });
+          if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
+            _refreshCompleter!.complete();
+          }
         }
       },
       onError: (err) {
         if (mounted) setState(() => _isLoading = false);
+        if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
+          _refreshCompleter!.complete();
+        }
       },
     );
 
@@ -92,10 +99,16 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
               }
               _isLoading = false;
             });
+            if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
+              _refreshCompleter!.complete();
+            }
           }
         },
         onError: (err) {
           if (mounted) setState(() => _isLoading = false);
+          if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
+            _refreshCompleter!.complete();
+          }
         },
       );
     } catch (_) {}
@@ -106,6 +119,27 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
     _primarySub?.cancel();
     _secondarySub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _handleRefresh() async {
+    if (!mounted) return;
+    final completer = Completer<void>();
+    _refreshCompleter = completer;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    _primarySub?.cancel();
+    _secondarySub?.cancel();
+    _primaryDocs.clear();
+    _secondaryDocs.clear();
+
+    await _authenticateAndListen();
+
+    try {
+      await completer.future.timeout(const Duration(seconds: 3));
+    } catch (_) {}
   }
 
   Future<void> _showUploadBottomSheet(BuildContext context, XeroxShopModel shop) async {
@@ -372,235 +406,264 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
           ),
           const Divider(height: 1, color: AppColors.border),
           Expanded(
-            child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : providerShops.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.storefront_rounded, size: 64, color: AppColors.textTertiary),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No shops support ${widget.selectedPaperSize} for this service.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: providerShops.length,
-                  itemBuilder: (context, index) {
-                    final item = providerShops.elementAt(index);
-                    final shop = item.shop;
-                    final pricing = XeroxPricing.fromShopData({
-                      'zikrinterServices': shop.zikrinterServices,
-                      'pricePerBWPage': shop.pricePerBWPage,
-                      'pricePerColorPage': shop.pricePerColorPage,
-                    }, widget.globalParams, serviceId: widget.serviceId);
-                    
-                    final sizeKey = widget.selectedPaperSize.toLowerCase();
-                    final double startingPrice = pricing.normalBwPrices[sizeKey] ?? 2.0;
-                    final double colorPrice = pricing.normalColorPrices[sizeKey] ?? 10.0;
-                    final double bulkBwPrice = pricing.bulkBwPrices[sizeKey] ?? 1.5;
-                    final int bulkStart = pricing.bwBulkStartPages[sizeKey] ?? 10;
-                    
-                    final isExpanded = _selectedShopId == shop.id;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(
-                          color: isExpanded ? AppColors.primaryBlue : AppColors.border.withValues(alpha: 0.5),
-                          width: isExpanded ? 1.5 : 1,
-                        ),
-                      ),
-                      child: InkWell(
-                        onTap: () {
-                          setState(() {
-                            _selectedShopId = isExpanded ? null : shop.id;
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(16),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Main Header Row
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      width: 68,
-                                      height: 68,
-                                      color: Colors.grey[100],
-                                      child: shop.imageUrl.isNotEmpty
-                                          ? Image.network(
-                                              shop.imageUrl,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, _b, _c) => const Icon(Icons.store_rounded, color: Colors.grey),
-                                            )
-                                          : const Icon(Icons.store_rounded, color: Colors.grey),
+            child: RefreshIndicator(
+              onRefresh: _handleRefresh,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : providerShops.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.storefront_rounded, size: 64, color: AppColors.textTertiary),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No shops support ${widget.selectedPaperSize} for this service.',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
                                     ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                shop.name,
-                                                style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFFFF9C4),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  const Icon(Icons.star_rounded, size: 12, color: Colors.orange),
-                                                  const SizedBox(width: 2),
-                                                  Text(
-                                                    shop.rating.toStringAsFixed(1),
-                                                    style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange[900]),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          shop.address,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Icon(Icons.location_on_outlined, size: 13, color: AppColors.textSecondary),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              shop.distance,
-                                              style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
-                                            ),
-                                            const Spacer(),
-                                            Text(
-                                              shop.isCurrentlyOpen ? 'Open Now' : 'Closed',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: shop.isCurrentlyOpen ? Colors.green[700] : Colors.red[700],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                              
-                              const Divider(height: 24),
-                              
-                              // Expandable details block
-                              AnimatedSize(
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                                child: !isExpanded
-                                    ? Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Starting Price',
-                                                style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
-                                              ),
-                                              Text(
-                                                '₹${startingPrice.toStringAsFixed(0)}',
-                                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primaryBlue),
-                                              ),
-                                            ],
-                                          ),
-                                          Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
-                                        ],
-                                      )
-                                    : Column(
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          itemCount: providerShops.length,
+                          itemBuilder: (context, index) {
+                            final item = providerShops.elementAt(index);
+                            final shop = item.shop;
+                            final pricing = XeroxPricing.fromShopData({
+                              'zikrinterServices': shop.zikrinterServices,
+                              'pricePerBWPage': shop.pricePerBWPage,
+                              'pricePerColorPage': shop.pricePerColorPage,
+                            }, widget.globalParams, serviceId: widget.serviceId);
+                            
+                            final sizeKey = widget.selectedPaperSize.toLowerCase();
+                            final double startingPrice = pricing.normalBwPrices[sizeKey] ?? 2.0;
+                            final double colorPrice = pricing.normalColorPrices[sizeKey] ?? 10.0;
+                            final double bulkBwPrice = pricing.bulkBwPrices[sizeKey] ?? 1.5;
+                            final int bulkStart = pricing.bwBulkStartPages[sizeKey] ?? 10;
+                            
+                            final isExpanded = _selectedShopId == shop.id;
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 0,
+                              color: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
+                                  color: isExpanded ? AppColors.primaryBlue : AppColors.border.withValues(alpha: 0.5),
+                                  width: isExpanded ? 1.5 : 1,
+                                ),
+                              ),
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedShopId = isExpanded ? null : shop.id;
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Main Header Row
+                                      Row(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            'Shop Information',
-                                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Container(
+                                              width: 68,
+                                              height: 68,
+                                              color: Colors.grey[100],
+                                              child: shop.imageUrl.isNotEmpty
+                                                  ? Image.network(
+                                                      shop.imageUrl,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (_, _b, _c) => const Icon(Icons.store_rounded, color: Colors.grey),
+                                                    )
+                                                  : const Icon(Icons.store_rounded, color: Colors.grey),
+                                            ),
                                           ),
-                                          const SizedBox(height: 8),
-                                          _detailRow(Icons.access_time_rounded, 'Hours: ${shop.openingTime ?? '09:00 AM'} - ${shop.closingTime ?? '09:00 PM'}'),
-                                          _detailRow(Icons.print_outlined, 'Active Printers: ${shop.activePrinters} available'),
-                                          _detailRow(Icons.timer_outlined, 'Est. completion time: 15-20 mins'),
-                                          
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            '${widget.selectedPaperSize} Pricing Details',
-                                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          _detailRow(Icons.brightness_medium_rounded, 'B&W Rate: ₹${startingPrice.toStringAsFixed(1)} / page'),
-                                          _detailRow(Icons.color_lens_outlined, 'Color Rate: ₹${colorPrice.toStringAsFixed(1)} / page'),
-                                          _detailRow(Icons.discount_outlined, 'Bulk Discount: ₹${bulkBwPrice.toStringAsFixed(1)} / page after $bulkStart pages'),
-                                          _detailRow(Icons.settings_outlined, 'Options: Portrait, Landscape, Single, Double Sided'),
-
-                                          const SizedBox(height: 16),
-                                          SizedBox(
-                                            width: double.infinity,
-                                            height: 48,
-                                            child: ElevatedButton(
-                                              onPressed: !shop.isCurrentlyOpen
-                                                  ? null
-                                                  : () => _showUploadBottomSheet(context, shop),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: AppColors.primaryBlue,
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                              ),
-                                              child: Text(
-                                                shop.isCurrentlyOpen ? 'Upload Files' : 'Shop Closed',
-                                                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
-                                              ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        shop.name,
+                                                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFFFFF9C4),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          const Icon(Icons.star_rounded, size: 12, color: Colors.orange),
+                                                          const SizedBox(width: 2),
+                                                          Text(
+                                                            shop.rating.toStringAsFixed(1),
+                                                            style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange[900]),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  shop.address,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12, 
+                                                    color: AppColors.textSecondary,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.access_time_rounded, size: 12, color: AppColors.textSecondary),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '${shop.openingTime ?? "09:00 AM"} - ${shop.closingTime ?? "09:00 PM"}',
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 11,
+                                                        color: AppColors.textSecondary,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.location_on_outlined, size: 13, color: AppColors.textSecondary),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      shop.distance,
+                                                      style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                                                    ),
+                                                    const Spacer(),
+                                                    Text(
+                                                      shop.isCurrentlyOpen ? 'Open Now' : 'Closed',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: shop.isCurrentlyOpen ? Colors.green[700] : Colors.red[700],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],
                                       ),
+                                      
+                                      const Divider(height: 24),
+                                      
+                                      // Expandable details block
+                                      AnimatedSize(
+                                        duration: const Duration(milliseconds: 250),
+                                        curve: Curves.easeInOut,
+                                        child: !isExpanded
+                                            ? Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        'Starting Price',
+                                                        style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
+                                                      ),
+                                                      Text(
+                                                        '₹${startingPrice.toStringAsFixed(0)}',
+                                                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primaryBlue),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
+                                                ],
+                                              )
+                                            : Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Shop Information',
+                                                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  _detailRow(Icons.access_time_rounded, 'Hours: ${shop.openingTime ?? '09:00 AM'} - ${shop.closingTime ?? '09:00 PM'}'),
+                                                  _detailRow(Icons.print_outlined, 'Active Printers: ${shop.activePrinters} available'),
+                                                  _detailRow(Icons.timer_outlined, 'Est. completion time: 15-20 mins'),
+                                                  
+                                                  const SizedBox(height: 12),
+                                                  Text(
+                                                    '${widget.selectedPaperSize} Pricing Details',
+                                                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  _detailRow(Icons.brightness_medium_rounded, 'B&W Rate: ₹${startingPrice.toStringAsFixed(1)} / page'),
+                                                  _detailRow(Icons.color_lens_outlined, 'Color Rate: ₹${colorPrice.toStringAsFixed(1)} / page'),
+                                                  _detailRow(Icons.discount_outlined, 'Bulk Discount: ₹${bulkBwPrice.toStringAsFixed(1)} / page after $bulkStart pages'),
+                                                  _detailRow(Icons.settings_outlined, 'Options: Portrait, Landscape, Single, Double Sided'),
+
+                                                  const SizedBox(height: 16),
+                                                  SizedBox(
+                                                    width: double.infinity,
+                                                    height: 48,
+                                                    child: ElevatedButton(
+                                                      onPressed: !shop.isCurrentlyOpen
+                                                          ? null
+                                                          : () => _showUploadBottomSheet(context, shop),
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: AppColors.primaryBlue,
+                                                        foregroundColor: Colors.white,
+                                                        elevation: 0,
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                      ),
+                                                      child: Text(
+                                                        shop.isCurrentlyOpen ? 'Upload Files' : 'Shop Closed',
+                                                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      ),
-                    );
-                  },
-                ),
+            ),
           ),
         ],
       ),
