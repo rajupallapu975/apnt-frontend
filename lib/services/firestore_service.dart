@@ -94,7 +94,7 @@ class FirestoreService {
   Future<int> getNextOrderIndex(bool isXerox) async {
     if (_currentUserId == null) return 1;
     try {
-      final userDoc = await _usersCollection.doc(_currentUserId).get();
+      final userDoc = await _usersCollection.doc(_currentUserId).get().timeout(const Duration(seconds: 4));
       if (!userDoc.exists) return 1;
       
       final data = userDoc.data() as Map<String, dynamic>;
@@ -110,7 +110,7 @@ class FirestoreService {
   Future<String?> getUserPhone() async {
     if (_currentUserId == null) return null;
     try {
-      final doc = await _usersCollection.doc(_currentUserId).get();
+      final doc = await _usersCollection.doc(_currentUserId).get().timeout(const Duration(seconds: 4));
       if (doc.exists) {
         return doc.get('phoneNumber') as String?;
       }
@@ -554,7 +554,7 @@ class FirestoreService {
 
     try {
       // 🥇 First, try to get cached totals from user document
-      final userDoc = await _usersCollection.doc(_currentUserId).get();
+      final userDoc = await _usersCollection.doc(_currentUserId).get().timeout(const Duration(seconds: 4));
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
         if (data.containsKey('totalSpent')) {
