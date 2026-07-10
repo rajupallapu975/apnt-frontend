@@ -1749,7 +1749,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           }
           if (originalBytes == null) return null;
 
-          if (!model.name.toLowerCase().endsWith('.pdf')) {
+          if (!model.name.toLowerCase().endsWith('.pdf') && !kIsWeb) {
             try {
               return await ImageProcessingService.processImageToA4(
                 imageBytes: originalBytes,

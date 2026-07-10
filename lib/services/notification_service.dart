@@ -166,30 +166,27 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> requestPermission() async {
     final prefs = await SharedPreferences.getInstance();
-    int retryCount = prefs.getInt('notification_permission_retries') ?? 0;
-    
-    // 🛡️ STOP after 3 failed attempts to avoid annoying the user
-    if (retryCount >= 3) {
-      debugPrint("🔔 Permission Retry Policy: Max attempts (3) reached.");
-      return;
-    }
 
     try {
       if (kIsWeb) {
         // 🌐 WEB REQUEST via Safe Abstraction
         final String status = await web_js.getBrowserNotificationStatus();
-        if (status != 'granted') {
-           debugPrint("🌐 Requesting Web Notification Permission (Attempt ${retryCount + 1})...");
+        if (status == 'default') {
+           debugPrint("🌐 Requesting Web Notification Permission...");
            web_js.triggerBrowserNotificationPermission();
-           
-           // We'll check again next time or via an event listener if we had JS-to-Dart callbacks
-           // For now, optimistic retry count increment if not granted
-           await prefs.setInt('notification_permission_retries', retryCount + 1);
         } else {
-           await prefs.setInt('notification_permission_retries', 0); // Reset on success
+           debugPrint("🌐 Web notification status: $status");
         }
       } else {
         // 📱 MOBILE REQUEST
+        int retryCount = prefs.getInt('notification_permission_retries') ?? 0;
+
+        // 🛡️ STOP after 3 failed attempts to avoid annoying the user
+        if (retryCount >= 3) {
+          debugPrint("🔔 Permission Retry Policy: Max attempts (3) reached.");
+          return;
+        }
+
         PermissionStatus status = await Permission.notification.request();
         
         if (status.isDenied || status.isPermanentlyDenied) {

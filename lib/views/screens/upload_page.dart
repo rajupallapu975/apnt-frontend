@@ -535,7 +535,7 @@ class _UploadPageState extends State<UploadPage> {
                           });
 
                           return SingleChildScrollView(
-                            physics: const NeverScrollableScrollPhysics(),
+                            physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

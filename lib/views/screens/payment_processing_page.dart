@@ -163,22 +163,6 @@ class _PaymentProcessingPageState
         'timeout': 180 
       };
 
-      final bool isBypass = widget.printSettings['isBypass'] == true;
-
-      if (isBypass) {
-        debugPrint("🔑 ADMIN BYPASS DETECTED: 9750");
-        setState(() {
-          _status = "Admin Code Verified...";
-          _progress = 0.5;
-        });
-        await Future.delayed(const Duration(milliseconds: 800));
-        _handlePaymentSuccess(
-          'pay_admin_9750', 
-          rzpId, 
-          'mock_signature_9750'
-        );
-        return;
-      }
 
       _paymentHandler!.openCheckout(
         options: options,
