@@ -8,9 +8,14 @@ class AuthService {
   /// 🔁 Auth state
   Stream<User?> get user => _auth.authStateChanges();
 
-  /// 🔐 Google Sign-In
+  /// 🔐 Google Sign-In (Temporarily bypassed using Anonymous Sign-In)
   Future<User?> signInWithGoogle() async {
     try {
+      debugPrint('ℹ️ Google Sign-In is temporarily bypassed. Signing in anonymously...');
+      final result = await _auth.signInAnonymously();
+      return result.user;
+
+      /* ORIGINAL GOOGLE SIGN-IN CODE:
       // 🌐 WEB
       if (kIsWeb) {
         final provider = GoogleAuthProvider();
@@ -34,8 +39,9 @@ class AuthService {
       final result = await _auth.signInWithCredential(credential);
 
       return result.user;
+      */
     } catch (e) {
-      debugPrint('❌ Google Sign-In Error: $e');
+      debugPrint('❌ Anonymous Sign-In Error: $e');
       if (e is FirebaseAuthException) {
         throw Exception("Auth Error: ${e.message}");
       }
@@ -48,7 +54,11 @@ class AuthService {
     try {
       await _auth.signOut();
       if (!kIsWeb) {
-        await GoogleSignIn().signOut();
+        try {
+          await GoogleSignIn().signOut();
+        } catch (e) {
+          debugPrint('⚠️ Google Sign-Out Error (ignored): $e');
+        }
       }
     } catch (e) {
       debugPrint('❌ Logout Error: $e');
