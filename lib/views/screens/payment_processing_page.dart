@@ -149,7 +149,6 @@ class _PaymentProcessingPageState
         'name': 'Zikrint',
         'description': 'Print Job #${rzpId.split('_').last.toUpperCase()}',
         'order_id': rzpId,
-        'method': 'upi',
         'prefill': <String, dynamic>{
           'name': userName,
           if (hasValidPhone) 'contact': userPhone,
@@ -160,7 +159,6 @@ class _PaymentProcessingPageState
           'contact': hasValidPhone,
           'email': true,
           'name': true,
-          'method': true,
         },
         'modal': <String, dynamic>{
           'backdropClose': false,
@@ -172,13 +170,10 @@ class _PaymentProcessingPageState
       };
 
       if (!kIsWeb) {
+        options['method'] = 'upi';
         options['upi'] = <String, dynamic>{'flow': 'intent'};
+        options['readonly']['method'] = true;
       } else {
-        options['webview_intent'] = true;
-        options['upi'] = <String, dynamic>{
-          'flow': 'intent',
-          'app': 'phonepe'
-        };
         options['config'] = <String, dynamic>{
           'display': <String, dynamic>{
             'blocks': <String, dynamic>{

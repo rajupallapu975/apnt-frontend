@@ -36,6 +36,7 @@
   <script>
     window.openRazorpayWebCheckout = function (options, successCallback, errorCallback) {
       console.log("⚙️ [Razorpay Input Options]:", options);
+      console.log("📱 [Browser/Platform]:", navigator.userAgent);
       var rzpOptions = JSON.parse(options);
       var paymentTriggered = false;
 
