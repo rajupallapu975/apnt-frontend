@@ -179,6 +179,25 @@ class _PaymentProcessingPageState
           'flow': 'intent',
           'app': 'phonepe'
         };
+        options['config'] = <String, dynamic>{
+          'display': <String, dynamic>{
+            'blocks': <String, dynamic>{
+              'upi': <String, dynamic>{
+                'name': 'Pay via PhonePe',
+                'instruments': <dynamic>[
+                  <String, dynamic>{
+                    'method': 'upi',
+                    'apps': <String>['phonepe']
+                  }
+                ]
+              }
+            },
+            'sequence': <String>['block.upi'],
+            'preferences': <String, dynamic>{
+              'show_default_blocks': false
+            }
+          }
+        };
       }
 
 
