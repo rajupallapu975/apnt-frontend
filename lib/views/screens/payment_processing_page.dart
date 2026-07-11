@@ -201,6 +201,7 @@ class _PaymentProcessingPageState
       }
 
 
+      debugPrint("⚙️ [Dart Razorpay Options]: $options");
       _paymentHandler!.openCheckout(
         options: options,
         onSuccess: _handlePaymentSuccess,

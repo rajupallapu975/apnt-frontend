@@ -35,6 +35,7 @@
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
     window.openRazorpayWebCheckout = function (options, successCallback, errorCallback) {
+      console.log("⚙️ [Razorpay Input Options]:", options);
       var rzpOptions = JSON.parse(options);
       var paymentTriggered = false;
 
@@ -54,6 +55,7 @@
               step: "modal_dismissed",
               metadata: {}
             };
+            console.log("🚨 [Razorpay Modal Dismissed]:", JSON.stringify(cancelError, null, 2));
             errorCallback(JSON.stringify(cancelError));
           }
         },
@@ -68,6 +70,7 @@
 
       rzp.on('payment.failed', function (response) {
         console.error("Razorpay Payment Failed:", response.error);
+        console.log("🚨 [Razorpay Payment Failed Complete Log]:", JSON.stringify(response.error, null, 2));
         if (response.error.code !== "USER_CANCELLED") {
           var errObj = {
             code: response.error.code || "UNKNOWN_ERROR",
@@ -81,6 +84,7 @@
         }
       });
 
+      console.log("⚙️ [Razorpay Final Checkout Options]:", JSON.stringify(rzpOptions, null, 2));
       rzp.open();
     }
   </script>
