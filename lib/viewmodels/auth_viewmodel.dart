@@ -22,10 +22,20 @@ class AuthViewModel extends ChangeNotifier {
         NotificationService().initOrderListeners();
       } else {
         _phoneNumber = null;
+        _autoSignInAnonymously();
       }
       _isLoading = false;
       notifyListeners();
     });
+  }
+
+  Future<void> _autoSignInAnonymously() async {
+    try {
+      debugPrint("ℹ️ Auto signing in anonymously in background...");
+      await _authService.signInWithGoogle();
+    } catch (e) {
+      debugPrint("❌ Auto anonymous sign in failed: $e");
+    }
   }
 
   Future<void> _loadUserProfile() async {

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class GoogleSliderButton extends StatefulWidget {
   final VoidCallback onAction;
   final String label;
+  final Widget? icon;
 
   const GoogleSliderButton({
     super.key,
     required this.onAction,
     this.label = 'Slide to sign in with Google',
+    this.icon,
   });
 
   @override
@@ -94,7 +96,7 @@ class GoogleSliderButtonState extends State<GoogleSliderButton> {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
-                      child: Image.asset(
+                      child: widget.icon ?? Image.asset(
                         'assets/google_logo.png',
                         fit: BoxFit.contain,
                       ),

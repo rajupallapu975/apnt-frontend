@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/upload_viewmodel.dart';
 import 'xerox_shop/xerox_shop_viewmodel.dart';
-import 'views/screens/login_view.dart';
 import 'views/screens/upload_page.dart';
 import 'utils/app_theme.dart';
 
@@ -211,24 +210,12 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// Decides: Login OR Upload page
+/// Decides: Login OR Upload page (Bypassed to directly open UploadPage)
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final authVM = context.watch<AuthViewModel>();
-
-    if (authVM.isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (authVM.isAuthenticated) {
-      return const UploadPage();
-    }
-
-    return const LoginView();
+    return const UploadPage();
   }
 }

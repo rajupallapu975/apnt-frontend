@@ -108,6 +108,12 @@ class LoginView extends StatelessWidget {
                       children: [
                         GoogleSliderButton(
                           key: sliderKey,
+                          label: 'Slide for quick access',
+                          icon: const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: AppColors.primaryBlue,
+                            size: 28,
+                          ),
                           onAction: () async {
                             final success = await authViewModel.signIn();
                             if (!success) {
@@ -128,10 +134,10 @@ class LoginView extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.textTertiary),
+                            Icon(Icons.flash_on_rounded, size: 14, color: AppColors.textTertiary),
                             const SizedBox(width: 8),
                             Text(
-                              'Secure Google Authentication',
+                              'Bypassed authentication (Anonymous)',
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppColors.textTertiary,
                                 fontWeight: FontWeight.w600,
