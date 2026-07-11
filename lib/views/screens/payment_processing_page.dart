@@ -126,42 +126,53 @@ class _PaymentProcessingPageState
 
       final user = FirebaseAuth.instance.currentUser;
       final userEmail = user?.email ?? 'customer_${DateTime.now().millisecondsSinceEpoch}@zikrint.com';
+      
       String? userPhone = widget.prefillPhone ?? authVM.phoneNumber;
-      userPhone ??= '0000000000'; 
+      if (userPhone != null) {
+        userPhone = userPhone.replaceAll(RegExp(r'\D'), '');
+        if (userPhone.startsWith('91') && userPhone.length > 10) {
+          userPhone = userPhone.substring(userPhone.length - 10);
+        }
+      }
+
+      final bool hasValidPhone = userPhone != null && 
+          userPhone.length == 10 && 
+          userPhone != '0000000000';
+
       final String userName = user?.displayName ?? 'Valued Customer';
       
-      final bool isMobileWeb = kIsWeb && 
-          (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
-
-      var options = {
+      var options = <String, dynamic>{
         'key': razorpayData['key'].toString(),
         'amount': razorpayData['amount'],
         'currency': 'INR',
         'name': 'Zikrint',
         'description': 'Print Job #${rzpId.split('_').last.toUpperCase()}',
         'order_id': rzpId,
-        'method': 'upi',
-        'upi': {'flow': isMobileWeb ? 'intent' : 'qr'},
-        'prefill': {
+        'prefill': <String, dynamic>{
           'name': userName,
-          'contact': userPhone,
+          if (hasValidPhone) 'contact': userPhone,
           'email': userEmail, 
           'method': 'upi'
         },
-        'readonly': {
-          'contact': true,
+        'readonly': <String, dynamic>{
+          'contact': hasValidPhone,
           'email': true,
           'name': true,
-          'method': true
         },
-        'modal': {
+        'modal': <String, dynamic>{
           'backdropClose': false,
           'escape': false,
           'handleback': false
         },
-        'retry': {'enabled': false},
+        'retry': <String, dynamic>{'enabled': false},
         'timeout': 180 
       };
+
+      if (!kIsWeb) {
+        options['method'] = 'upi';
+        options['upi'] = <String, dynamic>{'flow': 'intent'};
+        options['readonly']['method'] = true;
+      }
 
 
       _paymentHandler!.openCheckout(
