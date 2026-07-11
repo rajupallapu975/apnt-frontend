@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:apnt/models/print_order_model.dart';
 import 'package:apnt/services/notification_service.dart';
@@ -172,6 +173,8 @@ class _PaymentProcessingPageState
         options['method'] = 'upi';
         options['upi'] = <String, dynamic>{'flow': 'intent'};
         options['readonly']['method'] = true;
+      } else {
+        options['webview_intent'] = true;
       }
 
 
@@ -349,8 +352,32 @@ class _PaymentProcessingPageState
 
   void _goToError(dynamic error, {bool isRefundInitiated = false}) {
     if (!mounted) return;
-    final String message = error.toString().toLowerCase();
-    bool isUserCancel = message.contains("cancel") || message.contains("dismiss") || message.contains("back") || message.contains("pop") || message == "undefined" || message == "null" || message.trim().isEmpty;
+    String displayMessage = error.toString();
+    final String errorStr = error.toString();
+    
+    try {
+      final Map<String, dynamic> decoded = jsonDecode(errorStr);
+      debugPrint("🚨 [Razorpay Failure Details]:");
+      debugPrint("   - Code: ${decoded['code']}");
+      debugPrint("   - Description: ${decoded['description']}");
+      debugPrint("   - Reason: ${decoded['reason']}");
+      debugPrint("   - Source: ${decoded['source']}");
+      debugPrint("   - Step: ${decoded['step']}");
+      debugPrint("   - Metadata: ${decoded['metadata']}");
+      
+      displayMessage = decoded['description'] ?? "Payment Failed";
+    } catch (_) {
+      debugPrint("🚨 [Razorpay Failure Details]: $errorStr");
+    }
+
+    final String message = displayMessage.toLowerCase();
+    bool isUserCancel = message.contains("cancel") || 
+        message.contains("dismiss") || 
+        message.contains("back") || 
+        message.contains("pop") || 
+        message == "undefined" || 
+        message == "null" || 
+        message.trim().isEmpty;
 
     if (isUserCancel) {
       Navigator.pop(context);
@@ -361,7 +388,7 @@ class _PaymentProcessingPageState
       context,
       MaterialPageRoute(
         builder: (_) => PaymentErrorPage(
-          message: error.toString(),
+          message: displayMessage,
           isRefundInitiated: isRefundInitiated,
           onRetry: (errorCtx) {
             Navigator.pushReplacement(

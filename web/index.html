@@ -36,14 +36,26 @@
   <script>
     window.openRazorpayWebCheckout = function (options, successCallback, errorCallback) {
       var rzpOptions = JSON.parse(options);
+      var paymentTriggered = false;
 
       rzpOptions.handler = function (response) {
+        paymentTriggered = true;
         successCallback(response.razorpay_payment_id, response.razorpay_order_id, response.razorpay_signature);
       };
 
       rzpOptions.modal = {
         ondismiss: function () {
-          errorCallback("Payment Cancelled");
+          if (!paymentTriggered) {
+            var cancelError = {
+              code: "USER_CANCELLED",
+              description: "Payment Cancelled",
+              reason: "payment_cancelled",
+              source: "checkout_modal",
+              step: "modal_dismissed",
+              metadata: {}
+            };
+            errorCallback(JSON.stringify(cancelError));
+          }
         },
         escape: true,
         backdropclose: false
@@ -55,9 +67,17 @@
       var rzp = new Razorpay(rzpOptions);
 
       rzp.on('payment.failed', function (response) {
-        // Only trigger error if not a deliberate cancel
+        console.error("Razorpay Payment Failed:", response.error);
         if (response.error.code !== "USER_CANCELLED") {
-          errorCallback(response.error.description || "Payment Failed");
+          var errObj = {
+            code: response.error.code || "UNKNOWN_ERROR",
+            description: response.error.description || "Payment Failed",
+            reason: response.error.reason || "unknown",
+            source: response.error.source || "unknown",
+            step: response.error.step || "unknown",
+            metadata: response.error.metadata || {}
+          };
+          errorCallback(JSON.stringify(errObj));
         }
       });
 
