@@ -1004,6 +1004,21 @@ class _UploadPageState extends State<UploadPage> {
             ),
           );
         }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                ),
+              ),
+            ),
+          );
+        }
         if (!snapshot.hasData) return const SizedBox.shrink();
         // 🚀 FIX: Keep orders visible even after 'completed' status (Admin Done) 
         // until the user actually picks them up (isPicked == false)
