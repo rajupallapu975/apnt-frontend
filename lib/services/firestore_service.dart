@@ -51,12 +51,35 @@ class FirestoreService {
   Future<void> updateUserPhone(String phone) async {
     if (_currentUserId == null) return;
     try {
+      final user = _auth.currentUser;
       await _usersCollection.doc(_currentUserId).set({
         'phoneNumber': phone,
+        if (user?.email != null) 'email': user!.email,
+        if (user?.displayName != null) 'displayName': user!.displayName,
+        if (user?.photoURL != null) 'photoUrl': user!.photoURL,
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint("❌ Profile Phone Update Error: $e");
+    }
+  }
+
+  Future<void> syncUserProfile({
+    required String uid,
+    String? email,
+    String? displayName,
+    String? photoUrl,
+  }) async {
+    try {
+      await _usersCollection.doc(uid).set({
+        if (email != null) 'email': email,
+        if (displayName != null) 'displayName': displayName,
+        if (photoUrl != null) 'photoUrl': photoUrl,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      debugPrint("✅ User profile synced to Firestore: $uid");
+    } catch (e) {
+      debugPrint("❌ User Profile Sync Error: $e");
     }
   }
 
@@ -341,6 +364,7 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .snapshots()
           .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+          .onErrorReturn(<PrintOrderModel>[])
     ];
 
     if (email != null && email.isNotEmpty) {
@@ -350,6 +374,7 @@ class FirestoreService {
             .orderBy('createdAt', descending: true)
             .snapshots()
             .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
     }
 
@@ -381,14 +406,16 @@ class FirestoreService {
           .where('userId', isEqualTo: uid)
           .where('status', isEqualTo: 'ACTIVE')
           .snapshots()
-          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList()),
+          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+          .onErrorReturn(<PrintOrderModel>[]),
       
       // Xerox (UID) - Project 1
       _firestore.collection('xerox_orders')
           .where('userId', isEqualTo: uid)
           .where('status', whereIn: statusList)
           .snapshots()
-          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList()),
+          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+          .onErrorReturn(<PrintOrderModel>[]),
     ];
 
     // Xerox (UID) - Project 2
@@ -400,6 +427,7 @@ class FirestoreService {
             .where('status', whereIn: statusList)
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
     }
 
@@ -412,6 +440,7 @@ class FirestoreService {
             .where('status', whereIn: statusList)
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
     }
 
@@ -422,6 +451,7 @@ class FirestoreService {
             .where('status', isEqualTo: 'ACTIVE')
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
       streams.add(
         _firestore.collection('xerox_orders')
@@ -429,6 +459,7 @@ class FirestoreService {
             .where('status', whereIn: statusList)
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
       if (db2 != _firestore) {
         streams.add(
@@ -437,6 +468,7 @@ class FirestoreService {
               .where('status', whereIn: statusList)
               .snapshots()
               .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
         );
       }
       if (db3 != _firestore) {
@@ -446,6 +478,7 @@ class FirestoreService {
               .where('status', whereIn: statusList)
               .snapshots()
               .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
         );
       }
     }
@@ -475,6 +508,7 @@ class FirestoreService {
           .where('status', whereIn: statusList)
           .snapshots()
           .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+          .onErrorReturn(<PrintOrderModel>[])
     ];
 
     final db2 = _getFirestoreForProject('zikrint-944a4');
@@ -485,6 +519,7 @@ class FirestoreService {
             .where('status', whereIn: statusList)
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
     }
 
@@ -496,6 +531,7 @@ class FirestoreService {
             .where('status', whereIn: statusList)
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
     }
 
@@ -506,6 +542,7 @@ class FirestoreService {
             .where('status', whereIn: statusList)
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[])
       );
       if (db2 != _firestore) {
         streams.add(
@@ -514,6 +551,7 @@ class FirestoreService {
               .where('status', whereIn: statusList)
               .snapshots()
               .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
         );
       }
       if (db3 != _firestore) {
@@ -523,6 +561,7 @@ class FirestoreService {
               .where('status', whereIn: statusList)
               .snapshots()
               .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
         );
       }
     }

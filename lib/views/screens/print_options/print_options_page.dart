@@ -1606,13 +1606,21 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-          Text(value,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
               style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: muted ? FontWeight.w600 : FontWeight.w700,
-                  color: AppColors.textPrimary)),
+                fontSize: 13,
+                fontWeight: muted ? FontWeight.w600 : FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
         ],
       ),
     );

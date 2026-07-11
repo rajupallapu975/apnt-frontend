@@ -509,8 +509,6 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                                       child: Text(
                                                         shop.name,
                                                         style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
                                                     Container(

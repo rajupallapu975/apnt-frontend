@@ -66,7 +66,6 @@ class ShopCard extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.primaryBlack,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           _buildStatusTag(),

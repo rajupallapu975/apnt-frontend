@@ -154,14 +154,19 @@ class OrderSuccessPage extends StatelessWidget {
   Widget _infoRow(String label, String value, {bool isBold = false, bool isGreen = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: isBold || isGreen ? FontWeight.bold : FontWeight.w600,
-            color: isGreen ? AppColors.success : AppColors.textPrimary,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: isBold || isGreen ? FontWeight.bold : FontWeight.w600,
+              color: isGreen ? AppColors.success : AppColors.textPrimary,
+            ),
           ),
         ),
       ],

@@ -578,6 +578,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
   Widget _buildSimpleRow(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -587,12 +588,16 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
             color: AppColors.textSecondary,
           ),
         ),
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
           ),
         ),
       ],
