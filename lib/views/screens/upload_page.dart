@@ -484,6 +484,9 @@ class _UploadPageState extends State<UploadPage> {
               onPageChanged: (index) {
                 setState(() {
                   _currentTabIndex = index;
+                  if (index == 1) {
+                    _ordersStream = _orderRepo.getActiveOrders();
+                  }
                 });
               },
               children: [
@@ -586,6 +589,9 @@ class _UploadPageState extends State<UploadPage> {
         onTap: (index) {
           setState(() {
             _currentTabIndex = index;
+            if (index == 1) {
+              _ordersStream = _orderRepo.getActiveOrders();
+            }
           });
           _tabPageController.animateToPage(
             index,
