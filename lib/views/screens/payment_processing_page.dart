@@ -175,6 +175,10 @@ class _PaymentProcessingPageState
         options['upi'] = <String, dynamic>{'flow': 'intent'};
       } else {
         options['webview_intent'] = true;
+        options['upi'] = <String, dynamic>{
+          'flow': 'intent',
+          'app': 'phonepe'
+        };
       }
 
 
