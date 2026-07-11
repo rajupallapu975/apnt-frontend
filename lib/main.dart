@@ -155,6 +155,25 @@ void main() async {
     debugPrint("⚠️ Customer Project 3 Init Error: $e");
   }
 
+  // 🚀 Authenticate on secondary apps anonymously to bypass PERMISSION_DENIED on multi-app reads
+  try {
+    final secondaryApps = ["zikrint_admin", "zikrinter", "zikrint-944a4", "think-ink"];
+    for (final appName in secondaryApps) {
+      try {
+        final app = Firebase.app(appName);
+        final auth = FirebaseAuth.instanceFor(app: app);
+        if (auth.currentUser == null) {
+          await auth.signInAnonymously();
+          debugPrint("🚀 Signed in anonymously to secondary app: $appName");
+        }
+      } catch (e) {
+        debugPrint("⚠️ Anonymous auth failed for $appName: $e");
+      }
+    }
+  } catch (e) {
+    debugPrint("⚠️ Secondary apps auth error: $e");
+  }
+
   // 🔔 Initialize Notifications
   final notificationService = NotificationService();
   await notificationService.init();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
 import '../services/local_storage_service.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 
@@ -21,12 +22,33 @@ class AuthViewModel extends ChangeNotifier {
         _syncUserProfileToFirestore(user);
         // 🔔 Restart notification listeners with correct user email
         NotificationService().initOrderListeners();
+        _signInSecondaryAppsAnonymously();
       } else {
         _phoneNumber = null;
       }
       _isLoading = false;
       notifyListeners();
     });
+  }
+
+  Future<void> _signInSecondaryAppsAnonymously() async {
+    try {
+      final secondaryApps = ["zikrint_admin", "zikrinter", "zikrint-944a4", "think-ink"];
+      for (final appName in secondaryApps) {
+        try {
+          final app = Firebase.app(appName);
+          final auth = FirebaseAuth.instanceFor(app: app);
+          if (auth.currentUser == null) {
+            await auth.signInAnonymously();
+            debugPrint("🚀 Signed in anonymously to secondary app: $appName");
+          }
+        } catch (e) {
+          debugPrint("⚠️ Anonymous auth failed for $appName: $e");
+        }
+      }
+    } catch (e) {
+      debugPrint("⚠️ Secondary apps auth error: $e");
+    }
   }
 
   Future<void> _syncUserProfileToFirestore(User user) async {
