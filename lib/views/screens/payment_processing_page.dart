@@ -153,7 +153,6 @@ class _PaymentProcessingPageState
           'name': userName,
           if (hasValidPhone) 'contact': userPhone,
           'email': userEmail, 
-          'method': 'upi'
         },
         'readonly': <String, dynamic>{
           'contact': hasValidPhone,
@@ -173,26 +172,7 @@ class _PaymentProcessingPageState
         options['method'] = 'upi';
         options['upi'] = <String, dynamic>{'flow': 'intent'};
         options['readonly']['method'] = true;
-      } else {
-        options['config'] = <String, dynamic>{
-          'display': <String, dynamic>{
-            'blocks': <String, dynamic>{
-              'upi': <String, dynamic>{
-                'name': 'Pay via PhonePe',
-                'instruments': <dynamic>[
-                  <String, dynamic>{
-                    'method': 'upi',
-                    'apps': <String>['phonepe']
-                  }
-                ]
-              }
-            },
-            'sequence': <String>['block.upi'],
-            'preferences': <String, dynamic>{
-              'show_default_blocks': false
-            }
-          }
-        };
+        options['prefill']['method'] = 'upi';
       }
 
 
