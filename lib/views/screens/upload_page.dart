@@ -549,7 +549,6 @@ class _UploadPageState extends State<UploadPage> {
                                   const SizedBox(height: 24),
                                   _buildPendingTray(uploadVM),
                                 ],
-                                _buildHorizontalActiveOrders(),
                                 const SizedBox(height: 24),
                                 ZikrinterServicesSection(services: otherDocs),
                                 const SizedBox(height: 24),
@@ -1040,6 +1039,7 @@ class _UploadPageState extends State<UploadPage> {
         }
 
         final xeroxOrders = allOrders.where((o) => o.printMode == PrintMode.xeroxShop).toList();
+        final kioskOrders = allOrders.where((o) => o.printMode == PrintMode.autonomous).toList();
 
         return Column(
           children: [
@@ -1048,164 +1048,19 @@ class _UploadPageState extends State<UploadPage> {
               const SizedBox(height: 12),
               ...xeroxOrders.map((order) => _buildOrderCard(order)),
             ],
+            if (kioskOrders.isNotEmpty) ...[
+              if (xeroxOrders.isNotEmpty) const SizedBox(height: 20),
+              _sectionHeader('KIOSK PRINT ORDERS', Icons.print_rounded),
+              const SizedBox(height: 12),
+              ...kioskOrders.map((order) => _buildOrderCard(order)),
+            ],
           ],
         );
       },
     );
   }
 
-  Widget _buildHorizontalActiveOrders() {
-    return StreamBuilder<List<PrintOrderModel>>(
-      stream: _ordersStream,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.hasError) return const SizedBox.shrink();
-        final allOrders = snapshot.data!.where((o) => o.isActive || (o.status == OrderStatus.completed && !o.isPicked)).toList();
-        final xeroxOrders = allOrders.where((o) => o.printMode == PrintMode.xeroxShop).toList();
-        
-        if (xeroxOrders.isEmpty) return const SizedBox.shrink();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Active Orders',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF2D3142),
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _currentTabIndex = 1;
-                    });
-                    _tabPageController.animateToPage(
-                      1,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                  child: Text(
-                    'See All',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryBlue,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 96,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: xeroxOrders.length,
-                itemBuilder: (context, index) {
-                  final order = xeroxOrders[index];
-                  final String displayId = order.displayId;
-                  final isVerified = order.scanned || order.codeRevealed;
-                  final isDone = order.isPrintingCompleted;
-
-                  return GestureDetector(
-                    onTap: () => _showOrderDetails(order),
-                    child: Container(
-                      width: 180,
-                      margin: const EdgeInsets.only(right: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.015),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 3.5,
-                            decoration: BoxDecoration(
-                              color: isDone ? Colors.green : Colors.orange,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  displayId,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      isDone ? Icons.check_circle_rounded : Icons.hourglass_bottom_rounded,
-                                      size: 10,
-                                      color: isDone ? Colors.green : Colors.orange,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        (order.orderStatus ?? 'PENDING').toUpperCase(),
-                                        style: GoogleFonts.inter(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDone ? Colors.green : Colors.orange,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  isVerified ? 'READY' : 'SCAN QR',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.textTertiary,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   Widget _sectionHeader(String title, IconData icon) {
     return Row(
