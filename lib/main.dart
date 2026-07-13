@@ -11,6 +11,7 @@ import 'xerox_shop/xerox_shop_viewmodel.dart';
 import 'views/screens/login_view.dart';
 import 'views/screens/upload_page.dart';
 import 'utils/app_theme.dart';
+import 'utils/app_colors.dart';
 
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -235,6 +236,50 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const UploadPage();
+    final authVM = context.watch<AuthViewModel>();
+
+    // 🔄 Show splash while auth state is loading
+    if (authVM.isLoading) {
+      return const _SplashScreen();
+    }
+
+    // ✅ Authenticated with a real Google account (not anonymous)
+    final user = authVM.user;
+    if (user != null && !user.isAnonymous) {
+      return const UploadPage();
+    }
+
+    // 🔐 Not authenticated — show Google Sign-In
+    return const LoginView();
+  }
+}
+
+/// 🌟 Branded splash screen shown while Firebase auth state resolves
+class _SplashScreen extends StatelessWidget {
+  const _SplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/image.png',
+              width: 100,
+              height: 100,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 32),
+            const CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
