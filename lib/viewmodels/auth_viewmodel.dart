@@ -23,12 +23,24 @@ class AuthViewModel extends ChangeNotifier {
         // 🔔 Restart notification listeners with correct user email
         NotificationService().initOrderListeners();
         _signInSecondaryAppsAnonymously();
+        _isLoading = false;
+        notifyListeners();
       } else {
         _phoneNumber = null;
+        _signInAnonymously();
       }
+    });
+  }
+
+  Future<void> _signInAnonymously() async {
+    try {
+      debugPrint("🚀 Triggering auto-anonymous sign-in for guest user...");
+      await FirebaseAuth.instance.signInAnonymously();
+    } catch (e) {
+      debugPrint("⚠️ Auto-anonymous sign-in failed: $e");
       _isLoading = false;
       notifyListeners();
-    });
+    }
   }
 
   Future<void> _signInSecondaryAppsAnonymously() async {
