@@ -230,24 +230,11 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// Decides: Login OR Upload page
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final authVM = context.watch<AuthViewModel>();
-
-    if (authVM.isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (authVM.isAuthenticated) {
-      return const UploadPage();
-    }
-
-    return const LoginView();
+    return const UploadPage();
   }
 }

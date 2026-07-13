@@ -180,14 +180,6 @@
       return outcome === 'accepted';
     };
   </script>
-  <script>
-    // Use HTML renderer to avoid CanvasKit WebGL context-loss errors on hot restart.
-    // CanvasKit (Skia/WebGL) loses its GPU surface on hot restart in Flutter web,
-    // causing "LateInitializationError: _handledContextLostEvent has not been initialized".
-    window.flutterConfiguration = {
-      renderer: "html"
-    };
-  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 
