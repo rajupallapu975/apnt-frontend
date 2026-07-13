@@ -1652,21 +1652,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     try {
       setState(() => _isLoading = true);
       
-      // 1. Verify shop online status before initiating order/payment
-      final isOnline = await BackendService().checkShopStatus(widget.shopId ?? '');
-      if (!isOnline) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("This shop has gone offline. Please select another shop to proceed."),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
-        return;
-      }
+
 
       int totalPg = 0;
       for (var pc in pageConfigs) {

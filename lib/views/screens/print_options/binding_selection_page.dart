@@ -99,20 +99,7 @@ class _BindingSelectionPageState extends State<BindingSelectionPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Verify shop status
-      final isOnline = await BackendService().checkShopStatus(widget.shopId);
-      if (!isOnline) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("This shop has gone offline. Please select another shop to proceed."),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
+
 
       int totalPg = 0;
       for (var pc in widget.pageConfigs) {

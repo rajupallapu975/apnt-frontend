@@ -94,7 +94,7 @@ class XeroxShopModel {
       rating: (map['rating'] ?? 4.5).toDouble(),
       distance: 'Nearby', 
       imageUrl: map['imageUrl'] ?? '',
-      isOpen: map['isOpen'] ?? true, // Manual override from DB
+      isOpen: map['isOpen'] ?? false, // Manual override from DB
       pricePerBWPage: (map['pricePerBWPage'] ?? map['priceBW'] ?? 2.0).toDouble(),
       pricePerColorPage: (map['pricePerColorPage'] ?? map['priceColor'] ?? 10.0).toDouble(),
       activePrinters: map['activePrinters'] ?? 0,

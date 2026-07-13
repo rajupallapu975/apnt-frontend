@@ -80,6 +80,7 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
         }
       },
       onError: (err) {
+        debugPrint("⚠️ Primary shops listen error: $err");
         if (mounted) setState(() => _isLoading = false);
         if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
           _refreshCompleter!.complete();
@@ -105,6 +106,7 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
           }
         },
         onError: (err) {
+          debugPrint("⚠️ Secondary (zikrint_admin) shops listen error: $err");
           if (mounted) setState(() => _isLoading = false);
           if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
             _refreshCompleter!.complete();
@@ -140,6 +142,59 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
     try {
       await completer.future.timeout(const Duration(seconds: 3));
     } catch (_) {}
+  }
+
+  void _handleUploadClick(BuildContext context, XeroxShopModel shop) {
+    if (!shop.isCurrentlyOpen) {
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                const SizedBox(width: 12),
+                Text(
+                  "Shop is Offline",
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ],
+            ),
+            content: Text(
+              "The shop is currently offline. Your order will be printed only when the shop is opened. If that is OK with you, proceed to upload files and make payment.",
+              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(
+                  "Cancel",
+                  style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _showUploadBottomSheet(context, shop);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                child: Text(
+                  "Proceed",
+                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      _showUploadBottomSheet(context, shop);
+    }
   }
 
   Future<void> _showUploadBottomSheet(BuildContext context, XeroxShopModel shop) async {
@@ -342,7 +397,7 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
       final isBlocked = shopData['isBlocked'] == true;
       final isAcceptingOrders = shopData['isAcceptingOrders'] != false;
 
-      if (isActive && isOnline && !isBlocked && isAcceptingOrders && serviceConfig != null && serviceConfig['isEnabled'] == true) {
+      if (isActive && !isBlocked && isAcceptingOrders && serviceConfig != null && serviceConfig['isEnabled'] == true) {
         final sizeKey = widget.selectedPaperSize.toLowerCase();
         
         final pricing = XeroxPricing.fromShopData(shopData, widget.globalParams, serviceId: widget.serviceId);
@@ -566,12 +621,29 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                                       style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
                                                     ),
                                                     const Spacer(),
-                                                    Text(
-                                                      shop.isCurrentlyOpen ? 'Open Now' : 'Closed',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: shop.isCurrentlyOpen ? Colors.green[700] : Colors.red[700],
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: shop.isCurrentlyOpen
+                                                            ? const Color(0xFFE8F5E9)
+                                                            : const Color(0xFFFFEBEE),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(
+                                                          color: shop.isCurrentlyOpen
+                                                              ? const Color(0xFFC8E6C9)
+                                                              : const Color(0xFFFFCDD2),
+                                                          width: 1,
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        shop.isCurrentlyOpen ? 'Open Now' : 'Closed / Offline',
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: shop.isCurrentlyOpen
+                                                              ? const Color(0xFF2E7D32)
+                                                              : const Color(0xFFC62828),
+                                                        ),
                                                       ),
                                                     ),
                                                   ],
@@ -611,6 +683,28 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                             : Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
+                                                  if (!shop.isCurrentlyOpen)
+                                                    Container(
+                                                      margin: const EdgeInsets.only(bottom: 12),
+                                                      padding: const EdgeInsets.all(10),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.orange[50],
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        border: Border.all(color: Colors.orange[200]!),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange[800]),
+                                                          const SizedBox(width: 8),
+                                                          Expanded(
+                                                            child: Text(
+                                                              'Shop is currently offline. Orders may take longer to process.',
+                                                              style: GoogleFonts.inter(fontSize: 12, color: Colors.orange[800], fontWeight: FontWeight.w600),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
                                                   Text(
                                                     'Shop Information',
                                                     style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
@@ -636,9 +730,7 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                                     width: double.infinity,
                                                     height: 48,
                                                     child: ElevatedButton(
-                                                      onPressed: !shop.isCurrentlyOpen
-                                                          ? null
-                                                          : () => _showUploadBottomSheet(context, shop),
+                                                      onPressed: () => _handleUploadClick(context, shop),
                                                       style: ElevatedButton.styleFrom(
                                                         backgroundColor: AppColors.primaryBlue,
                                                         foregroundColor: Colors.white,
@@ -646,7 +738,7 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                                       ),
                                                       child: Text(
-                                                        shop.isCurrentlyOpen ? 'Upload Files' : 'Shop Closed',
+                                                        'Upload Files',
                                                         style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
                                                       ),
                                                     ),

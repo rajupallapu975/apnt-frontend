@@ -55,6 +55,8 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
   List<Map<String, dynamic>> _availableShops = [];
   bool _isLoadingShops = true;
   StreamSubscription<DocumentSnapshot>? _shopSubscription;
+  StreamSubscription? _shopsRealtimeSubscription;
+  StreamSubscription? _primaryShopsSubscription;
 
   @override
   void initState() {
@@ -66,6 +68,8 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
   @override
   void dispose() {
     _shopSubscription?.cancel();
+    _shopsRealtimeSubscription?.cancel();
+    _primaryShopsSubscription?.cancel();
     super.dispose();
   }
 
@@ -125,6 +129,7 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
             _availableShops = List<Map<String, dynamic>>.from(list);
             _isLoadingShops = false;
           });
+          _startRealtimeShopsListener();
           return;
         }
       }
@@ -138,6 +143,55 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
         _isLoadingShops = false;
       });
     }
+  }
+
+  void _startRealtimeShopsListener() {
+    _shopsRealtimeSubscription?.cancel();
+    try {
+      final secondaryApp = Firebase.app('zikrint_admin');
+      _shopsRealtimeSubscription = FirebaseFirestore.instanceFor(app: secondaryApp)
+          .collection('shops')
+          .snapshots()
+          .listen((snapshot) {
+        _updateShopsFromSnapshot(snapshot.docs);
+      });
+    } catch (e) {
+      debugPrint("⚠️ Failed to start real-time shops secondary listener: $e");
+    }
+
+    _primaryShopsSubscription?.cancel();
+    try {
+      _primaryShopsSubscription = FirebaseFirestore.instance
+          .collection('shops')
+          .snapshots()
+          .listen((snapshot) {
+        _updateShopsFromSnapshot(snapshot.docs);
+      });
+    } catch (e) {
+      debugPrint("⚠️ Failed to start real-time shops primary listener: $e");
+    }
+  }
+
+  void _updateShopsFromSnapshot(List<DocumentSnapshot> docs) {
+    if (!mounted || _availableShops.isEmpty) return;
+    setState(() {
+      final updatedData = <String, Map<String, dynamic>>{};
+      for (final doc in docs) {
+        if (doc.exists && doc.data() != null) {
+          updatedData[doc.id] = doc.data() as Map<String, dynamic>;
+        }
+      }
+
+      for (int i = 0; i < _availableShops.length; i++) {
+        final shopId = _availableShops[i]['id'];
+        if (updatedData.containsKey(shopId)) {
+          _availableShops[i] = {
+            ..._availableShops[i],
+            ...updatedData[shopId]!,
+          };
+        }
+      }
+    });
   }
 
   List<Map<String, dynamic>> get _shopsForSelectedSize {
@@ -576,8 +630,57 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     // 4. Pop the loading dialog
     navigator.pop();
 
-    // 5. Open the Upload Bottom Sheet
-    _showUploadBottomSheet(this.context, _selectedShop!);
+    // 5. Open the Upload Bottom Sheet (Warn first if shop is offline)
+    if (!_selectedShop!.isCurrentlyOpen) {
+      showDialog(
+        context: this.context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                const SizedBox(width: 12),
+                Text(
+                  "Shop is Offline",
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ],
+            ),
+            content: Text(
+              "The shop is currently offline. Your order will be printed only when the shop is opened. If that is OK with you, proceed to upload files and make payment.",
+              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(
+                  "Cancel",
+                  style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _showUploadBottomSheet(this.context, _selectedShop!);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                child: Text(
+                  "Proceed",
+                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      _showUploadBottomSheet(this.context, _selectedShop!);
+    }
   }
 
   // ─── Sub-views for Inline Switching ──────────────────────────────────────────
@@ -847,7 +950,7 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     final double colorPrice = pricing.normalColorPrices[sizeKey] ?? 10.0;
     final double bulkBwPrice = pricing.bulkBwPrices[sizeKey] ?? 1.5;
     final int bulkStart = pricing.bwBulkStartPages[sizeKey] ?? 10;
-    final bool isOpen = shop.isCurrentlyOpen;
+    final bool isOnline = shop.isOpen;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
@@ -888,9 +991,10 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Flexible(
+                          Expanded(
                             child: Text(
                               shop.name,
                               style: GoogleFonts.inter(
@@ -898,22 +1002,22 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.primaryBlack,
                               ),
-                              overflow: TextOverflow.ellipsis,
+                              softWrap: true,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isOpen ? Colors.green.shade50 : Colors.red.shade50,
+                              color: isOnline ? Colors.green.shade50 : Colors.red.shade50,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              isOpen ? 'Open' : 'Closed',
+                              isOnline ? 'Online' : 'Offline',
                               style: GoogleFonts.inter(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: isOpen ? Colors.green.shade700 : Colors.red.shade700,
+                                color: isOnline ? Colors.green.shade700 : Colors.red.shade700,
                               ),
                             ),
                           ),
@@ -988,15 +1092,14 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
                     label: const Text('SELECT SHOP'),
-                    onPressed: !isOpen 
-                        ? null 
-                        : () {
-                            setState(() {
-                              _selectedShop = shop;
-                            });
-                            _startListeningToSelectedShop(shop.id);
-                            _setViewIndex(2);
-                          },
+                    onPressed: () {
+                      final isOnline = shop.isOpen;
+                      if (isOnline) {
+                        _confirmAndSelectShop(shop);
+                      } else {
+                        _showOfflineConfirmationDialog(context, shop);
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryBlue,
                       foregroundColor: Colors.white,
@@ -1011,6 +1114,57 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
           ),
         ],
       ),
+    );
+  }
+
+  void _confirmAndSelectShop(XeroxShopModel shop) {
+    setState(() {
+      _selectedShop = shop;
+    });
+    _startListeningToSelectedShop(shop.id);
+    _setViewIndex(2);
+  }
+
+  void _showOfflineConfirmationDialog(BuildContext context, XeroxShopModel shop) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            "Shop is currently offline",
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Text(
+            "This shop is currently offline. You can still place your order now, but the shop will start processing it when they come back online. Do you want to continue?",
+            style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(
+                "Choose Another Shop",
+                style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _confirmAndSelectShop(shop);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: Text(
+                "Continue Anyway",
+                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

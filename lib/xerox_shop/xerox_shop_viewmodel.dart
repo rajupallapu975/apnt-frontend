@@ -65,7 +65,6 @@ class XeroxShopViewModel extends ChangeNotifier {
         if (data.isNotEmpty) {
           _shops = data
               .map((json) => XeroxShopModel.fromMap(json, json['id'] ?? ''))
-              .where((shop) => shop.isOpen)
               .toList();
           fetchSuccess = true;
           debugPrint("✅ Fetched ${_shops.length} shops from Backend");
@@ -134,7 +133,6 @@ class XeroxShopViewModel extends ChangeNotifier {
 
       _shops = snapshot.docs
           .map((doc) => XeroxShopModel.fromMap(doc.data(), doc.id))
-          .where((shop) => shop.isOpen)
           .toList();
 
       debugPrint("✅ Final Shop Fetch Count: ${_shops.length} shops total");
