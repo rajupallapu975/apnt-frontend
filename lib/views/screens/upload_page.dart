@@ -825,7 +825,7 @@ class _UploadPageState extends State<UploadPage> {
                         borderRadius: BorderRadius.circular(16),
                         child: CachedNetworkImage(
                           imageUrl: imageUrl,
-                         q height: 110,
+                         height: 110,
                           fit: BoxFit.cover,
                           placeholder: (_, _b) => Shimmer.fromColors(
                             baseColor: Colors.grey[300]!,
