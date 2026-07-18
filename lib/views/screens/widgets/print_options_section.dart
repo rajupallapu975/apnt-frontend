@@ -63,14 +63,17 @@ class PrintOptionsSection extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Number of copies', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
-                    const SizedBox(height: 2),
-                    Text('How many prints of this document', style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Number of copies', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text('How many prints of this document', style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: AppColors.border),
@@ -322,7 +325,12 @@ class PrintOptionsSection extends StatelessWidget {
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(name, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Expanded(
+                        child: Text(name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: AppColors.border),

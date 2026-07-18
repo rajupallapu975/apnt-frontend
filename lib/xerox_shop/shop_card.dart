@@ -61,6 +61,8 @@ class ShopCard extends StatelessWidget {
                           Flexible(
                             child: Text(
                               shop.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w800,
@@ -101,12 +103,16 @@ class ShopCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 _priceTag('Color: ₹${shop.pricePerColorPage.toStringAsFixed(0)}'),
                 const Spacer(),
-                Text(
-                  '${shop.openingTime} - ${shop.closingTime}',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textTertiary,
+                Flexible(
+                  child: Text(
+                    '${shop.openingTime} - ${shop.closingTime}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textTertiary,
+                    ),
                   ),
                 ),
               ],
@@ -184,17 +190,21 @@ class ShopCard extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Icon(
-          Icons.print_rounded, 
-          size: 14, 
+          Icons.print_rounded,
+          size: 14,
           color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
         ),
         const SizedBox(width: 4),
-        Text(
-          '${shop.activePrinters} Ready',
-          style: GoogleFonts.inter(
-            fontSize: 12, 
-            fontWeight: FontWeight.w700, 
-            color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
+        Flexible(
+          child: Text(
+            '${shop.activePrinters} Ready',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: shop.activePrinters > 0 ? AppColors.success : AppColors.textTertiary
+            ),
           ),
         ),
       ],

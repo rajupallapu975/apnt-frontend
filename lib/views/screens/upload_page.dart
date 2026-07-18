@@ -1178,13 +1178,17 @@ class _UploadPageState extends State<UploadPage> {
                                 color: order.isPrintingCompleted ? Colors.green : Colors.orange,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                (order.orderStatus ?? 'NOT PRINTED YET').toUpperCase(),
-                                style: GoogleFonts.inter(
-                                  fontSize: 10, 
-                                  fontWeight: FontWeight.w900, 
-                                  color: order.isPrintingCompleted ? Colors.green : Colors.orange, 
-                                  letterSpacing: 0.5
+                              Flexible(
+                                child: Text(
+                                  (order.orderStatus ?? 'NOT PRINTED YET').toUpperCase(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    color: order.isPrintingCompleted ? Colors.green : Colors.orange,
+                                    letterSpacing: 0.5
+                                  ),
                                 ),
                               ),
                             ],

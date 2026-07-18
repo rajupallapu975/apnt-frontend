@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import 'package:google_fonts/google_fonts.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/google_slider_button.dart';
 import '../../utils/app_colors.dart';
+import 'name_onboarding_screen.dart';
 
 class LoginView extends StatelessWidget {
   const LoginView({super.key});
@@ -138,6 +140,25 @@ class LoginView extends StatelessWidget {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 28),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const NameOnboardingScreen(),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            "Continue as Guest",
+                            style: GoogleFonts.inter(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
                         ),
                       ],
                     )

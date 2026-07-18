@@ -83,6 +83,36 @@ class FirestoreService {
     }
   }
 
+  Future<void> updateUserName(String name) async {
+    if (_currentUserId == null) return;
+    try {
+      await _usersCollection.doc(_currentUserId).set({
+        'displayName': name,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      debugPrint("✅ User name updated to Firestore: $name");
+    } catch (e) {
+      debugPrint("❌ User Name Update Error: $e");
+    }
+  }
+
+  Future<Map<String, String?>> getUserProfileData() async {
+    if (_currentUserId == null) return {};
+    try {
+      final doc = await _usersCollection.doc(_currentUserId).get().timeout(const Duration(seconds: 4));
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        return {
+          'phoneNumber': data['phoneNumber'] as String?,
+          'displayName': data['displayName'] as String?,
+        };
+      }
+    } catch (e) {
+      debugPrint("❌ User Profile Data Read Error: $e");
+    }
+    return {};
+  }
+
   /// 🔄 SYNC USER STATS AFTER SUCCESSFUL PAYMENT
   Future<void> syncUserPostPayment({
     required double amount,

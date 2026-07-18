@@ -77,9 +77,14 @@ class BottomActionBar extends StatelessWidget {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            buttonText,
-                            style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                buttonText,
+                                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           const Icon(Icons.arrow_forward_rounded, size: 16),

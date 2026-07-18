@@ -104,9 +104,9 @@ class NotificationService extends ChangeNotifier {
     initOrderListeners();
 
     // 🚀 Initialize FCM (Background/Killed logic)
-    if (!kIsWeb) {
-      _setupFCM(); 
-    }
+    // 🌐 Runs on web too: registers web/firebase-messaging-sw.js and syncs the
+    // browser's FCM token so backend pushes reach web/PWA users.
+    _setupFCM();
   }
 
   Future<void> _setupFCM() async {

@@ -592,12 +592,15 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                   ),
                 ),
                 const SizedBox(width: 20),
-                Text(
-                  "Verifying shop pricing...",
-                  style: GoogleFonts.inter(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                Flexible(
+                  child: Text(
+                    "Verifying shop pricing...",
+                    softWrap: true,
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -641,9 +644,11 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
               children: [
                 const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
                 const SizedBox(width: 12),
-                Text(
-                  "Shop is Offline",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+                Expanded(
+                  child: Text(
+                    "Shop is Offline",
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
                 ),
               ],
             ),
@@ -1071,12 +1076,16 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  '${shop.openingTime ?? "09:00 AM"} - ${shop.closingTime ?? "09:00 PM"}',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textTertiary,
+                Flexible(
+                  child: Text(
+                    '${shop.openingTime ?? "09:00 AM"} - ${shop.closingTime ?? "09:00 PM"}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textTertiary,
+                    ),
                   ),
                 ),
               ],
@@ -1276,9 +1285,13 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                             'Selected Shop: ',
                             style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                           ),
-                          Text(
-                            _selectedShop!.name,
-                            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primaryBlue),
+                          Expanded(
+                            child: Text(
+                              _selectedShop!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primaryBlue),
+                            ),
                           ),
                         ],
                       ),
@@ -1380,9 +1393,13 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
             '$label: ',
             style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
           ),
-          Text(
-            value,
-            style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -1395,9 +1412,12 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+          Flexible(
+            child: Text(
+              label,
+              softWrap: true,
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+            ),
           ),
           Text(
             '₹${price.toStringAsFixed(1)}',

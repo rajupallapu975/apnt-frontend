@@ -110,6 +110,7 @@ class BackendService {
     required int totalPages,
     String printMode = 'autonomous', // New: added printMode
     String? customId, // Sequential ID (order_1)
+    String? customerName,
   }) async {
     final user = _auth.currentUser;
     final String userId = user?.uid ?? "guest_user";
@@ -129,6 +130,7 @@ class BackendService {
           "totalPages": totalPages,
           "printMode": printMode, // Pass mode to backend
           "customId": customId,
+          "customerName": customerName,
         }),
       ).timeout(const Duration(seconds: 30));
 

@@ -219,12 +219,15 @@ class _PickupPageState extends State<PickupPage> {
                           ),
                           child: _isFinalizing
                               ? const CircularProgressIndicator(color: Colors.white)
-                              : Text(
-                                  'DONE — ITEMS PICKED UP',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.5,
+                              : FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'DONE — ITEMS PICKED UP',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.5,
+                                    ),
                                   ),
                                 ),
                         ),

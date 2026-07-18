@@ -12,6 +12,7 @@ class AuthViewModel extends ChangeNotifier {
 
   User? _user;
   String? _phoneNumber;
+  String? _displayName;
   bool _isLoading = true;
 
   AuthViewModel() {
@@ -78,7 +79,15 @@ class AuthViewModel extends ChangeNotifier {
 
   Future<void> _loadUserProfile() async {
     // 🔍 Try Firestore first
-    String? phone = await FirestoreService().getUserPhone();
+    final data = await FirestoreService().getUserProfileData();
+    String? phone = data['phoneNumber'];
+    _displayName = data['displayName'];
+
+    // Fallback to Google displayName if not set in Firestore profile
+    if ((_displayName == null || _displayName!.trim().isEmpty) && _user?.displayName != null) {
+      _displayName = _user!.displayName;
+    }
+
     bool fromLocal = false;
     
     // 📂 Fallback to local storage if Firestore is empty/fails
@@ -100,6 +109,7 @@ class AuthViewModel extends ChangeNotifier {
 
   User? get user => _user;
   String? get phoneNumber => _phoneNumber;
+  String? get displayName => _displayName;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _user != null;
 
@@ -112,6 +122,15 @@ class AuthViewModel extends ChangeNotifier {
       debugPrint("⚠️ Firestore phone update failed: $e");
     });
     LocalStorageService().saveLastPhone(phone);
+  }
+
+  Future<void> updateDisplayName(String name) async {
+    _displayName = name;
+    notifyListeners();
+    
+    FirestoreService().updateUserName(name).catchError((e) {
+      debugPrint("⚠️ Firestore name update failed: $e");
+    });
   }
 
   /// 🔐 Sign in

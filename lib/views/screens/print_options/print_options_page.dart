@@ -696,14 +696,16 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Double sided print',
-                              style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
-                          Text('Print on both sides of paper',
-                              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Double sided print',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
+                            Text('Print on both sides of paper',
+                                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                          ],
+                        ),
                       ),
                       Switch.adaptive(
                         value: cfg.isDoubleSided,
@@ -1071,8 +1073,13 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Total Price', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 17)),
-              Text('₹${_payablePrice.toStringAsFixed(0)}',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 26, color: AppColors.primaryBlue)),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('₹${_payablePrice.toStringAsFixed(0)}',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 26, color: AppColors.primaryBlue)),
+                ),
+              ),
             ],
           ),
 
@@ -1161,10 +1168,16 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Total $_totalPages ${_totalPages == 1 ? 'page' : 'pages'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text('₹$_totalPrice',
-                        style: GoogleFonts.inter(fontSize: 30, fontWeight: FontWeight.w900, color: const Color(0xFF2D3142))),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text('₹$_totalPrice',
+                          style: GoogleFonts.inter(fontSize: 30, fontWeight: FontWeight.w900, color: const Color(0xFF2D3142))),
+                    ),
                   ],
                 ),
               ),
@@ -1238,8 +1251,13 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                             children: [
                               const Icon(Icons.print_rounded, size: 20),
                               const SizedBox(width: 8),
-                              Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
-                                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('Pay ₹${_totalPrice.toStringAsFixed(0)}',
+                                      style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16)),
+                                ),
+                              ),
                             ],
                           ),
                     );
@@ -1287,11 +1305,15 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                             color: selected ? selColor : AppColors.textPrimary)),
                     Text(price,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
                             fontSize: 11,
                             color: selected ? selColor.withValues(alpha: 0.7) : AppColors.textSecondary)),
@@ -1389,21 +1411,27 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             children: [
               indicator,
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: selected ? AppColors.primaryBlue : AppColors.textPrimary)),
-                  Text(price,
-                      style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: selected
-                              ? AppColors.primaryBlue.withValues(alpha: 0.7)
-                              : AppColors.textSecondary)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: selected ? AppColors.primaryBlue : AppColors.textPrimary)),
+                    Text(price,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: selected
+                                ? AppColors.primaryBlue.withValues(alpha: 0.7)
+                                : AppColors.textSecondary)),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1452,11 +1480,15 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                             color: selected ? selColor : const Color(0xFF2D3142))),
                     Text(sublabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
                             fontSize: 12,
                             color: selected ? selColor.withValues(alpha: 0.8) : AppColors.textSecondary,
@@ -1630,8 +1662,11 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         children: [
           Icon(icon, size: 14, color: AppColors.success),
           const SizedBox(width: 6),
-          Text(text,
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          Expanded(
+            child: Text(text,
+                softWrap: true,
+                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          ),
         ],
       );
 
@@ -2105,7 +2140,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(name, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+                  Expanded(
+                    child: Text(name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+                  ),
                   Container(
                     decoration: BoxDecoration(
                       border: Border.all(color: AppColors.border),

@@ -120,6 +120,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
   Widget build(BuildContext context) {
     if (!_isInit) return const SizedBox(height: 100);
 
+    final media = MediaQuery.of(context);
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -128,10 +129,18 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
           topRight: Radius.circular(32),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
-      child: AnimatedSwitcher(
-        duration: 150.ms,
-        child: _isWaitingForRequest ? _buildWaitingUI() : _buildSummaryUI(),
+      // ⌨️ Lift the sheet above the keyboard so the phone field stays visible
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      // 📏 Never let the sheet exceed the screen — scroll instead of overflowing
+      constraints: BoxConstraints(
+        maxHeight: media.size.height * 0.9,
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(28, 12, 28, 32 + media.padding.bottom),
+        child: AnimatedSwitcher(
+          duration: 150.ms,
+          child: _isWaitingForRequest ? _buildWaitingUI() : _buildSummaryUI(),
+        ),
       ),
     );
   }
@@ -167,26 +176,32 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                     color: AppColors.primaryBlue, size: 24),
               ),
               const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Payment Summary',
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.primaryBlack,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Payment Summary',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryBlack,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Review and confirm details',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
+                    Text(
+                      'Review and confirm details',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ).animate().fadeIn().slideX(begin: -0.1, end: 0),
@@ -325,7 +340,9 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                         color: AppColors.primaryBlack,
                       ),
                     ),
-                    Wrap(
+                    Flexible(
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
                       spacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
@@ -348,6 +365,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
                           ),
                         ),
                       ],
+                      ),
                     ),
                   ],
                 ),
@@ -580,12 +598,15 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+        Flexible(
+          child: Text(
+            label,
+            softWrap: true,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
           ),
         ),
         const SizedBox(width: 16),
@@ -611,12 +632,15 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
       children: [
         Icon(icon, size: 14, color: AppColors.success),
         const SizedBox(width: 8),
-        Text(
-          text,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
+        Expanded(
+          child: Text(
+            text,
+            softWrap: true,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],

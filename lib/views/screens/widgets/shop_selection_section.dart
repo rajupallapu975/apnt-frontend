@@ -224,9 +224,13 @@ class _ShopSelectionSectionState extends State<ShopSelectionSection> {
                                   const SizedBox(width: 12),
                                   Icon(Icons.access_time_rounded, size: 13, color: AppColors.textSecondary),
                                   const SizedBox(width: 3),
-                                  Text(
-                                    '15 min ready', // estimate placeholder
-                                    style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                                  Flexible(
+                                    child: Text(
+                                      '15 min ready', // estimate placeholder
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                                    ),
                                   ),
                                 ],
                               ),

@@ -88,13 +88,16 @@ class PaymentSuccessPage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            Text(
-                              pickupCode.toUpperCase(),
-                              style: GoogleFonts.inter(
-                                fontSize: 56,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: 10,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                pickupCode.toUpperCase(),
+                                style: GoogleFonts.inter(
+                                  fontSize: 56,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: 10,
+                                ),
                               ),
                             ),
                           ],

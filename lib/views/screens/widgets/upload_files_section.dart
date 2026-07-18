@@ -142,10 +142,15 @@ class _UploadFilesSectionState extends State<UploadFilesSection> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Upload Documents',
-                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              Flexible(
+                child: Text(
+                  'Upload Documents',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                ),
               ),
+              const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: _pickFiles,
                 icon: const Icon(Icons.add_rounded, size: 16),

@@ -90,18 +90,22 @@ class ServiceInfoSection extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$shopsCount Shops Available',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.success,
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$shopsCount Shops Available',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.success,
+                    ),
                   ),
                 ),
               ),

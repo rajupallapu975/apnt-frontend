@@ -121,12 +121,17 @@ class ProfilePage extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
-              Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+              ],
+            ),
           ),
         ],
       ),
@@ -310,12 +315,16 @@ class _OrdersStatsSheet extends StatelessWidget {
     final FirestoreService firestoreService = FirestoreService();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -366,7 +375,12 @@ class _OrdersStatsSheet extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('₹${totalAmount.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white)),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('₹${totalAmount.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white)),
+                          ),
+                        ),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4, left: 8),
                           child: Text('SPENT', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6))),
@@ -465,6 +479,7 @@ class _OrdersStatsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 32),
         ],
+        ),
       ),
     );
   }

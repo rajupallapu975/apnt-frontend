@@ -280,6 +280,7 @@ class _PaymentProcessingPageState
         totalPages: widget.expectedPages,
         printMode: widget.printSettings['printMode'] ?? 'autonomous',
         customId: customId,
+        customerName: context.read<AuthViewModel>().displayName,
       );
 
       final finalOrderId = verifyResult['orderId'];
@@ -538,9 +539,12 @@ class _PaymentProcessingPageState
             child: ElevatedButton(
               onPressed: _progress > 0.1 ? null : _startProcessing,
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlack, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 0),
-              child: _progress > 0.1 
+              child: _progress > 0.1
                 ? const CircularProgressIndicator(color: Colors.white)
-                : Text("PROCEED TO PAY ₹${widget.expectedPrice.toStringAsFixed(0)}", style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+                : FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text("PROCEED TO PAY ₹${widget.expectedPrice.toStringAsFixed(0)}", style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+                  ),
             ),
           ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
           const SizedBox(height: 16),

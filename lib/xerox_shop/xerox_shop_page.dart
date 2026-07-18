@@ -433,7 +433,7 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(context).padding.bottom),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -671,9 +671,13 @@ class _XeroxShopPageState extends State<XeroxShopPage> {
             '$label: ',
             style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
           ),
-          Text(
-            value,
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryBlack),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryBlack),
+            ),
           ),
         ],
       ),

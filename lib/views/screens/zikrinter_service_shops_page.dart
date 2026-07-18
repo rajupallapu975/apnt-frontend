@@ -155,9 +155,11 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
               children: [
                 const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
                 const SizedBox(width: 12),
-                Text(
-                  "Shop is Offline",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+                Expanded(
+                  child: Text(
+                    "Shop is Offline",
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
                 ),
               ],
             ),
@@ -448,9 +450,13 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Select Shop (${widget.selectedPaperSize})',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary),
+                Flexible(
+                  child: Text(
+                    'Select Shop (${widget.selectedPaperSize})',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
@@ -601,12 +607,16 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                                   children: [
                                                     const Icon(Icons.access_time_rounded, size: 12, color: AppColors.textSecondary),
                                                     const SizedBox(width: 4),
-                                                    Text(
-                                                      '${shop.openingTime ?? "09:00 AM"} - ${shop.closingTime ?? "09:00 PM"}',
-                                                      style: GoogleFonts.inter(
-                                                        fontSize: 11,
-                                                        color: AppColors.textSecondary,
-                                                        fontWeight: FontWeight.w600,
+                                                    Flexible(
+                                                      child: Text(
+                                                        '${shop.openingTime ?? "09:00 AM"} - ${shop.closingTime ?? "09:00 PM"}',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 11,
+                                                          color: AppColors.textSecondary,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
                                                       ),
                                                     ),
                                                   ],

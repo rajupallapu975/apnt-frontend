@@ -307,20 +307,29 @@ class _BindingSelectionPageState extends State<BindingSelectionPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Files + Binding",
-                            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "₹${(widget.printingCost + _currentBindingCost).toStringAsFixed(0)}",
-                            style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryBlue),
-                          ),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Files + Binding",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "₹${(widget.printingCost + _currentBindingCost).toStringAsFixed(0)}",
+                                style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryBlue),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 12),
                       SizedBox(
                         height: 52,
                         width: 160,
@@ -400,10 +409,15 @@ class _BindingSelectionPageState extends State<BindingSelectionPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      Flexible(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         "₹${price.toStringAsFixed(0)}",
                         style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary),

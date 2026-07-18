@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 // flutter_local_notifications handled by NotificationService internally
 import 'firebase_options.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'viewmodels/auth_viewmodel.dart';
@@ -10,8 +11,10 @@ import 'viewmodels/upload_viewmodel.dart';
 import 'xerox_shop/xerox_shop_viewmodel.dart';
 import 'views/screens/login_view.dart';
 import 'views/screens/upload_page.dart';
+import 'views/screens/name_onboarding_screen.dart';
 import 'utils/app_theme.dart';
 import 'utils/app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -40,8 +43,13 @@ void callbackDispatcher() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // 🛡️ On hot restart the FCM background isolate re-registers plugins at the
+  // same time as initializeApp, causing a transient native
+  // ConcurrentModificationException. Retry with growing backoff — the native
+  // default app survives restarts, so a later attempt always succeeds.
+  const int maxInitRetries = 5;
   int retries = 0;
-  while (retries < 3) {
+  while (retries < maxInitRetries) {
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp(
@@ -51,19 +59,87 @@ void main() async {
       break;
     } catch (e) {
       retries++;
-      if (retries >= 3) {
-        debugPrint("⚠️ Main Firebase Init failed after 3 retries: $e");
+      if (retries >= maxInitRetries) {
+        debugPrint("⚠️ Main Firebase Init failed after $maxInitRetries retries: $e");
       } else {
-        debugPrint("⚠️ Main Firebase Init failed (try $retries), retrying in 500ms...: $e");
-        await Future.delayed(const Duration(milliseconds: 500));
+        final waitMs = 400 * retries;
+        debugPrint("⚠️ Main Firebase Init failed (try $retries), retrying in ${waitMs}ms...: $e");
+        await Future.delayed(Duration(milliseconds: waitMs));
       }
+    }
+  }
+
+  // 🛡️ Last-chance attempt after a longer settle if all retries failed
+  if (Firebase.apps.isEmpty) {
+    await Future.delayed(const Duration(seconds: 2));
+    try {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      debugPrint("✅ Main Firebase Init succeeded on last-chance attempt");
+    } catch (e) {
+      debugPrint("❌ Main Firebase Init permanently failed: $e");
     }
   }
 
   // 🔔 FCM Background Handler registration
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // ⏳ Introduce a small delay to prevent ConcurrentModificationException on native side
+  // 🔔 Initialize Notifications — never allow this to abort startup
+  final notificationService = NotificationService();
+  try {
+    await notificationService.init();
+  } catch (e) {
+    debugPrint("⚠️ Notification init failed (continuing startup): $e");
+  }
+
+  // 🔤 Wait for Google Fonts (Manrope/Inter) before first frame so web/mobile
+  // never render a fallback font and then "jump" to the real one.
+  try {
+    await GoogleFonts.pendingFonts([
+      GoogleFonts.manrope(),
+      GoogleFonts.inter(),
+    ]).timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint("⚠️ Font preload skipped: $e");
+  }
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => UploadViewModel()),
+        ChangeNotifierProvider(create: (_) => XeroxShopViewModel()),
+        ChangeNotifierProvider.value(value: notificationService),
+      ],
+      child: const MyApp(),
+    ),
+  );
+
+  // 🚀 Secondary Firebase apps are not needed for the first frame — initialize
+  // them in the background so startup doesn't skip frames.
+  // FirestoreService.getFirestore falls back to the primary instance until ready.
+  unawaited(_initializeSecondaryApps());
+
+  // 🛡️ Start the Background Watchman (Android only)
+  if (!kIsWeb && Platform.isAndroid && Firebase.apps.isNotEmpty) {
+    Workmanager().initialize(callbackDispatcher);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      Workmanager().registerPeriodicTask(
+        "order_check_task",
+        "checkOrderStatus",
+        inputData: {'userId': user.uid},
+        frequency: const Duration(minutes: 15),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      );
+    }
+  }
+}
+
+/// Initializes the four secondary Firebase apps and their anonymous sessions
+/// AFTER the first frame. Kept sequential with the original 300ms gaps to
+/// avoid the native ConcurrentModificationException the delays were added for.
+Future<void> _initializeSecondaryApps() async {
+  // ⏳ Small delay to prevent ConcurrentModificationException on native side
   await Future.delayed(const Duration(milliseconds: 300));
 
   // 🏪 Initialize Zikrint Admin as a secondary app
@@ -174,37 +250,6 @@ void main() async {
   } catch (e) {
     debugPrint("⚠️ Secondary apps auth error: $e");
   }
-
-  // 🔔 Initialize Notifications
-  final notificationService = NotificationService();
-  await notificationService.init();
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthViewModel()),
-        ChangeNotifierProvider(create: (_) => UploadViewModel()),
-        ChangeNotifierProvider(create: (_) => XeroxShopViewModel()),
-        ChangeNotifierProvider.value(value: notificationService),
-      ],
-      child: const MyApp(),
-    ),
-  );
-
-  // 🛡️ Start the Background Watchman (Android only)
-  if (!kIsWeb && Platform.isAndroid) {
-    Workmanager().initialize(callbackDispatcher);
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      Workmanager().registerPeriodicTask(
-        "order_check_task",
-        "checkOrderStatus",
-        inputData: {'userId': user.uid},
-        frequency: const Duration(minutes: 15),
-        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-      );
-    }
-  }
 }
 
 class MyCustomScrollBehavior extends MaterialScrollBehavior {
@@ -226,6 +271,18 @@ class MyApp extends StatelessWidget {
       title: 'Zikrint',
       theme: AppTheme.lightTheme,
       scrollBehavior: MyCustomScrollBehavior(),
+      // 🔠 Respect the user's system text size, but clamp it so extreme
+      // accessibility settings scale text without shattering fixed layouts.
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: mediaQuery.textScaler
+                .clamp(minScaleFactor: 0.85, maxScaleFactor: 1.2),
+          ),
+          child: child!,
+        );
+      },
       home: const AuthWrapper(),
     );
   }
@@ -243,13 +300,24 @@ class AuthWrapper extends StatelessWidget {
       return const _SplashScreen();
     }
 
-    // ✅ Authenticated with a real Google account (not anonymous)
     final user = authVM.user;
-    if (user != null && !user.isAnonymous) {
+    if (user != null) {
+      if (user.isAnonymous) {
+        // 🔒 Anonymous (Guest): Must have an onboarded name before accessing the app.
+        // If not set yet, show LoginView (enabling Google Sign-In or Continue as Guest choice).
+        if (authVM.displayName == null || authVM.displayName!.trim().isEmpty) {
+          return const LoginView();
+        }
+      } else {
+        // 🔐 Google User: Must confirm/onboard their name.
+        if (authVM.displayName == null || authVM.displayName!.trim().isEmpty) {
+          return const NameOnboardingScreen();
+        }
+      }
       return const UploadPage();
     }
 
-    // 🔐 Not authenticated — show Google Sign-In
+    // 🔐 Safe fallback
     return const LoginView();
   }
 }
