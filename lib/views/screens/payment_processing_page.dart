@@ -177,17 +177,48 @@ class _PaymentProcessingPageState
         options['config'] = <String, dynamic>{
           'display': <String, dynamic>{
             'blocks': <String, dynamic>{
-              'upi': <String, dynamic>{
-                'name': 'Pay via PhonePe',
+              'gpay': <String, dynamic>{
+                'name': 'Google Pay',
+                'instruments': <dynamic>[
+                  <String, dynamic>{
+                    'method': 'upi',
+                    'apps': <String>['google_pay']
+                  }
+                ]
+              },
+              'phonepe': <String, dynamic>{
+                'name': 'PhonePe',
                 'instruments': <dynamic>[
                   <String, dynamic>{
                     'method': 'upi',
                     'apps': <String>['phonepe']
                   }
                 ]
+              },
+              'paytm': <String, dynamic>{
+                'name': 'Paytm',
+                'instruments': <dynamic>[
+                  <String, dynamic>{
+                    'method': 'upi',
+                    'apps': <String>['paytm']
+                  }
+                ]
+              },
+              'other_upi': <String, dynamic>{
+                'name': 'Other UPI / QR Code',
+                'instruments': <dynamic>[
+                  <String, dynamic>{
+                    'method': 'upi'
+                  }
+                ]
               }
             },
-            'sequence': <String>['block.upi'],
+            'sequence': <String>[
+              'block.gpay',
+              'block.phonepe',
+              'block.paytm',
+              'block.other_upi'
+            ],
             'preferences': <String, dynamic>{
               'show_default_blocks': false
             }
