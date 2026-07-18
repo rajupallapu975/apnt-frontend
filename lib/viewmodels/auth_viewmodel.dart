@@ -69,7 +69,7 @@ class AuthViewModel extends ChangeNotifier {
       await FirestoreService().syncUserProfile(
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName,
+        displayName: null, // Do not auto-populate from Google in database
         photoUrl: user.photoURL,
       );
     } catch (e) {
@@ -82,11 +82,6 @@ class AuthViewModel extends ChangeNotifier {
     final data = await FirestoreService().getUserProfileData();
     String? phone = data['phoneNumber'];
     _displayName = data['displayName'];
-
-    // Fallback to Google displayName if not set in Firestore profile
-    if ((_displayName == null || _displayName!.trim().isEmpty) && _user?.displayName != null) {
-      _displayName = _user!.displayName;
-    }
 
     bool fromLocal = false;
     

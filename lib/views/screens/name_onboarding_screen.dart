@@ -244,27 +244,6 @@ class _NameOnboardingScreenState extends State<NameOnboardingScreen> {
                           .animate()
                           .fadeIn(delay: 650.ms, duration: 600.ms)
                           .slideY(begin: 0.2, end: 0),
-  
-                          const SizedBox(height: 16),
-  
-                          // Sign Out Button (to switch accounts if needed, but not bypass)
-                          Center(
-                            child: TextButton(
-                              onPressed: _isSubmitting ? null : () async {
-                                final authVM = context.read<AuthViewModel>();
-                                await authVM.signOut();
-                              },
-                              child: Text(
-                                "Cancel & Sign Out",
-                                style: GoogleFonts.inter(
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          )
-                          .animate()
-                          .fadeIn(delay: 750.ms, duration: 600.ms),
                         ],
                       ),
                     ),
