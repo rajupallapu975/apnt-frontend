@@ -15,16 +15,55 @@ class GoogleSliderButton extends StatefulWidget {
       GoogleSliderButtonState();
 }
 
-class GoogleSliderButtonState extends State<GoogleSliderButton> {
+class GoogleSliderButtonState extends State<GoogleSliderButton>
+    with SingleTickerProviderStateMixin {
   double _position = 0;
   final double _handleSize = 56;
   bool _locked = false;
+  bool _isDragging = false;
+
+  late AnimationController _teaserController;
+  late Animation<double> _teaserAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _teaserController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    );
+
+    _teaserAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0, end: 24).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 24, end: 0).chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0),
+        weight: 20,
+      ),
+    ]).animate(_teaserController);
+
+    _teaserController.repeat();
+  }
+
+  @override
+  void dispose() {
+    _teaserController.dispose();
+    super.dispose();
+  }
 
   void reset() {
     setState(() {
       _position = 0;
       _locked = false;
+      _isDragging = false;
     });
+    _teaserController.repeat();
   }
 
   @override
@@ -57,12 +96,26 @@ class GoogleSliderButtonState extends State<GoogleSliderButton> {
                   ),
                 ),
               ),
-              Positioned(
-                left: _position + 8,
-                top: 8,
+              AnimatedBuilder(
+                animation: _teaserAnimation,
+                builder: (context, child) {
+                  final currentLeft = (_isDragging || _locked)
+                      ? _position + 8
+                      : _position + 8 + _teaserAnimation.value;
+
+                  return Positioned(
+                    left: currentLeft,
+                    top: 8,
+                    child: child!,
+                  );
+                },
                 child: GestureDetector(
                   onHorizontalDragUpdate: (d) {
                     if (_locked) return;
+                    if (!_isDragging) {
+                      _isDragging = true;
+                      _teaserController.stop();
+                    }
                     setState(() {
                       _position += d.delta.dx;
                       _position = _position.clamp(0, maxSlide);
