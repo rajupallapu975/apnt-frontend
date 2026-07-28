@@ -129,15 +129,24 @@ class XeroxPricing {
         colorBulkStart ??= baseColorBulkStart;
       }
 
-      // Final mappings with defaults to base A4 values
-      normalBwPrices[sizeKey] = normalBw ?? baseNormalBw;
-      doubleBwPrices[sizeKey] = doubleBw ?? baseDoubleBw;
-      bulkBwPrices[sizeKey] = bulkBw ?? baseBulkBw;
+      // Size-aware defaults (scale up from A4 base)
+      final double sizeMultiplier = sizeKey == 'a3'
+          ? 1.5
+          : sizeKey == 'a2'
+              ? 2.0
+              : sizeKey == 'a1'
+                  ? 3.0
+                  : 1.0;
+
+      // Final mappings with size-scaled defaults
+      normalBwPrices[sizeKey] = normalBw ?? (baseNormalBw * sizeMultiplier).ceilToDouble();
+      doubleBwPrices[sizeKey] = doubleBw ?? (baseDoubleBw * sizeMultiplier).ceilToDouble();
+      bulkBwPrices[sizeKey] = bulkBw ?? (baseBulkBw * sizeMultiplier).ceilToDouble();
       bwBulkStartPages[sizeKey] = bwBulkStart ?? baseBwBulkStart;
 
-      normalColorPrices[sizeKey] = normalColor ?? baseNormalColor;
-      doubleColorPrices[sizeKey] = doubleColor ?? baseDoubleColor;
-      bulkColorPrices[sizeKey] = bulkColor ?? baseBulkColor;
+      normalColorPrices[sizeKey] = normalColor ?? (baseNormalColor * sizeMultiplier).ceilToDouble();
+      doubleColorPrices[sizeKey] = doubleColor ?? (baseDoubleColor * sizeMultiplier).ceilToDouble();
+      bulkColorPrices[sizeKey] = bulkColor ?? (baseBulkColor * sizeMultiplier).ceilToDouble();
       colorBulkStartPages[sizeKey] = colorBulkStart ?? baseColorBulkStart;
     }
 

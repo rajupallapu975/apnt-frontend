@@ -1,4 +1,4 @@
-package com.example.apnt
+package com.zikrint.app
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -10,7 +10,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.example.apnt/file_opener"
+    private val CHANNEL = "com.zikrint.app/file_opener"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

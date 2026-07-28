@@ -78,10 +78,24 @@ class LoginView extends StatelessWidget {
                           const SizedBox(height: 48),
 
                           // 🖋️ Typography Hierarchy
-                          Text(
-                            'ZIKRINT',
-                            style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                              letterSpacing: -2,
+                          Text.rich(
+                            TextSpan(
+                              text: 'zik',
+                              style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                letterSpacing: -1.5,
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: 'rint',
+                                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                    letterSpacing: -1.5,
+                                    color: AppColors.primaryBlue,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                           .animate()

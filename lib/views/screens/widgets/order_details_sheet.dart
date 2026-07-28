@@ -10,6 +10,7 @@ import '../../../utils/app_colors.dart';
 import '../../../widgets/common/status_badge.dart';
 import '../../../xerox_shop/xerox_shop_viewmodel.dart';
 import '../../../services/firestore_service.dart';
+import 'print_progress_tracker.dart';
 
 class OrderDetailsSheet extends StatelessWidget {
   final PrintOrderModel order;
@@ -146,78 +147,117 @@ class OrderDetailsSheet extends StatelessWidget {
                           ),
                           const SizedBox(width: 12),
                           StatusBadge(
-                            label: (order.reason ?? order.status.name).toUpperCase(),
-                            type: order.status == OrderStatus.active
-                                ? StatusType.active
-                                : StatusType.success,
+                            label: (order.status == OrderStatus.completed || order.isPicked || order.orderDone)
+                                ? 'COMPLETED'
+                                : (order.reason ?? order.status.name).toUpperCase(),
+                            type: (order.status == OrderStatus.completed || order.isPicked || order.orderDone)
+                                ? StatusType.success
+                                : (order.status == OrderStatus.active
+                                    ? StatusType.active
+                                    : StatusType.success),
                           ),
                         ],
                       ),
                       const SizedBox(height: 20),
 
+                      // 🖨️ Printing Process Timeline Tracker (Active Orders Only)
+                      if (!(order.status == OrderStatus.completed || order.isPicked || order.orderDone)) ...[
+                        PrintProgressTracker(
+                          status: order.status,
+                          orderStatus: liveStatus ?? order.orderStatus,
+                          isPrintingCompleted: isPrinted || order.isPrintingCompleted,
+                          isPicked: order.isPicked,
+                          isCompleted: false,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
                       // ── Live Print Status (Xerox only) ──
                       if (order.isXerox) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: (isPrinted ? AppColors.success : Colors.orange)
-                                .withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: (isPrinted ? AppColors.success : Colors.orange)
-                                  .withValues(alpha: 0.25),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: (isPrinted ? AppColors.success : Colors.orange)
-                                      .withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  isPrinted
-                                      ? Icons.check_circle_rounded
-                                      : Icons.hourglass_bottom_rounded,
-                                  size: 22,
-                                  color: isPrinted ? AppColors.success : Colors.orange,
+                        Builder(
+                          builder: (context) {
+                            final bool isOrderDone = order.status == OrderStatus.completed || order.isPicked || order.orderDone;
+                            final bool isReady = isPrinted || order.isPrintingCompleted || isOrderDone;
+                            final Color statusCol = isReady ? AppColors.success : Colors.orange;
+
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: statusCol.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: statusCol.withValues(alpha: 0.25),
+                                  width: 1.2,
                                 ),
                               ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      (liveStatus ?? 'NOT PRINTED YET').toUpperCase(),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0.3,
-                                        color:
-                                            isPrinted ? AppColors.success : Colors.orange,
-                                      ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: statusCol.withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      isPrinted
-                                          ? 'Your documents are ready. Visit shop now.'
-                                          : 'Shop will print this soon.',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppColors.textSecondary,
-                                      ),
+                                    child: Icon(
+                                      isReady
+                                          ? Icons.check_circle_rounded
+                                          : Icons.hourglass_bottom_rounded,
+                                      size: 22,
+                                      color: statusCol,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Builder(
+                                      builder: (context) {
+                                         final String norm = (liveStatus ?? order.orderStatus ?? '').toLowerCase().trim();
+                                         final bool isPrinting = norm == 'printing' || norm == 'in_progress' || norm == 'in progress';
+                                         final String statusTitle = isOrderDone
+                                            ? 'ORDER COMPLETED'
+                                            : (isReady
+                                                ? 'READY TO COLLECT'
+                                                : (isPrinting
+                                                    ? 'PRINTING IN PROGRESS'
+                                                    : 'ORDER PLACED'));
+                                        final String statusSubtitle = isOrderDone
+                                            ? 'Prints collected successfully at ${order.shopName ?? "Xerox Shop"}.'
+                                            : (isReady
+                                                ? 'Your documents are ready. Visit shop now.'
+                                                : (isPrinting
+                                                    ? 'Shopkeeper is printing your order.'
+                                                    : 'Order received. Waiting for shopkeeper to start printing.'));
+
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              statusTitle,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 0.3,
+                                                color: statusCol,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              statusSubtitle,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                         const SizedBox(height: 14),
                       ],
@@ -357,7 +397,7 @@ class OrderDetailsSheet extends StatelessWidget {
                                         color: AppColors.textPrimary,
                                       ),
                                     ),
-                                    if (formattedPhone != null) ...[
+                                    if (formattedPhone != null && !(order.status == OrderStatus.completed || order.isPicked || order.orderDone)) ...[
                                       const SizedBox(height: 6),
                                       Row(
                                         children: [
@@ -366,7 +406,7 @@ class OrderDetailsSheet extends StatelessWidget {
                                           const SizedBox(width: 5),
                                           Expanded(
                                             child: Text(
-                                              formattedPhone,
+                                              formattedPhone!,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: GoogleFonts.inter(
@@ -408,7 +448,7 @@ class OrderDetailsSheet extends StatelessWidget {
                               const SizedBox(width: 8),
                               Column(
                                 children: [
-                                  if (formattedPhone != null)
+                                  if (formattedPhone != null && !(order.status == OrderStatus.completed || order.isPicked || order.orderDone))
                                     _actionCircle(
                                       icon: Icons.call_rounded,
                                       color: AppColors.success,
@@ -421,7 +461,7 @@ class OrderDetailsSheet extends StatelessWidget {
                                         }
                                       },
                                     ),
-                                  if (formattedPhone != null && hasAddress)
+                                  if (formattedPhone != null && !(order.status == OrderStatus.completed || order.isPicked || order.orderDone) && hasAddress)
                                     const SizedBox(height: 8),
                                   if (hasAddress)
                                     _actionCircle(
@@ -502,8 +542,10 @@ class OrderDetailsSheet extends StatelessWidget {
                                     order.getOrientation(i).toUpperCase(),
                                     AppColors.primaryBlue,
                                   ),
-                                  if (order.getIsDuplex(i))
-                                    _settingBadge('DOUBLE SIDED', Colors.indigo),
+                                  _settingBadge(
+                                    order.getIsDuplex(i) ? 'TWO SIDED (DOUBLE)' : 'ONE SIDED (SINGLE)',
+                                    order.getIsDuplex(i) ? Colors.indigo : AppColors.primaryBlue,
+                                  ),
                                   _settingBadge(
                                     '${order.getCopies(i)} COPIES',
                                     AppColors.textSecondary,
@@ -520,45 +562,47 @@ class OrderDetailsSheet extends StatelessWidget {
                       }),
                       const SizedBox(height: 10),
 
-                      // ── Print Instructions Guide ──
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                              color: AppColors.primaryBlue.withValues(alpha: 0.1)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.tips_and_updates_rounded,
-                                    size: 15, color: AppColors.primaryBlue),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'HOW TO COLLECT YOUR PRINTS',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.primaryBlue,
-                                    letterSpacing: 1,
+                      if (!(order.status == OrderStatus.completed || order.isPicked || order.orderDone)) ...[
+                        // ── Print Instructions Guide ──
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                                color: AppColors.primaryBlue.withValues(alpha: 0.1)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.tips_and_updates_rounded,
+                                      size: 15, color: AppColors.primaryBlue),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'HOW TO COLLECT YOUR PRINTS',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.primaryBlue,
+                                      letterSpacing: 1,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            _buildStepRow(1, 'Go to selected shop'),
-                            _buildStepRow(2, 'Scan the Zikrint QR'),
-                            _buildStepRow(3, 'Code is revealed'),
-                            _buildStepRow(4, 'Show the code to the shopkeeper'),
-                            _buildStepRow(5, 'Collect the prints', isLast: true),
-                          ],
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              _buildStepRow(1, 'Go to selected shop'),
+                              _buildStepRow(2, 'Scan the Zikrint QR'),
+                              _buildStepRow(3, 'Code is revealed'),
+                              _buildStepRow(4, 'Show the code to the shopkeeper'),
+                              _buildStepRow(5, 'Collect the prints', isLast: true),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+                      ],
 
                       // ── Order Summary strip ──
                       Container(

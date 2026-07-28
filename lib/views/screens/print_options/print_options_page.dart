@@ -686,38 +686,41 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             ),
           ),
 
-          if (cfg.pageCount >= 2)
-            Column(
-              children: [
-                divider,
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          if (cfg.pageCount >= 2) ...[
+            divider,
+            // Print Sides Selection (One Sided vs Two Sided)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Choose print sides',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
+                  const SizedBox(height: 18),
+                  Row(
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Double sided print',
-                                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
-                            Text('Print on both sides of paper',
-                                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-                          ],
-                        ),
+                      _mobileSideTile(
+                        icon: Icons.filter_1_rounded,
+                        label: 'One Sided',
+                        sublabel: 'Single side print',
+                        selected: !cfg.isDoubleSided,
+                        onTap: () => setState(() => cfg.isDoubleSided = false),
                       ),
-                      Switch.adaptive(
-                        value: cfg.isDoubleSided,
-                        activeTrackColor: AppColors.primaryBlue.withValues(alpha: 0.5),
-                        activeThumbColor: AppColors.primaryBlue,
-                        onChanged: (v) => setState(() => cfg.isDoubleSided = v),
+                      const SizedBox(width: 12),
+                      _mobileSideTile(
+                        icon: Icons.filter_2_rounded,
+                        label: 'Two Sided',
+                        sublabel: 'Double sided print',
+                        selected: cfg.isDoubleSided,
+                        onTap: () => setState(() => cfg.isDoubleSided = true),
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+          ],
 
           if (_isCustomService)
             Padding(
@@ -959,22 +962,13 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             const SizedBox(height: 24),
             const Divider(color: AppColors.border),
             const SizedBox(height: 24),
-            _webSettingLabel('Double Sided'),
+            _webSettingLabel('Print Sides'),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    'Print on both sides of paper',
-                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
-                  ),
-                ),
-                Switch.adaptive(
-                  value: cfg.isDoubleSided,
-                  activeTrackColor: AppColors.primaryBlue.withValues(alpha: 0.5),
-                  activeThumbColor: AppColors.primaryBlue,
-                  onChanged: (v) => setState(() => cfg.isDoubleSided = v),
-                ),
+                _webTile('One Sided (Single)', '1 side per sheet', !cfg.isDoubleSided, () => setState(() => cfg.isDoubleSided = false)),
+                const SizedBox(width: 12),
+                _webTile('Two Sided (Double)', 'Both sides of sheet', cfg.isDoubleSided, () => setState(() => cfg.isDoubleSided = true)),
               ],
             ),
           ],
@@ -1312,6 +1306,66 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                             fontSize: 13,
                             color: selected ? selColor : AppColors.textPrimary)),
                     Text(price,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: selected ? selColor.withValues(alpha: 0.7) : AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileSideTile({
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final selColor = AppColors.primaryBlue;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: selected ? selColor.withValues(alpha: 0.06) : Colors.white,
+            border: Border.all(
+              color: selected ? selColor : AppColors.border,
+              width: selected ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: selected ? selColor.withValues(alpha: 0.12) : AppColors.surface,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 18, color: selected ? selColor : AppColors.textSecondary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: selected ? selColor : AppColors.textPrimary)),
+                    Text(sublabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
@@ -1872,7 +1926,7 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       try {
         if (model.file != null) {
           if (!kIsWeb && Platform.isAndroid) {
-            final channel = const MethodChannel('com.example.apnt/file_opener');
+            final channel = const MethodChannel('com.zikrint.app/file_opener');
             await channel.invokeMethod('openFile', {
               'path': model.file!.path,
               'mimeType': null, // native will detect

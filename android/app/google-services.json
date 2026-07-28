@@ -64,6 +64,50 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:52763236709:android:2011e6985664375e37e98c",
+        "android_client_info": {
+          "package_name": "com.zikrint.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "52763236709-tpvjs244os15h8nctddjts8fht23kpig.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zikrint.app",
+            "certificate_hash": "40e9a5a4c3cfce415dbe6b10b59aafb8ff13faab"
+          }
+        },
+        {
+          "client_id": "52763236709-ppdk4s7l1tsavhlo98ppqcmu84hf0n04.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAod0xDUzLN0MVDZ1Er2OXA43xSk9MY0wk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "52763236709-ppdk4s7l1tsavhlo98ppqcmu84hf0n04.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "52763236709-cfrgl63tvnublb11r48jnsvhd8c4ghkl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.apnt"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

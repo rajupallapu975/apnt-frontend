@@ -140,6 +140,12 @@ class PrintPreviewCarousel extends StatelessWidget {
               }
             }
 
+            // Determine image format label for non-pdf/doc files
+            final isImage = !isPdf && !isWord;
+            final imageExt = isImage
+                ? name.split('.').last.toUpperCase()
+                : null;
+
             // B&W filter (Apply to images and PDF thumbnails)
             if (!color && !isWord && (isPdf ? byteData != null : true)) {
               previewWidget = ColorFiltered(
@@ -192,6 +198,51 @@ class PrintPreviewCarousel extends StatelessWidget {
                           ),
                           child: previewWidget,
                         ),
+
+                      // 🏷️ FORMAT BADGE (top-left) — shown only for image files
+                      if (isImage && imageExt != null)
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              imageExt,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 10,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // 📐 PAPER SIZE BADGE (top-right)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            paperSize.toUpperCase(),
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 10,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
 
                       // 🟣 ACTION OVERLAY (Edit for Images, Open for Docs)
                         Positioned(

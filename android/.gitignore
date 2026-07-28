@@ -13,7 +13,7 @@ ios/Flutter/.last_build_id
 .vscode/
 *.iml
 
-# Mac
+# macOS
 .DS_Store
 
 # Windows
@@ -21,3 +21,16 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Android Signing (DO NOT COMMIT)
+android/key.properties
+android/app/keys/
+*.jks
+*.keystore
+
+# Android Build
+android/.gradle/
+android/local.properties
+
+# Generated files
+coverage/

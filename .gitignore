@@ -59,3 +59,8 @@ ios/.symlinks/
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
 # Note: Podfile and Podfile.lock should be committed for reproducible builds
+# Android Signing (DO NOT COMMIT)
+android/key.properties
+android/app/keys/
+*.jks
+*.keystore

@@ -41,5 +41,5 @@ class BackendConfig {
     debugPrint('   Platform: ${defaultTargetPlatform.name}');
     debugPrint('   Is Web: $kIsWeb');
     debugPrint('   Base URL: $baseUrl');
-  }
+   }
 }

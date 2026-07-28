@@ -373,6 +373,51 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
             ),
           ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
 
+          if (widget.totalPages < 5) ...[
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3CD),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFFEBA8)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Color(0xFF856404), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "WATERMARK NOTICE",
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF856404),
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "For orders below 5 pages, a unique identification watermark code will be added to the bottom corner of your printout to help locate and verify your document at the shop.",
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF856404),
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn().slideY(begin: 0.1, end: 0),
+          ],
+
           if (_needsPhone) ...[
             const SizedBox(height: 24),
             Text(

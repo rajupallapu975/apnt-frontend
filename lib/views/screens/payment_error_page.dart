@@ -93,27 +93,36 @@ class PaymentErrorPage extends StatelessWidget {
                     ],
                   ),
                 ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.1, end: 0),
-              ],
 
-              const Spacer(),
+                const Spacer(),
 
-              PrimaryButton(
-                label: 'RETRY',
-                onPressed: () => onRetry(context),
-              ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
-
-              const SizedBox(height: 16),
-
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: OutlinedButton(
+                PrimaryButton(
+                  label: 'GO TO HOMEPAGE',
                   onPressed: () => onGoBack(context),
-                  child: const Text('CANCEL'),
-                ),
-              ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),
+                ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),
 
-              const SizedBox(height: 48),
+                const SizedBox(height: 48),
+              ] else ...[
+                const Spacer(),
+
+                PrimaryButton(
+                  label: 'RETRY',
+                  onPressed: () => onRetry(context),
+                ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
+
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: OutlinedButton(
+                    onPressed: () => onGoBack(context),
+                    child: const Text('CANCEL'),
+                  ),
+                ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.2, end: 0),
+
+                const SizedBox(height: 48),
+              ],
             ],
           ),
         ),

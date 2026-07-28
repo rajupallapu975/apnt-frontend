@@ -633,59 +633,8 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     // 4. Pop the loading dialog
     navigator.pop();
 
-    // 5. Open the Upload Bottom Sheet (Warn first if shop is offline)
-    if (!_selectedShop!.isCurrentlyOpen) {
-      showDialog(
-        context: this.context,
-        builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
-              children: [
-                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "Shop is Offline",
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                ),
-              ],
-            ),
-            content: Text(
-              "The shop is currently offline. Your order will be printed only when the shop is opened. If that is OK with you, proceed to upload files and make payment.",
-              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: Text(
-                  "Cancel",
-                  style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  _showUploadBottomSheet(this.context, _selectedShop!);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: Text(
-                  "Proceed",
-                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    } else {
-      _showUploadBottomSheet(this.context, _selectedShop!);
-    }
+    // 5. Open the Upload Bottom Sheet directly (User confirmed offline status during selection)
+    _showUploadBottomSheet(this.context, _selectedShop!);
   }
 
   // ─── Sub-views for Inline Switching ──────────────────────────────────────────
