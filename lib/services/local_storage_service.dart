@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/print_order_model.dart';
 
 class LocalStorageService {
@@ -45,6 +46,14 @@ class LocalStorageService {
     }
 
     final orderMap = order.toJson();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (orderMap['userId'] == null || (orderMap['userId'] as String).isEmpty) {
+      if (currentUser?.uid != null) {
+        orderMap['userId'] = currentUser!.uid;
+      } else if (currentUser?.email != null) {
+        orderMap['userId'] = currentUser!.email;
+      }
+    }
     
     final existingIndex = ordersList.indexWhere((o) => o['orderId'] == order.orderId);
     if (existingIndex != -1) {
@@ -60,17 +69,41 @@ class LocalStorageService {
     await prefs.setString(_keyOrders, jsonEncode(ordersList));
   }
 
-  /// Get all locally saved orders (history)
-  Future<List<PrintOrderModel>> getLocalOrders() async {
+  /// Get all locally saved orders (history), strictly filtered by active user ID & email
+  Future<List<PrintOrderModel>> getLocalOrders({String? userId, String? userEmail}) async {
     final prefs = await SharedPreferences.getInstance();
     final String? ordersJson = prefs.getString(_keyOrders);
     
     if (ordersJson == null) return [];
 
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final activeUid = userId ?? currentUser?.uid;
+    final activeEmail = (userEmail ?? currentUser?.email)?.trim().toLowerCase();
+    final bool isReviewer = (currentUser?.isAnonymous == true) || (activeEmail == 'reviewer@zikrint.app') || activeUid == 'reviewer_user';
+
     final List<dynamic> ordersList = jsonDecode(ordersJson);
-    return ordersList.map((o) {
-      // Create a mock document snapshot equivalent or just use a helper
-      return PrintOrderModel.fromLocalMap(o);
+    final List<PrintOrderModel> allOrders = ordersList.map((o) => PrintOrderModel.fromLocalMap(o)).toList();
+
+    return allOrders.where((o) {
+      final String? oUserId = o.userId;
+      final bool isOrderReviewer = oUserId == 'reviewer_user' || (oUserId?.toLowerCase() == 'reviewer@zikrint.app');
+
+      // Regular users MUST NEVER see reviewer test orders saved locally on the device
+      if (!isReviewer && isOrderReviewer) {
+        return false;
+      }
+
+      if (isReviewer) {
+        return isOrderReviewer ||
+            (activeUid != null && oUserId == activeUid) ||
+            (activeEmail != null && oUserId?.toLowerCase() == activeEmail);
+      }
+
+      // Strict user matching for normal accounts
+      if (activeUid != null && oUserId == activeUid) return true;
+      if (activeEmail != null && oUserId?.toLowerCase() == activeEmail) return true;
+
+      return false;
     }).toList();
   }
 
@@ -90,6 +123,12 @@ class LocalStorageService {
   Future<void> clearAllOrdersLocally() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyOrders);
+  }
+
+  /// 🗑️ Clear all stored local preferences and cache
+  Future<void> clearAllData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
   }
 
 

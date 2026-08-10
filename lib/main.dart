@@ -12,6 +12,8 @@ import 'xerox_shop/xerox_shop_viewmodel.dart';
 import 'views/screens/login_view.dart';
 import 'views/screens/upload_page.dart';
 import 'views/screens/name_onboarding_screen.dart';
+import 'views/screens/delete_account_page.dart';
+import 'views/screens/privacy_policy_page.dart';
 import 'utils/app_theme.dart';
 import 'utils/app_colors.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -283,7 +285,37 @@ class MyApp extends StatelessWidget {
           child: child!,
         );
       },
-      home: const AuthWrapper(),
+      onGenerateRoute: (settings) {
+        final String routeName = settings.name ?? '';
+        final String currentPath = Uri.base.path;
+        final String currentUrl = Uri.base.toString();
+
+        if (routeName == '/privacy-policy' || 
+            routeName.contains('privacy-policy') || 
+            currentPath == '/privacy-policy' || 
+            currentPath.contains('privacy-policy') || 
+            currentUrl.contains('privacy-policy')) {
+          return MaterialPageRoute(
+            builder: (_) => const PrivacyPolicyPage(),
+            settings: settings,
+          );
+        }
+
+        if (routeName == '/delete-account' || 
+            routeName.contains('delete-account') || 
+            currentPath == '/delete-account' || 
+            currentPath.contains('delete-account') || 
+            currentUrl.contains('delete-account')) {
+          return MaterialPageRoute(
+            builder: (_) => const DeleteAccountPage(),
+            settings: settings,
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => const AuthWrapper(),
+          settings: settings,
+        );
+      },
     );
   }
 }
@@ -293,11 +325,32 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 🌐 Public Route Check: Allow /privacy-policy & /delete-account without requiring login
+    final String currentUrl = Uri.base.toString();
+    final String currentPath = Uri.base.path;
+
+    if (currentPath == '/privacy-policy' || 
+        currentPath.contains('privacy-policy') || 
+        currentUrl.contains('privacy-policy')) {
+      return const PrivacyPolicyPage();
+    }
+
+    if (currentPath == '/delete-account' || 
+        currentPath.contains('delete-account') || 
+        currentUrl.contains('delete-account')) {
+      return const DeleteAccountPage();
+    }
+
     final authVM = context.watch<AuthViewModel>();
 
     // 🔄 Show splash while auth state is loading
     if (authVM.isLoading) {
       return const _SplashScreen();
+    }
+
+    // 🚀 Direct transition for Reviewer Test Session
+    if (authVM.isReviewerSession) {
+      return const UploadPage();
     }
 
     final user = authVM.user;

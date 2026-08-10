@@ -53,6 +53,8 @@ class PrintOrderModel {
   final String? serviceName;
   final String? razorpayPaymentId;
   final String? paymentStatus;
+  final String? userEmail;
+  final String? customerName;
   
   bool get isXerox => printMode == PrintMode.xeroxShop;
   /// True if admin has confirmed printing is complete
@@ -111,6 +113,8 @@ class PrintOrderModel {
     this.serviceName,
     this.razorpayPaymentId,
     this.paymentStatus,
+    this.userEmail,
+    this.customerName,
   });
 
   // Check if order is active
@@ -162,6 +166,8 @@ class PrintOrderModel {
       serviceName: data['serviceName']?.toString(),
       razorpayPaymentId: data['razorpayPaymentId']?.toString(),
       paymentStatus: data['paymentStatus']?.toString(),
+      userEmail: data['userEmail']?.toString(),
+      customerName: data['customerName']?.toString(),
       projectId: data['projectId']?.toString() ?? 'psfc-43b5a',
     );
   }

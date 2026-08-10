@@ -1,8 +1,8 @@
 {
   "projects": {
-    "default": "think-ink",
-    "test": "think-ink",
-    "zikrint": "think-ink"
+    "default": "zikrint-944a4",
+    "test": "zikrint-944a4",
+    "zikrint": "zikrint-944a4"
   },
   "targets": {},
   "etags": {}

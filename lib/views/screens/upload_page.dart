@@ -17,6 +17,7 @@ import 'history_page.dart'; // Rename reference if needed
 import 'widgets/order_details_sheet.dart';
 import '../profile_page.dart';
 import 'notifications_page.dart';
+import 'recycle_page.dart';
 import '../../services/notification_service.dart';
 import '../../services/pwa_service.dart';
 import '../../services/firestore_service.dart';
@@ -36,6 +37,7 @@ import 'package:http/http.dart' as http;
 import '../../config/backend_config.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -600,8 +602,12 @@ class _UploadPageState extends State<UploadPage> {
                   onRefresh: () async {
                     final xeroxVM = context.read<XeroxShopViewModel>();
                     await xeroxVM.fetchShops();
+                    if (mounted) {
+                      setState(() {
+                        _ordersStream = _orderRepo.getActiveOrders();
+                      });
+                    }
                     await Future.delayed(const Duration(milliseconds: 500));
-                    if (mounted) setState(() {});
                   },
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -616,6 +622,19 @@ class _UploadPageState extends State<UploadPage> {
                       ],
                     ),
                   ),
+                ),
+                // Tab 3: Recycle & Earn
+                RecyclePage(
+                  onUseOnPrints: () {
+                    setState(() {
+                      _currentTabIndex = 0;
+                    });
+                    _tabPageController.animateToPage(
+                      0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
                 ),
               ],
             ),
@@ -638,16 +657,22 @@ class _UploadPageState extends State<UploadPage> {
         unselectedItemColor: AppColors.textSecondary,
         selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 12),
         unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.print_outlined),
-            activeIcon: Icon(Icons.print),
-            label: 'Services',
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home_rounded),
+            label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long_outlined),
-            activeIcon: Icon(Icons.receipt_long),
+            icon: Icon(Icons.assignment_outlined),
+            activeIcon: Icon(Icons.assignment_rounded),
             label: 'Orders',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.recycling_outlined),
+            activeIcon: Icon(Icons.recycling_rounded),
+            label: 'Recycle',
           ),
         ],
       ),
@@ -1141,44 +1166,86 @@ class _UploadPageState extends State<UploadPage> {
 
         // 🔀 Filter based on active vs completed sub-tab
         if (_ordersSubTabIndex == 0) {
-          // Active Orders Sub-tab
-          final activeOrders = rawOrders.where((o) => !o.isPicked && o.status != OrderStatus.completed && !o.orderDone).toList();
+          final currentUser = FirebaseAuth.instance.currentUser;
+          // Active Orders Sub-tab: Merge live stream active & local storage active orders for this user ONLY
+          return FutureBuilder<List<PrintOrderModel>>(
+            future: LocalStorageService().getLocalOrders(
+              userId: currentUser?.uid,
+              userEmail: currentUser?.email,
+            ),
+            builder: (context, localSnapshot) {
+              final localOrders = localSnapshot.data ?? [];
+              final streamActive = rawOrders.where((o) => !o.isPicked && o.status != OrderStatus.completed && !o.orderDone).toList();
 
-          if (activeOrders.isEmpty) {
-            return Container(
-              padding: const EdgeInsets.symmetric(vertical: 36),
-              child: Center(
-                child: Column(
-                  children: [
-                    const Icon(Icons.inbox_outlined, size: 40, color: AppColors.textTertiary),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No active orders in progress',
-                      style: GoogleFonts.inter(color: AppColors.textTertiary, fontWeight: FontWeight.w600, fontSize: 14),
+              final Map<String, PrintOrderModel> combinedMap = {};
+              for (final o in streamActive) {
+                combinedMap[o.orderId] = o;
+              }
+              for (final o in localOrders) {
+                if (!o.isPicked && o.status != OrderStatus.completed && !o.orderDone) {
+                  combinedMap[o.orderId] = o;
+                }
+              }
+
+              final activeOrders = combinedMap.values.toList();
+              activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+              // 🧪 Terminal Console Logger for Tester Account Active Orders
+              final authVM = context.read<AuthViewModel>();
+              final String currentUserEmail = (currentUser?.email ?? authVM.user?.email ?? '').toLowerCase();
+              final bool isReviewerAccount = authVM.isReviewerSession || currentUserEmail == 'reviewer@zikrint.app' || currentUserEmail.contains('reviewer');
+
+              if (isReviewerAccount) {
+                debugPrint("\n==================================================");
+                debugPrint("🧪 [TESTER ACCOUNT ACTIVE ORDERS]: Found ${activeOrders.length} active order(s)");
+                if (activeOrders.isEmpty) {
+                  debugPrint("⚠️ No active orders currently found for tester account.");
+                } else {
+                  for (int i = 0; i < activeOrders.length; i++) {
+                    final o = activeOrders[i];
+                    debugPrint("  [$i] Order ID: ${o.orderId} | Pickup Code: ${o.pickupCode} | Status: ${o.status.name} / ${o.orderStatus ?? 'active'} | Amount: ₹${o.totalPrice} | Files: ${o.fileUrls.length}");
+                  }
+                }
+                debugPrint("==================================================\n");
+              }
+
+              if (activeOrders.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 36),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        const Icon(Icons.inbox_outlined, size: 40, color: AppColors.textTertiary),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No active orders in progress',
+                          style: GoogleFonts.inter(color: AppColors.textTertiary, fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                      ],
                     ),
+                  ),
+                );
+              }
+
+              final xeroxOrders = activeOrders.where((o) => o.printMode == PrintMode.xeroxShop).toList();
+              final kioskOrders = activeOrders.where((o) => o.printMode == PrintMode.autonomous).toList();
+
+              return Column(
+                children: [
+                  if (xeroxOrders.isNotEmpty) ...[
+                    _sectionHeader('XEROX SHOP ORDERS', Icons.store_rounded),
+                    const SizedBox(height: 12),
+                    ...xeroxOrders.map((order) => _buildOrderCard(order)),
                   ],
-                ),
-              ),
-            );
-          }
-
-          final xeroxOrders = activeOrders.where((o) => o.printMode == PrintMode.xeroxShop).toList();
-          final kioskOrders = activeOrders.where((o) => o.printMode == PrintMode.autonomous).toList();
-
-          return Column(
-            children: [
-              if (xeroxOrders.isNotEmpty) ...[
-                _sectionHeader('XEROX SHOP ORDERS', Icons.store_rounded),
-                const SizedBox(height: 12),
-                ...xeroxOrders.map((order) => _buildOrderCard(order)),
-              ],
-              if (kioskOrders.isNotEmpty) ...[
-                if (xeroxOrders.isNotEmpty) const SizedBox(height: 20),
-                _sectionHeader('KIOSK PRINT ORDERS', Icons.print_rounded),
-                const SizedBox(height: 12),
-                ...kioskOrders.map((order) => _buildOrderCard(order)),
-              ],
-            ],
+                  if (kioskOrders.isNotEmpty) ...[
+                    if (xeroxOrders.isNotEmpty) const SizedBox(height: 20),
+                    _sectionHeader('KIOSK PRINT ORDERS', Icons.print_rounded),
+                    const SizedBox(height: 12),
+                    ...kioskOrders.map((order) => _buildOrderCard(order)),
+                  ],
+                ],
+              );
+            },
           );
         } else {
           // Completed Orders Sub-tab: Merge live stream completed & local storage completed orders

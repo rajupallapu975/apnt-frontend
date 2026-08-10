@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/print_order_model.dart';
 import '../../services/local_storage_service.dart';
 import '../../utils/app_colors.dart';
@@ -28,7 +29,11 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
 
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
-    final orders = await _localStorage.getLocalOrders();
+    final user = FirebaseAuth.instance.currentUser;
+    final orders = await _localStorage.getLocalOrders(
+      userId: user?.uid,
+      userEmail: user?.email,
+    );
     // Focused on COMPLETED orders per user request
     _completedOrders = orders.where((o) => 
       o.status == OrderStatus.completed || 

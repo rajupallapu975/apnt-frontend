@@ -37,23 +37,36 @@ class ZikrinterServicesSection extends StatelessWidget {
                 letterSpacing: -0.5,
               ),
             ),
-            if (!showAll)
-              GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ZikrinterAllServicesPage(services: services),
-                  ),
-                ),
-                child: Text(
-                  'See all',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryBlue,
-                  ),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ZikrinterAllServicesPage(services: services),
                 ),
               ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'More Services',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: AppColors.primaryBlue),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -68,10 +81,11 @@ class ZikrinterServicesSection extends StatelessWidget {
             mainAxisSpacing: 10,
             childAspectRatio: 0.72, // taller than wide — Blinkit style
           ),
-          itemCount: displayCount + (showAll ? 0 : 1), // +1 for "More" card
+          itemCount: (services.length > 5 ? 5 : services.length) + 1, // +1 for "More" card
           itemBuilder: (context, index) {
+            final displayCount = services.length > 5 ? 5 : services.length;
             // ── "More Services" card ─────────────────────────────────────────
-            if (!showAll && index == displayCount) {
+            if (index == displayCount) {
               return _MoreCard(services: services);
             }
 

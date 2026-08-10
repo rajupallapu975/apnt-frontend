@@ -74,6 +74,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "52763236709-5upg8kpjuql1t98fme5n91hohco7hoeu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zikrint.app",
+            "certificate_hash": "9ff3e502dca0c7d9f34d42f86c4751af85d25b34"
+          }
+        },
+        {
+          "client_id": "52763236709-l9fv6tg9ehtihum9gmjadsdv8dbkq560.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zikrint.app",
+            "certificate_hash": "1f44d765806ed711440b4e13c3a9b1267cde4155"
+          }
+        },
+        {
           "client_id": "52763236709-tpvjs244os15h8nctddjts8fht23kpig.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

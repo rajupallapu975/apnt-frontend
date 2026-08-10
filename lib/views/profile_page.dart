@@ -138,6 +138,123 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  void _showDeleteAccountDialog(BuildContext context, AuthViewModel authVM) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Delete Account?',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Are you sure you want to delete your account?',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.primaryBlack),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
+                    ),
+                    child: Text(
+                      '⚠️ PERMANENT ACTION: This will completely and permanently erase your account, order history, uploaded files, and settings. This CANNOT be undone.',
+                      style: GoogleFonts.manrope(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w700, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              actions: [
+                if (!isDeleting)
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text('CANCEL', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.greyDark, fontSize: 13)),
+                  ),
+                ElevatedButton(
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setState(() {
+                            isDeleting = true;
+                          });
+                          try {
+                            await authVM.deleteAccount();
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                              if (context.mounted) {
+                                Navigator.of(context).popUntil((route) => route.isFirst);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Your account has been completely and permanently deleted.'),
+                                    backgroundColor: AppColors.primaryBlack,
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            if (dialogContext.mounted) {
+                              setState(() {
+                                isDeleting = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e.toString().replaceAll('Exception: ', '')),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: isDeleting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text('DELETE PERMANENTLY', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authVM = context.watch<AuthViewModel>();
@@ -223,7 +340,17 @@ class ProfilePage extends StatelessWidget {
                     color: AppColors.greyDark,
                     onTap: () => _showSupportCenter(context),
                   ).animate().fadeIn(delay: 600.ms).slideX(begin: 0.1, end: 0),
-                  const SizedBox(height: 56),
+                  const SizedBox(height: 16),
+
+                  /// 🗑️ DELETE ACCOUNT ITEM
+                  _profileItem(
+                    icon: Icons.delete_forever_rounded,
+                    title: 'Delete Account',
+                    subtitle: 'Permanently delete account and all data',
+                    color: AppColors.error,
+                    onTap: () => _showDeleteAccountDialog(context, authVM),
+                  ).animate().fadeIn(delay: 650.ms).slideX(begin: 0.1, end: 0),
+                  const SizedBox(height: 48),
 
                   /// 🚪 LOGOUT BUTTON
                   PrimaryButton(

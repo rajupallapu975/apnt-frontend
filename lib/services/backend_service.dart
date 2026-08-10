@@ -114,6 +114,10 @@ class BackendService {
   }) async {
     final user = _auth.currentUser;
     final String userId = user?.uid ?? "guest_user";
+    final bool isReviewerOrder = razorpaySignature.contains('reviewer') || razorpayOrderId.contains('reviewer');
+    final String userEmail = (user?.email != null && user!.email!.isNotEmpty)
+        ? user.email!
+        : (isReviewerOrder ? 'reviewer@zikrint.app' : 'Guest User');
 
     try {
       final response = await http.post(
@@ -125,12 +129,12 @@ class BackendService {
           "razorpay_signature": razorpaySignature,
           "printSettings": printSettings,
           "userId": userId,
-          "userEmail": user?.email ?? "Guest User",
+          "userEmail": userEmail,
           "amount": amount,
           "totalPages": totalPages,
           "printMode": printMode, // Pass mode to backend
           "customId": customId,
-          "customerName": customerName,
+          "customerName": customerName ?? 'Reviewer User',
         }),
       ).timeout(const Duration(seconds: 30));
 

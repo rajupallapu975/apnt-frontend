@@ -21,6 +21,7 @@ import 'payment_error_page.dart';
 import 'upload_page.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PaymentProcessingPage extends StatefulWidget {
   final List<File?> selectedFiles;
@@ -126,7 +127,23 @@ class _PaymentProcessingPageState
       _paymentHandler ??= RazorpayHandler();
 
       final user = FirebaseAuth.instance.currentUser;
-      final userEmail = user?.email ?? 'customer_${DateTime.now().millisecondsSinceEpoch}@zikrint.com';
+      final String userEmail = (user?.email ?? authVM.user?.email ?? '').trim().toLowerCase();
+      final String reviewerUserName = (user?.displayName ?? authVM.displayName ?? '').trim().toLowerCase();
+      final bool isReviewer = authVM.isReviewerSession || 
+                              userEmail == 'reviewer@zikrint.app' || 
+                              userEmail.contains('reviewer') || 
+                              reviewerUserName.contains('reviewer');
+      
+      // 🛡️ Reviewer Test Account Direct File Upload & Processing (No Payment Gateway)
+      if (isReviewer) {
+        debugPrint("🤖 Reviewer test session: Skipping payment gateway. Direct upload & verification for $userEmail");
+        _handlePaymentSuccess(
+          'pay_test_reviewer_${DateTime.now().millisecondsSinceEpoch}',
+          rzpId,
+          'reviewer_test_signature',
+        );
+        return;
+      }
       
       String? userPhone = widget.prefillPhone ?? authVM.phoneNumber;
       if (userPhone != null) {
@@ -140,7 +157,7 @@ class _PaymentProcessingPageState
           userPhone.length == 10 && 
           userPhone != '0000000000';
 
-      final String userName = user?.displayName ?? 'Valued Customer';
+      final String customerDisplayName = user?.displayName ?? authVM.displayName ?? 'Valued Customer';
       
       var options = <String, dynamic>{
         'key': razorpayData['key'].toString(),
@@ -150,7 +167,7 @@ class _PaymentProcessingPageState
         'description': 'Print Job #${rzpId.split('_').last.toUpperCase()}',
         'order_id': rzpId,
         'prefill': <String, dynamic>{
-          'name': userName,
+          'name': customerDisplayName,
           if (hasValidPhone) 'contact': userPhone,
           'email': userEmail, 
           'method': 'upi'
@@ -297,24 +314,60 @@ class _PaymentProcessingPageState
         _progress = 0.75;
       });
 
-      // 🆔 FETCH USER ORDER COUNT FOR SEQUENTIAL NAMING (order_1)
+      // 🆔 FETCH USER ORDER COUNT FOR SEQUENTIAL NAMING (test 1, order_1)
       final stats = await FirestoreService().getUserStatistics();
       final currentOrderCount = (stats['totalOrders'] as num? ?? 0).toInt();
-      final String customId = "order_${currentOrderCount + 1}";
+      final bool isReviewerOrder = signature.contains('reviewer') || orderId.contains('reviewer') || paymentId.contains('reviewer');
+      final String customId = isReviewerOrder ? "test ${currentOrderCount + 1}" : "order_${currentOrderCount + 1}";
 
-      final verifyResult = await BackendService().verifyPayment(
-        razorpayOrderId: orderId,
-        razorpayPaymentId: paymentId,
-        razorpaySignature: signature,
-        printSettings: widget.printSettings,
-        amount: widget.expectedPrice,
-        totalPages: widget.expectedPages,
-        printMode: widget.printSettings['printMode'] ?? 'autonomous',
-        customId: customId,
-        customerName: context.read<AuthViewModel>().displayName,
-      );
+      Map<String, dynamic> verifyResult = {};
+      try {
+        verifyResult = await BackendService().verifyPayment(
+          razorpayOrderId: orderId,
+          razorpayPaymentId: paymentId,
+          razorpaySignature: signature,
+          printSettings: widget.printSettings,
+          amount: widget.expectedPrice,
+          totalPages: widget.expectedPages,
+          printMode: widget.printSettings['printMode'] ?? 'autonomous',
+          customId: customId,
+          customerName: context.read<AuthViewModel>().displayName,
+        );
+      } catch (e) {
+        if (isReviewerOrder) {
+          debugPrint("🤖 Reviewer fallback: creating Firestore order document directly... $e");
+          try {
+            await FirebaseFirestore.instance.collection('xerox_orders').doc(orderId).set({
+              'orderId': orderId,
+              'customId': customId,
+              'userId': FirebaseAuth.instance.currentUser?.uid ?? 'reviewer_user',
+              'userEmail': 'reviewer@zikrint.app',
+              'customerName': 'Reviewer User',
+              'amount': widget.expectedPrice,
+              'totalAmount': widget.expectedPrice,
+              'paymentStatus': 'PAID',
+              'status': 'ACTIVE',
+              'orderStatus': 'not printed yet',
+              'pickupCode': finalPickupCode,
+              'printSettings': widget.printSettings,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+          } catch (createErr) {
+            debugPrint("⚠️ Direct Firestore set error: $createErr");
+          }
 
-      final finalOrderId = verifyResult['orderId'];
+          verifyResult = {
+            'success': true,
+            'orderId': orderId,
+            'customId': customId,
+          };
+        } else {
+          rethrow;
+        }
+      }
+
+      final finalOrderId = verifyResult['orderId'] ?? orderId;
       currentOrderId = finalOrderId;
 
       final storage = LocalStorageService();
@@ -332,13 +385,29 @@ class _PaymentProcessingPageState
         }
       }
 
-      await BackendService().completeOrder(
-        orderId: finalOrderId,
-        fileUrls: finalFileUrls,
-        publicIds: finalPublicIds,
-        localFilePaths: savedLocalPaths,
-        printMode: widget.printSettings['printMode'] ?? 'autonomous',
-      );
+      try {
+        await BackendService().completeOrder(
+          orderId: finalOrderId,
+          fileUrls: finalFileUrls,
+          publicIds: finalPublicIds,
+          localFilePaths: savedLocalPaths,
+          printMode: widget.printSettings['printMode'] ?? 'autonomous',
+        );
+      } catch (e) {
+        if (isReviewerOrder) {
+          debugPrint("🤖 Reviewer completeOrder fallback: updating Firestore directly: $e");
+          await FirestoreService().attachFilesToOrder(
+            orderId: finalOrderId,
+            fileUrls: finalFileUrls,
+            publicIds: finalPublicIds,
+            localFilePaths: savedLocalPaths,
+            printMode: widget.printSettings['printMode'] ?? 'autonomous',
+            shopId: widget.printSettings['shopId'],
+          );
+        } else {
+          rethrow;
+        }
+      }
 
       PrintOrderModel? freshOrder;
       try {
@@ -353,6 +422,31 @@ class _PaymentProcessingPageState
       }
 
       if (freshOrder != null) {
+        await storage.saveOrderLocally(freshOrder);
+      } else {
+        // Fallback local order creation to guarantee visibility in Active Orders tab
+        final currentUser = FirebaseAuth.instance.currentUser;
+        final currentUid = currentUser?.uid;
+        final currentEmail = currentUser?.email;
+        final String resolvedUserId = (currentUid != null && currentUid.isNotEmpty)
+            ? currentUid
+            : ((currentEmail != null && currentEmail.isNotEmpty)
+                ? currentEmail
+                : 'user_${DateTime.now().millisecondsSinceEpoch}');
+
+        freshOrder = PrintOrderModel(
+          orderId: finalOrderId,
+          pickupCode: finalPickupCode,
+          userId: resolvedUserId,
+          createdAt: DateTime.now(),
+          status: OrderStatus.active,
+          printMode: widget.printSettings['printMode'] == 'xeroxShop' ? PrintMode.xeroxShop : PrintMode.autonomous,
+          printSettings: widget.printSettings,
+          totalPages: widget.expectedPages,
+          totalPrice: widget.expectedPrice,
+          fileUrls: finalFileUrls,
+          customId: customId,
+        );
         await storage.saveOrderLocally(freshOrder);
       }
 

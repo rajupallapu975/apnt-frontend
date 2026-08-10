@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/google_slider_button.dart';
@@ -164,6 +165,18 @@ class LoginView extends StatelessWidget {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 16),
+                                TextButton.icon(
+                                  onPressed: () => _showEmailSignInDialog(context, authViewModel),
+                                  icon: const Icon(Icons.email_outlined, size: 16, color: AppColors.primaryBlue),
+                                  label: Text(
+                                    'Sign in with Email',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: AppColors.primaryBlue,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
                               ],
                             )
                             .animate()
@@ -178,6 +191,88 @@ class LoginView extends StatelessWidget {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEmailSignInDialog(BuildContext context, AuthViewModel authViewModel) {
+    final emailController = TextEditingController(text: 'reviewer@zikrint.app');
+    final passwordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.mark_email_read_rounded, color: AppColors.primaryBlue),
+            const SizedBox(width: 10),
+            Text(
+              'Reviewer Sign In',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Use official reviewer credentials to evaluate Zikrint test mode.',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email Address',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email_outlined),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              final success = await authViewModel.signInWithEmail(
+                emailController.text,
+                passwordController.text,
+              );
+              nav.pop();
+              if (!success) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Sign in failed. Please check credentials.'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
+            },
+            child: const Text('Sign In'),
           ),
         ],
       ),
