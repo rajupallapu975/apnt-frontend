@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/app_colors.dart';
 import 'xerox_shop_model.dart';
 
@@ -126,6 +127,21 @@ class ShopCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _actionButton(
+                    label: 'NAVIGATE',
+                    icon: Icons.directions_rounded,
+                    color: AppColors.success,
+                    onPressed: () async {
+                      final uri = Uri.parse(shop.mapsUrl);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    isFilled: false,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _actionButton(
                     label: 'DETAILS',
                     icon: Icons.info_outline_rounded,
                     color: AppColors.textSecondary,
@@ -133,7 +149,7 @@ class ShopCard extends StatelessWidget {
                     isFilled: false,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: _actionButton(
                     label: 'SELECT',

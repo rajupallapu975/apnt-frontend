@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/print_order_model.dart';
+import '../../services/firestore_service.dart';
 import '../../services/local_storage_service.dart';
 import '../../utils/app_colors.dart';
 import '../../widgets/common/modern_card.dart';
@@ -30,10 +31,28 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
-    final orders = await _localStorage.getLocalOrders(
+    final localOrders = await _localStorage.getLocalOrders(
       userId: user?.uid,
       userEmail: user?.email,
     );
+
+    List<PrintOrderModel> remoteOrders = [];
+    try {
+      remoteOrders = await FirestoreService().getUserOrders().first.timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint("⚠️ Remote history load timeout/error: $e");
+    }
+
+    final combinedMap = <String, PrintOrderModel>{};
+    for (var o in localOrders) {
+      combinedMap[o.orderId] = o;
+    }
+    for (var o in remoteOrders) {
+      combinedMap[o.orderId] = o;
+    }
+
+    final orders = combinedMap.values.toList();
+
     // Focused on COMPLETED orders per user request
     _completedOrders = orders.where((o) => 
       o.status == OrderStatus.completed || 

@@ -132,6 +132,20 @@ class LocalStorageService {
   }
 
 
+  static const String _keyLastName = 'last_used_name';
+
+  /// 👤 Save the last used full name for onboarding persistence
+  Future<void> saveLastName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLastName, name);
+  }
+
+  /// 👤 Get the last used full name
+  Future<String?> getLastName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyLastName);
+  }
+
   /// 📞 Save the last used phone number for prefilling
   Future<void> saveLastPhone(String phone) async {
     final prefs = await SharedPreferences.getInstance();

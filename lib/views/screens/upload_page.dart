@@ -17,7 +17,6 @@ import 'history_page.dart'; // Rename reference if needed
 import 'widgets/order_details_sheet.dart';
 import '../profile_page.dart';
 import 'notifications_page.dart';
-import 'recycle_page.dart';
 import '../../services/notification_service.dart';
 import '../../services/pwa_service.dart';
 import '../../services/firestore_service.dart';
@@ -623,19 +622,6 @@ class _UploadPageState extends State<UploadPage> {
                     ),
                   ),
                 ),
-                // Tab 3: Recycle & Earn
-                RecyclePage(
-                  onUseOnPrints: () {
-                    setState(() {
-                      _currentTabIndex = 0;
-                    });
-                    _tabPageController.animateToPage(
-                      0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                ),
               ],
             ),
       bottomNavigationBar: BottomNavigationBar(
@@ -668,11 +654,6 @@ class _UploadPageState extends State<UploadPage> {
             icon: Icon(Icons.assignment_outlined),
             activeIcon: Icon(Icons.assignment_rounded),
             label: 'Orders',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.recycling_outlined),
-            activeIcon: Icon(Icons.recycling_rounded),
-            label: 'Recycle',
           ),
         ],
       ),
@@ -1523,18 +1504,18 @@ class _UploadPageState extends State<UploadPage> {
                   const SizedBox(height: 12),
                   InkWell(
                     onTap: () async {
-                      String? shopAddr = order.printSettings['shopAddress'];
-                      if (shopAddr == null || shopAddr.isEmpty || shopAddr == 'N/A') {
-                        try {
-                          final xeroxVM = context.read<XeroxShopViewModel>();
-                          final matched = xeroxVM.shops.firstWhere((s) => s.id == order.shopId);
-                          if (matched.address.isNotEmpty) shopAddr = matched.address;
-                        } catch (_) {}
+                      String url;
+                      try {
+                        final xeroxVM = context.read<XeroxShopViewModel>();
+                        final matched = xeroxVM.shops.firstWhere((s) => s.id == order.shopId);
+                        url = matched.mapsUrl;
+                      } catch (_) {
+                        String? shopAddr = order.printSettings['shopAddress'];
+                        final query = (shopAddr != null && shopAddr.isNotEmpty && shopAddr != 'N/A')
+                            ? shopAddr
+                            : (order.shopName ?? 'Xerox Shop');
+                        url = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}';
                       }
-                      final query = (shopAddr != null && shopAddr.isNotEmpty && shopAddr != 'N/A')
-                          ? shopAddr
-                          : (order.shopName ?? 'Xerox Shop');
-                      final url = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}';
                       final uri = Uri.parse(url);
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);

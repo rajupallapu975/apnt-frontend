@@ -15,13 +15,26 @@ class AuthViewModel extends ChangeNotifier {
   String? _displayName;
   bool _isLoading = true;
   bool _isReviewerSession = false;
+  bool _showEmailLogin = false;
 
   bool _isAttemptingAnonSignIn = false;
   bool _anonSignInFailed = false;
 
   bool get isReviewerSession => _isReviewerSession;
+  bool get showEmailLogin => _showEmailLogin;
 
   AuthViewModel() {
+    // ⚙️ Stream auth config from backend (controls showEmailLogin)
+    FirestoreService().streamAuthConfig().listen((config) {
+      final newValue = config['showEmailLogin'] == true;
+      if (_showEmailLogin != newValue) {
+        _showEmailLogin = newValue;
+        notifyListeners();
+      }
+    }, onError: (e) {
+      debugPrint("⚠️ Auth config stream error: $e");
+    });
+
     _authService.user.listen((user) async {
       _user = user;
       if (user != null) {
@@ -104,29 +117,45 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> _loadUserProfile() async {
-    // 🔍 Try Firestore first
-    final data = await FirestoreService().getUserProfileData();
+    final uid = _user?.uid;
+    if (uid == null) return;
+
+    // 🔍 1. Try Firestore first
+    final data = await FirestoreService().getUserProfileData(uid);
     String? phone = data['phoneNumber'];
-    
+    String? name = data['displayName'];
+
+    // 🌐 2. Fallback to Google Account name if Firestore name is not set
+    if ((name == null || name.trim().isEmpty) && _user?.displayName != null && _user!.displayName!.trim().isNotEmpty) {
+      name = _user!.displayName;
+      FirestoreService().updateUserName(name!);
+    }
+
+    // 📂 3. Fallback to local storage if Firestore name is empty/fails
+    if (name == null || name.trim().isEmpty) {
+      name = await LocalStorageService().getLastName();
+    }
+
+    // 📂 4. Fallback to local storage if phone is empty
+    if (phone == null || phone.isEmpty) {
+      phone = await LocalStorageService().getLastPhone();
+    }
+
     if (_isReviewerSession || (_user?.email ?? '').toLowerCase() == 'reviewer@zikrint.app') {
       _displayName = 'Reviewer User';
     } else {
-      _displayName = data['displayName'];
-    }
-
-    bool fromLocal = false;
-    
-    // 📂 Fallback to local storage if Firestore is empty/fails
-    if (phone == null || phone.isEmpty) {
-      phone = await LocalStorageService().getLastPhone();
-      fromLocal = true;
+      _displayName = name;
     }
 
     _phoneNumber = phone;
     notifyListeners();
 
-    // If we loaded it from local storage, sync it to Firestore so it's saved in Firebase!
-    if (fromLocal && phone != null && phone.isNotEmpty) {
+    // 💾 Persist to local storage & sync so it is remembered across reinstalls
+    if (name != null && name.isNotEmpty) {
+      LocalStorageService().saveLastName(name);
+    }
+    if (phone != null && phone.isNotEmpty) {
+      LocalStorageService().saveLastPhone(phone);
       FirestoreService().updateUserPhone(phone).catchError((e) {
         debugPrint("⚠️ Syncing local phone to Firestore failed: $e");
       });
@@ -157,6 +186,7 @@ class AuthViewModel extends ChangeNotifier {
     FirestoreService().updateUserName(name).catchError((e) {
       debugPrint("⚠️ Firestore name update failed: $e");
     });
+    LocalStorageService().saveLastName(name);
   }
 
   /// 🔐 Sign in

@@ -44,6 +44,16 @@ class FirestoreService {
 
   CollectionReference get _usersCollection => _firestore.collection('users');
 
+  /// ⚙️ Dynamic Auth Config (Controls showEmailLogin from backend)
+  Stream<Map<String, dynamic>> streamAuthConfig() {
+    return _firestore.collection('app_config').doc('auth').snapshots().map((doc) {
+      if (doc.exists && doc.data() != null) {
+        return doc.data()!;
+      }
+      return {'showEmailLogin': false};
+    });
+  }
+
   /* =================================================
      USER PROFILE MANAGEMENT
   ================================================= */
@@ -96,10 +106,11 @@ class FirestoreService {
     }
   }
 
-  Future<Map<String, String?>> getUserProfileData() async {
-    if (_currentUserId == null) return {};
+  Future<Map<String, String?>> getUserProfileData([String? uid]) async {
+    final targetUid = uid ?? _currentUserId;
+    if (targetUid == null || targetUid.isEmpty) return {};
     try {
-      final doc = await _usersCollection.doc(_currentUserId).get().timeout(const Duration(seconds: 4));
+      final doc = await _usersCollection.doc(targetUid).get().timeout(const Duration(seconds: 5));
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>? ?? {};
         return {
@@ -388,27 +399,106 @@ class FirestoreService {
       final String uid = user.uid;
       final String? email = user.email;
 
+      final db2 = _getFirestoreForProject('zikrint-944a4');
+      final db3 = _getFirestoreForProject('think-ink');
+
       final List<Stream<List<PrintOrderModel>>> streams = [
+        // Kiosk (UID)
         _ordersCollection
             .where('userId', isEqualTo: uid)
-            .orderBy('createdAt', descending: true)
             .snapshots()
             .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturn(<PrintOrderModel>[])
+            .onErrorReturn(<PrintOrderModel>[]),
+
+        // Xerox (UID) - Project 1
+        _firestore.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .snapshots()
+            .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[]),
       ];
+
+      if (db2 != _firestore) {
+        streams.add(
+          db2.collection('xerox_orders')
+              .where('userId', isEqualTo: uid)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
+        );
+      }
+
+      if (db3 != _firestore) {
+        streams.add(
+          db3.collection('xerox_orders')
+              .where('userId', isEqualTo: uid)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
+        );
+      }
 
       if (email != null && email.isNotEmpty) {
         streams.add(
           _ordersCollection
               .where('userId', isEqualTo: email)
-              .orderBy('createdAt', descending: true)
               .snapshots()
               .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
               .onErrorReturn(<PrintOrderModel>[])
         );
+        streams.add(
+          _firestore.collection('xerox_orders')
+              .where('userId', isEqualTo: email)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
+        );
+        streams.add(
+          _firestore.collection('xerox_orders')
+              .where('userEmail', isEqualTo: email)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
+        );
+
+        if (db2 != _firestore) {
+          streams.add(
+            db2.collection('xerox_orders')
+                .where('userId', isEqualTo: email)
+                .snapshots()
+                .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+                .onErrorReturn(<PrintOrderModel>[])
+          );
+          streams.add(
+            db2.collection('xerox_orders')
+                .where('userEmail', isEqualTo: email)
+                .snapshots()
+                .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+                .onErrorReturn(<PrintOrderModel>[])
+          );
+        }
+
+        if (db3 != _firestore) {
+          streams.add(
+            db3.collection('xerox_orders')
+                .where('userId', isEqualTo: email)
+                .snapshots()
+                .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+                .onErrorReturn(<PrintOrderModel>[])
+          );
+          streams.add(
+            db3.collection('xerox_orders')
+                .where('userEmail', isEqualTo: email)
+                .snapshots()
+                .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+                .onErrorReturn(<PrintOrderModel>[])
+          );
+        }
       }
 
-      return Rx.combineLatest(streams, (List<List<PrintOrderModel>> results) {
+      final preparedStreams = streams.map((s) => s.startWith(<PrintOrderModel>[])).toList();
+
+      return Rx.combineLatest(preparedStreams, (List<List<PrintOrderModel>> results) {
         final all = results.expand((list) => list).toList();
         final uniqueIds = <String>{};
         final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
@@ -494,6 +584,13 @@ class FirestoreService {
       streams.add(
         _firestore.collection('xerox_orders')
             .where('userId', isEqualTo: email)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+      );
+      streams.add(
+        _firestore.collection('xerox_orders')
+            .where('userEmail', isEqualTo: email)
             .snapshots()
             .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
             .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
@@ -605,10 +702,24 @@ class FirestoreService {
               .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
               .onErrorReturn(<PrintOrderModel>[])
         );
+        streams.add(
+          _firestore.collection('xerox_orders')
+              .where('userEmail', isEqualTo: email)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturn(<PrintOrderModel>[])
+        );
         if (db2 != _firestore) {
           streams.add(
             db2.collection('xerox_orders')
                 .where('userId', isEqualTo: email)
+                .snapshots()
+                .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+                .onErrorReturn(<PrintOrderModel>[])
+          );
+          streams.add(
+            db2.collection('xerox_orders')
+                .where('userEmail', isEqualTo: email)
                 .snapshots()
                 .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
                 .onErrorReturn(<PrintOrderModel>[])
@@ -618,6 +729,13 @@ class FirestoreService {
           streams.add(
             db3.collection('xerox_orders')
                 .where('userId', isEqualTo: email)
+                .snapshots()
+                .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+                .onErrorReturn(<PrintOrderModel>[])
+          );
+          streams.add(
+            db3.collection('xerox_orders')
+                .where('userEmail', isEqualTo: email)
                 .snapshots()
                 .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
                 .onErrorReturn(<PrintOrderModel>[])

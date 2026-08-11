@@ -53,28 +53,31 @@ class LoginView extends StatelessWidget {
                         children: [
                           const SizedBox(height: 40),
 
-                          // 🔷 Brand Logo with Premium Breath Animation
-                          Hero(
-                            tag: 'app_logo',
-                            child: Container(
-                              padding: const EdgeInsets.all(32),
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                shape: BoxShape.circle,
-                                boxShadow: AppColors.mediumShadow,
+                          // 🔷 Brand Logo with Premium Breath Animation (Long-press for Reviewer Auth)
+                          GestureDetector(
+                            onLongPress: () => _showEmailSignInDialog(context, authViewModel),
+                            child: Hero(
+                              tag: 'app_logo',
+                              child: Container(
+                                padding: const EdgeInsets.all(32),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  shape: BoxShape.circle,
+                                  boxShadow: AppColors.mediumShadow,
+                                ),
+                                child: Image.asset(
+                                  'assets/image.png',
+                                  width: 120,
+                                  height: 120,
+                                  fit: BoxFit.contain,
+                                ),
                               ),
-                              child: Image.asset(
-                                'assets/image.png',
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          )
-                          .animate()
-                          .fadeIn(duration: 800.ms)
-                          .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack)
-                          .shimmer(delay: 1000.ms, duration: 2000.ms, color: AppColors.primaryBlue.withValues(alpha: 0.1)),
+                            )
+                            .animate()
+                            .fadeIn(duration: 800.ms)
+                            .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack)
+                            .shimmer(delay: 1000.ms, duration: 2000.ms, color: AppColors.primaryBlue.withValues(alpha: 0.1)),
+                          ),
 
                           const SizedBox(height: 48),
 
@@ -165,18 +168,20 @@ class LoginView extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 16),
-                                TextButton.icon(
-                                  onPressed: () => _showEmailSignInDialog(context, authViewModel),
-                                  icon: const Icon(Icons.email_outlined, size: 16, color: AppColors.primaryBlue),
-                                  label: Text(
-                                    'Sign in with Email',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppColors.primaryBlue,
-                                      fontWeight: FontWeight.w700,
+                                if (authViewModel.showEmailLogin) ...[
+                                  const SizedBox(height: 16),
+                                  TextButton.icon(
+                                    onPressed: () => _showEmailSignInDialog(context, authViewModel),
+                                    icon: const Icon(Icons.email_outlined, size: 16, color: AppColors.primaryBlue),
+                                    label: Text(
+                                      'Sign in with Email',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppColors.primaryBlue,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ],
                             )
                             .animate()
