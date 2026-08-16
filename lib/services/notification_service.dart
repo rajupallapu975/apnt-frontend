@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -187,9 +186,13 @@ class NotificationService extends ChangeNotifier {
           return;
         }
 
-        PermissionStatus status = await Permission.notification.request();
+        NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
         
-        if (status.isDenied || status.isPermanentlyDenied) {
+        if (settings.authorizationStatus == AuthorizationStatus.denied) {
           debugPrint("📱 Notification Permission Denied (Attempt ${retryCount + 1}).");
           await prefs.setInt('notification_permission_retries', retryCount + 1);
           
@@ -203,11 +206,6 @@ class NotificationService extends ChangeNotifier {
           }
         } else {
           await prefs.setInt('notification_permission_retries', 0); // Reset on success
-          if (defaultTargetPlatform == TargetPlatform.android) {
-            if (await Permission.scheduleExactAlarm.isDenied) {
-              await Permission.scheduleExactAlarm.request();
-            }
-          }
         }
       }
     } catch (e) {
@@ -261,21 +259,36 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
+  String _getStorageKey() {
+    final user = FirebaseAuth.instance.currentUser;
+    final email = (user?.email ?? '').toLowerCase();
+    final uid = user?.uid ?? 'guest';
+    if (email.contains('reviewer') || uid == 'reviewer_user') {
+      return 'user_notifications_reviewer_test';
+    }
+    return 'user_notifications_${email.isNotEmpty ? email : uid}';
+  }
+
   Future<void> loadNotifications() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('user_notifications');
+    final storageKey = _getStorageKey();
+    final data = prefs.getString(storageKey);
     if (data != null) {
       final List<dynamic> list = jsonDecode(data);
       _notifications.clear();
       _notifications.addAll(list.map((e) => NotificationItem.fromJson(e)).toList());
+      notifyListeners();
+    } else {
+      _notifications.clear();
       notifyListeners();
     }
   }
 
   Future<void> saveNotifications() async {
     final prefs = await SharedPreferences.getInstance();
+    final storageKey = _getStorageKey();
     final data = jsonEncode(_notifications.map((e) => e.toJson()).toList());
-    await prefs.setString('user_notifications', data);
+    await prefs.setString(storageKey, data);
   }
 
   void markAsRead() {

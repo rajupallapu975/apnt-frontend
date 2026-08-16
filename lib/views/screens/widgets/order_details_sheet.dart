@@ -468,14 +468,8 @@ class OrderDetailsSheet extends StatelessWidget {
                                       icon: Icons.directions_rounded,
                                       color: AppColors.primaryBlue,
                                       onTap: () async {
-                                        String url;
-                                        try {
-                                          final xeroxVM = context.read<XeroxShopViewModel>();
-                                          final matched = xeroxVM.shops.firstWhere((s) => s.id == order.shopId);
-                                          url = matched.mapsUrl;
-                                        } catch (_) {
-                                          url = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(dynamicAddress!)}';
-                                        }
+                                        final url =
+                                            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(dynamicAddress!)}';
                                         if (await canLaunchUrl(Uri.parse(url))) {
                                           await launchUrl(Uri.parse(url),
                                               mode: LaunchMode.externalApplication);

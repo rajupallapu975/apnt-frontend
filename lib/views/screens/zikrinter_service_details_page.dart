@@ -3,10 +3,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/backend_config.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -75,8 +79,16 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
 
   void _loadPaperSizes() {
     final rawSizes = widget.globalParams['paperSizes'] as List<dynamic>? ?? [];
+    final bool isPhoto = widget.serviceName.toLowerCase().contains('passport') ||
+                         widget.serviceId.contains('yPiaqNqbvhABcunanu5X');
+
     setState(() {
-      _paperSizes = rawSizes.isNotEmpty ? List<String>.from(rawSizes) : ['A4'];
+      if (isPhoto) {
+        _paperSizes = ['4 photos', '8 photos'];
+      } else {
+        _paperSizes = rawSizes.isNotEmpty ? List<String>.from(rawSizes) : ['A4'];
+      }
+
       final containsA4 = _paperSizes.any((s) => s.toUpperCase() == 'A4');
       if (containsA4) {
         _selectedSize = _paperSizes.firstWhere((s) => s.toUpperCase() == 'A4');
@@ -120,7 +132,9 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     });
 
     try {
-      final response = await http.get(Uri.parse('${BackendConfig.baseUrl}/api/services/${widget.serviceId}/shops?paperSize=$_selectedSize'));
+      final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+
+      final response = await http.get(Uri.parse('${BackendConfig.baseUrl}/api/services/${widget.serviceId}/shops?paperSize=$_selectedSize&isTestUser=$isReviewer'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -200,6 +214,8 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
 
   String _getDimensions(String size) {
     final s = size.toUpperCase();
+    if (s.contains('4 PHOTO') || s == '4 PHOTOS') return 'Set of 4 Photos  •  ₹60';
+    if (s.contains('8 PHOTO') || s == '8 PHOTOS') return 'Set of 8 Photos  •  ₹100';
     if (s == 'A4' || s.contains('BOND')) {
       return '21.0 × 29.7 cm';
     }
@@ -219,6 +235,7 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
 
   String _getInches(String size) {
     final s = size.toUpperCase();
+    if (s.contains('PHOTO')) return '3.5 × 4.5 cm (Passport)';
     if (s == 'A4' || s.contains('BOND')) {
       return '8.3 × 11.7 in';
     }
@@ -477,16 +494,33 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     );
   }
 
+  bool get _isPassportPhotoService => widget.serviceName.toLowerCase().contains('passport') ||
+                                      widget.serviceId.contains('yPiaqNqbvhABcunanu5X');
+
   Future<void> _pickFromFiles(BuildContext context, XeroxShopModel shop) async {
     Navigator.pop(context);
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'bmp', 'tiff'],
-        allowMultiple: true,
+        allowMultiple: !_isPassportPhotoService,
       );
       if (result == null || result.files.isEmpty) return;
-      _navigateToOptions(result.files.map((f) => FileModel(
+
+      var selectedFiles = result.files;
+      if (_isPassportPhotoService && selectedFiles.length > 1) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Passport photo service allows only 1 photo to be uploaded at a time.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        selectedFiles = [selectedFiles.first];
+      }
+
+      _navigateToOptions(selectedFiles.map((f) => FileModel(
         id: '${DateTime.now().millisecondsSinceEpoch}_${f.name}',
         name: f.name,
         path: f.path ?? '',
@@ -504,23 +538,39 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     Navigator.pop(context);
     try {
       final picker = ImagePicker();
-      final images = await picker.pickMultiImage();
-      if (images.isEmpty) return;
-      
-      final List<FileModel> picked = [];
-      for (final img in images) {
-        final bytes = await img.readAsBytes();
-        picked.add(FileModel(
-          id: '${DateTime.now().millisecondsSinceEpoch}_${img.name}',
-          name: img.name,
-          path: img.path,
-          file: File(img.path),
+      if (_isPassportPhotoService) {
+        final image = await picker.pickImage(source: ImageSource.gallery);
+        if (image == null) return;
+        final bytes = await image.readAsBytes();
+        final fileModel = FileModel(
+          id: '${DateTime.now().millisecondsSinceEpoch}_${image.name}',
+          name: image.name,
+          path: image.path,
+          file: File(image.path),
           bytes: bytes,
           addedAt: DateTime.now(),
           size: bytes.length,
-        ));
+        );
+        _navigateToOptions([fileModel], shop);
+      } else {
+        final images = await picker.pickMultiImage();
+        if (images.isEmpty) return;
+        
+        final List<FileModel> picked = [];
+        for (final img in images) {
+          final bytes = await img.readAsBytes();
+          picked.add(FileModel(
+            id: '${DateTime.now().millisecondsSinceEpoch}_${img.name}',
+            name: img.name,
+            path: img.path,
+            file: File(img.path),
+            bytes: bytes,
+            addedAt: DateTime.now(),
+            size: bytes.length,
+          ));
+        }
+        _navigateToOptions(picked, shop);
       }
-      _navigateToOptions(picked, shop);
     } catch (e) {
       debugPrint("Error picking gallery images: $e");
     }
@@ -549,12 +599,67 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     }
   }
 
-  void _navigateToOptions(List<FileModel> files, XeroxShopModel shop) {
+  Future<List<FileModel>> _autoCropPassportPhotosIfNeeded(List<FileModel> files) async {
+    if (!_isPassportPhotoService) return files;
+    final List<FileModel> inputFiles = files.length > 1 ? [files.first] : files;
+
+    final List<FileModel> processed = [];
+    for (final model in inputFiles) {
+      final String src = kIsWeb ? model.path : (model.file?.path ?? model.path);
+      if (src.isEmpty) {
+        processed.add(model);
+        continue;
+      }
+      try {
+        final cropped = await ImageCropper().cropImage(
+          sourcePath: src,
+          aspectRatio: const CropAspectRatio(ratioX: 3, ratioY: 4),
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Fit Photo (3:4 Passport Ratio)',
+              toolbarColor: AppColors.primaryBlue,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.ratio4x3,
+              lockAspectRatio: true,
+            ),
+            IOSUiSettings(
+              title: 'Fit Photo (3:4 Passport Ratio)',
+              aspectRatioLockEnabled: true,
+            ),
+          ],
+        );
+        if (cropped != null) {
+          final bytes = await cropped.readAsBytes();
+          final String webPath = kIsWeb ? "data:image/png;base64,${base64Encode(bytes)}" : cropped.path;
+          processed.add(FileModel(
+            id: model.id,
+            name: model.name,
+            path: webPath,
+            file: kIsWeb ? null : File(cropped.path),
+            bytes: bytes,
+            addedAt: DateTime.now(),
+            size: bytes.length,
+            pageCount: 1,
+          ));
+        } else {
+          processed.add(model);
+        }
+      } catch (e) {
+        debugPrint("Error auto-cropping passport photo: $e");
+        processed.add(model);
+      }
+    }
+    return processed;
+  }
+
+  Future<void> _navigateToOptions(List<FileModel> files, XeroxShopModel shop) async {
+    final processedFiles = await _autoCropPassportPhotosIfNeeded(files);
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PrintOptionsPage(
-          pickedFiles: files,
+          pickedFiles: processedFiles,
           printMode: PrintMode.xeroxShop,
           shopId: _selectedShop!.id,
           shopName: _selectedShop!.name,
@@ -693,7 +798,8 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                   ),
                 ),
 
-                // Select Paper Size Section Card
+                // Select Paper Size Section Card (hidden when 1 or 0 sizes available)
+                if (_paperSizes.length > 1)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(24),
@@ -711,14 +817,29 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Select Paper Size',
-                        style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Choose the sheet standard formatting for your printouts',
-                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                      Builder(
+                        builder: (context) {
+                          final isPhoto = widget.serviceName.toLowerCase().contains('passport') ||
+                                          _paperSizes.any((s) => s.toLowerCase().contains('photo'));
+                          final title = isPhoto ? 'Select Photo Quantity' : 'Select Paper Size';
+                          final subtitle = isPhoto
+                              ? 'Choose how many passport size photos you need'
+                              : 'Choose the sheet standard formatting for your printouts';
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                subtitle,
+                                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 20),
                       
@@ -827,9 +948,18 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                         style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                       ),
                       const SizedBox(height: 16),
-                      _specRow(Icons.description_outlined, 'Selected Size', _selectedSize),
-                      _specRow(Icons.aspect_ratio_outlined, 'Dimensions', _getDimensions(_selectedSize)),
-                      _specRow(Icons.square_foot_outlined, 'Inches', _getInches(_selectedSize)),
+                      Builder(
+                        builder: (context) {
+                          final isPhoto = widget.serviceName.toLowerCase().contains('passport') || widget.serviceId.contains('yPiaqNqbvhABcunanu5X');
+                          return Column(
+                            children: [
+                              _specRow(Icons.description_outlined, isPhoto ? 'Selected Package' : 'Selected Size', _selectedSize),
+                              _specRow(Icons.aspect_ratio_outlined, isPhoto ? 'Package Pricing' : 'Dimensions', _getDimensions(_selectedSize)),
+                              _specRow(Icons.square_foot_outlined, isPhoto ? 'Photo Size' : 'Inches', _getInches(_selectedSize)),
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -876,9 +1006,15 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      widget.actionButtonLabel ?? 'Continue',
-                      style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold),
+                    Builder(
+                      builder: (context) {
+                        final isPhoto = widget.serviceName.toLowerCase().contains('passport') || widget.serviceId.contains('yPiaqNqbvhABcunanu5X');
+                        final label = widget.actionButtonLabel ?? (isPhoto ? 'Continue to Select Shop' : 'Continue');
+                        return Text(
+                          label,
+                          style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold),
+                        );
+                      },
                     ),
                     const SizedBox(width: 8),
                     const Icon(Icons.arrow_forward_rounded, size: 18),
@@ -1248,40 +1384,43 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                   ),
                 ),
 
-                // Pricing Details Card
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
+                // Pricing Details Card (Replaced with Photo Upload Rules for Passport Photos)
+                if (widget.serviceName.toLowerCase().contains('passport') || widget.serviceId.contains('yPiaqNqbvhABcunanu5X'))
+                  _buildPassportRulesCard()
+                else
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pricing Details (${_selectedSize.toUpperCase()})',
+                          style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 16),
+                        _pricingRow('Black & White (Single Side)', bwSingle),
+                        _pricingRow('Black & White (Double Side)', bwDouble),
+                        _pricingRow('Black & White (Bulk Rate)', bwBulk),
+                        const Divider(height: 24),
+                        _pricingRow('Color (Single Side)', colorSingle),
+                        _pricingRow('Color (Double Side)', colorDouble),
+                        _pricingRow('Color (Bulk Rate)', colorBulk),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Pricing Details (${_selectedSize.toUpperCase()})',
-                        style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                      ),
-                      const SizedBox(height: 16),
-                      _pricingRow('Black & White (Single Side)', bwSingle),
-                      _pricingRow('Black & White (Double Side)', bwDouble),
-                      _pricingRow('Black & White (Bulk Rate)', bwBulk),
-                      const Divider(height: 24),
-                      _pricingRow('Color (Single Side)', colorSingle),
-                      _pricingRow('Color (Double Side)', colorDouble),
-                      _pricingRow('Color (Bulk Rate)', colorBulk),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
@@ -1570,6 +1709,101 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPassportRulesCard() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF), // Soft light blue tint
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.25), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.rule_folder_rounded, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Photo Upload Rules',
+                      style: GoogleFonts.inter(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Please follow these guidelines for file uploading:',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const Divider(height: 1, color: Color(0xFFDBEAFE)),
+          const SizedBox(height: 16),
+          _buildRuleRow(Icons.crop_portrait_rounded, 'Orientation', 'Portrait'),
+          _buildRuleRow(Icons.aspect_ratio_rounded, 'Aspect ratio', '3:4 (Auto-fit & Edit option)'),
+          _buildRuleRow(Icons.color_lens_outlined, 'Background', 'Plain white/light background'),
+          _buildRuleRow(Icons.face_retouching_natural_rounded, 'Face', 'Clearly visible and centered'),
+          _buildRuleRow(Icons.high_quality_outlined, 'Photo quality', 'Clear, not blurry'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: AppColors.primaryBlue),
+          const SizedBox(width: 10),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
+                children: [
+                  TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  TextSpan(text: value, style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

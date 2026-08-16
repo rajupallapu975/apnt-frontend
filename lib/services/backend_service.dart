@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../config/backend_config.dart';
+import '../viewmodels/auth_viewmodel.dart';
 
 class CreateOrderResponse {
   final String orderId;
@@ -157,7 +158,9 @@ class BackendService {
   ================================================= */
   Future<List<Map<String, dynamic>>> getXeroxShops() async {
     try {
-      final url = BackendConfig.getXeroxShopsUrl;
+      final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+
+      final url = "${BackendConfig.getXeroxShopsUrl}?isTestUser=$isReviewer";
       debugPrint("📡 Fetching shops from: $url");
 
       final response = await http.get(

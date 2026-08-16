@@ -20,6 +20,129 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  void _showEditProfileSheet(BuildContext context, AuthViewModel authVM) {
+    final nameController = TextEditingController(text: authVM.displayName ?? authVM.user?.displayName ?? '');
+    final phoneController = TextEditingController(text: authVM.phoneNumber ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        padding: EdgeInsets.fromLTRB(24, 32, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'EDIT PROFILE',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textTertiary,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.greyDark),
+                    onPressed: () => Navigator.pop(sheetContext),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Full Name field
+              Text(
+                'FULL NAME',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: nameController,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+                decoration: InputDecoration(
+                  hintText: 'Enter your full name',
+                  prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.primaryBlue),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Full name cannot be empty';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Mobile Number field
+              Text(
+                'MOBILE NUMBER',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+                decoration: InputDecoration(
+                  hintText: 'Enter 10 digit phone number',
+                  prefixIcon: const Icon(Icons.phone_android_rounded, color: AppColors.primaryBlue),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                ),
+                validator: (val) {
+                  if (val != null && val.isNotEmpty && val.length < 10) {
+                    return 'Enter valid 10-digit number';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              PrimaryButton(
+                label: 'SAVE CHANGES',
+                onPressed: () async {
+                  if (formKey.currentState!.validate()) {
+                    final newName = nameController.text.trim();
+                    final newPhone = phoneController.text.trim();
+
+                    if (newName.isNotEmpty) {
+                      await authVM.updateDisplayName(newName);
+                    }
+                    if (newPhone.isNotEmpty) {
+                      await authVM.updatePhoneNumber(newPhone);
+                    }
+
+                    if (sheetContext.mounted) {
+                      Navigator.pop(sheetContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Profile updated successfully!'),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showEditPhoneSheet(BuildContext context, AuthViewModel authVM) {
     final controller = TextEditingController(text: authVM.phoneNumber);
     showModalBottomSheet(
@@ -99,9 +222,7 @@ class ProfilePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            _supportItem(Icons.email_outlined, 'Email', 'rajupallapu975@gmail.com', AppColors.primaryBlue),
-            const SizedBox(height: 16),
-            _supportItem(Icons.phone_outlined, 'Phone', '+91 9391392506', AppColors.success),
+            _supportItem(Icons.email_outlined, 'Email Support', 'zikrint975@gmail.com', AppColors.primaryBlue),
             const SizedBox(height: 16),
           ],
         ),
@@ -299,9 +420,26 @@ class ProfilePage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    user?.displayName ?? 'Welcome User',
-                    style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.primaryBlack),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          authVM.displayName ?? user?.displayName ?? 'Welcome User',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryBlack),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primaryBlue),
+                        tooltip: 'Edit Profile',
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        onPressed: () => _showEditProfileSheet(context, authVM),
+                      ),
+                    ],
                   ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
                   const SizedBox(height: 4),
                   Text(
@@ -317,6 +455,14 @@ class ProfilePage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
+                  _profileItem(
+                    icon: Icons.edit_note_rounded,
+                    title: 'Edit Profile',
+                    subtitle: 'Update your name and phone number',
+                    color: AppColors.primaryBlue,
+                    onTap: () => _showEditProfileSheet(context, authVM),
+                  ).animate().fadeIn(delay: 350.ms).slideX(begin: 0.1, end: 0),
+                  const SizedBox(height: 16),
                   _profileItem(
                     icon: Icons.history_rounded,
                     title: 'Orders',

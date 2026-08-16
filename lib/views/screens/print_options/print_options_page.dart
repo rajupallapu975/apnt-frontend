@@ -108,8 +108,58 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   Map<String, dynamic> _customValues = {};
   List<String> _supportedPaperSizes = ['A4'];
   String _selectedPaperSize = 'A4';
+  int _extraPhotoSets = 0;
 
   PricingCalculationResult get _pricingResult {
+    final bool isPassportPhoto = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
+                                 (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
+
+    if (isPassportPhoto) {
+      final double basePrice = _selectedPaperSize.toLowerCase().contains('8') ? 100.0 : 60.0;
+      final double extraCost = _extraPhotoSets * 40.0;
+      final int copies = pageConfigs.isNotEmpty ? pageConfigs.first.copies : 1;
+      final double subtotal = (basePrice + extraCost) * copies;
+      
+      double comm = 0.0;
+      if (commissionType == 'percentage') {
+        comm = subtotal * (commissionValue / 100.0);
+      } else {
+        comm = commissionValue;
+      }
+      final double finalAmt = subtotal + comm;
+
+      return PricingCalculationResult(
+        shopSubtotal: subtotal,
+        originalShopSubtotal: subtotal,
+        commissionType: commissionType,
+        commissionValue: commissionValue,
+        commissionAmount: comm,
+        originalCommissionAmount: comm,
+        finalAmount: finalAmt,
+        originalFinalAmount: finalAmt,
+        amountSaved: 0.0,
+        finalAmountSaved: 0.0,
+        isBulkApplied: false,
+        totalBwPages: 0,
+        totalBwPagesWithCopies: 0,
+        bwPricingMode: 'single',
+        bwPricePerPage: 0.0,
+        bwCost: 0.0,
+        bwOriginalCost: 0.0,
+        isBwBulkApplied: false,
+        totalColorPages: 1,
+        totalColorPagesWithCopies: copies,
+        colorPricingMode: 'single',
+        colorPricePerPage: basePrice + extraCost,
+        colorCost: subtotal,
+        colorOriginalCost: subtotal,
+        isColorBulkApplied: false,
+        extraPageFee: 0.0,
+        fileCosts: [subtotal],
+        generateCoverPage: false,
+      );
+    }
+
     return PricingService.calculate(
       fileConfigs: pageConfigs.map((c) => {
         'pageCount': c.pageCount,
@@ -163,6 +213,11 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   void initState() {
     super.initState();
     pickedFiles = List.from(widget.pickedFiles);
+    final bool isPassportPhoto = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
+                                 (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
+    if (isPassportPhoto && pickedFiles.length > 1) {
+      pickedFiles = [pickedFiles.first];
+    }
     _thumbnails = List.generate(pickedFiles.length, (i) => pickedFiles[i].bytes);
     pageConfigs = List.generate(pickedFiles.length, (i) {
       final model = pickedFiles[i];
@@ -479,19 +534,20 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.textPrimary)),
           ],
           const Spacer(),
-          // Add files outlined pill
-          OutlinedButton.icon(
-            icon: const Icon(Icons.add_rounded, size: 16),
-            label: Text('Add files',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13)),
-            onPressed: _addMoreFiles,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primaryBlue,
-              side: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          // Add files outlined pill (hidden for passport photos)
+          if (!((widget.serviceName ?? '').toLowerCase().contains('passport') || (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X')))
+            OutlinedButton.icon(
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: Text('Add files',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13)),
+              onPressed: _addMoreFiles,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                side: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -545,6 +601,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
     final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
     
+    final bool isPassportPhoto = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
+                                 (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -552,112 +611,202 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           // Preview card (white, prominent)
           _buildFilePreviewCard(wide: false),
 
-          // Copies — flat section
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          // Copies — flat section (hidden for passport photos)
+          if (!isPassportPhoto) ...[
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Number of copies',
+                            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
+                        const SizedBox(height: 4),
+                        Text(
+                          'File ${_currentPageIndex + 1} (${cfg.pageCount} ${cfg.pageCount == 1 ? 'page' : 'pages'})',
+                          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _pillStepper(cfg),
+                ],
+              ),
+            ),
+            divider,
+          ],
+
+          // Extra Photos Stepper (+4 Photos per set)
+          if (isPassportPhoto) ...[
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text('Number of copies',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
-                      const SizedBox(height: 4),
-                      Text(
-                        'File ${_currentPageIndex + 1} (${cfg.pageCount} ${cfg.pageCount == 1 ? 'page' : 'pages'})',
-                        style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Add Extra Photos (+4)',
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142)),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '+4 photos for +₹40 per copy set',
+                              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove_rounded, size: 18, color: AppColors.primaryBlue),
+                              onPressed: _extraPhotoSets > 0
+                                  ? () => setState(() => _extraPhotoSets--)
+                                  : null,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: Text(
+                                _extraPhotoSets == 0 ? '0' : '+${_extraPhotoSets * 4}',
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primaryBlue),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_rounded, size: 18, color: AppColors.primaryBlue),
+                              onPressed: () => setState(() => _extraPhotoSets++),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-                _pillStepper(cfg),
-              ],
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calculate_rounded, size: 18, color: AppColors.primaryBlue),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Total Admin Photo Count: ${((_selectedPaperSize.toLowerCase().contains('8') ? 8 : 4) + (_extraPhotoSets * 4)) * cfg.copies} Photos (${(_selectedPaperSize.toLowerCase().contains('8') ? 8 : 4) + (_extraPhotoSets * 4)} photos × ${cfg.copies} ${cfg.copies == 1 ? 'copy' : 'copies'})',
+                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryBlue),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            divider,
+          ],
 
-          divider,
+          // Color mode (hidden for passport photos - always colored)
+          if (!isPassportPhoto) ...[
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Choose print color',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      _mobileColorTile(
+                        colorIndicator: _colorCircle(),
+                        label: 'Coloured',
+                        price: '₹${currentColorPrice.toStringAsFixed(0)}/page',
+                        selected: cfg.isColor,
+                        onTap: () => setState(() => cfg.isColor = true),
+                      ),
+                      const SizedBox(width: 12),
+                      _mobileColorTile(
+                        colorIndicator: _bwCircle(),
+                        label: 'B & W',
+                        price: '₹${currentBwPrice.toStringAsFixed(0)}/page',
+                        selected: !cfg.isColor,
+                        onTap: () => setState(() => cfg.isColor = false),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            divider,
+          ],
 
-          // Color mode — Blinkit-style circular indicators
+          // Orientation (hidden for passport photos - always portrait)
+          if (!isPassportPhoto) ...[
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Choose print orientation',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      _mobileOrientationTile(
+                        icon: Icons.stay_current_portrait_rounded,
+                        label: 'Portrait',
+                        sublabel: _getDimensions(true),
+                        selected: cfg.isPortrait,
+                        onTap: () => setState(() => cfg.isPortrait = true),
+                      ),
+                      const SizedBox(width: 12),
+                      _mobileOrientationTile(
+                        icon: Icons.stay_current_landscape_rounded,
+                        label: 'Landscape',
+                        sublabel: _getDimensions(false),
+                        selected: !cfg.isPortrait,
+                        onTap: () => setState(() => cfg.isPortrait = false),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            divider,
+          ],
+
+          // No. of Photos / Paper Size Section
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Choose print color',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    _mobileColorTile(
-                      colorIndicator: _colorCircle(),
-                      label: 'Coloured',
-                      price: '₹${currentColorPrice.toStringAsFixed(0)}/page',
-                      selected: cfg.isColor,
-                      onTap: () => setState(() => cfg.isColor = true),
-                    ),
-                    const SizedBox(width: 12),
-                    _mobileColorTile(
-                      colorIndicator: _bwCircle(),
-                      label: 'B & W',
-                      price: '₹${currentBwPrice.toStringAsFixed(0)}/page',
-                      selected: !cfg.isColor,
-                      onTap: () => setState(() => cfg.isColor = false),
-                    ),
-                  ],
+                Text(
+                  isPassportPhoto ? 'No. of Photos' : 'Choosed paper size',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142)),
                 ),
-              ],
-            ),
-          ),
-
-          divider,
-
-          // Orientation
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Choose print orientation',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    _mobileOrientationTile(
-                      icon: Icons.stay_current_portrait_rounded,
-                      label: 'Portrait',
-                      sublabel: _getDimensions(true),
-                      selected: cfg.isPortrait,
-                      onTap: () => setState(() => cfg.isPortrait = true),
-                    ),
-                    const SizedBox(width: 12),
-                    _mobileOrientationTile(
-                      icon: Icons.stay_current_landscape_rounded,
-                      label: 'Landscape',
-                      sublabel: _getDimensions(false),
-                      selected: !cfg.isPortrait,
-                      onTap: () => setState(() => cfg.isPortrait = false),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          divider,
-
-          // Paper Size
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Choosed paper size',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF2D3142))),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -669,7 +818,11 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.check_circle_rounded, color: AppColors.primaryBlue, size: 18),
+                      Icon(
+                        isPassportPhoto ? Icons.photo_library_rounded : Icons.check_circle_rounded,
+                        color: AppColors.primaryBlue,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         _selectedPaperSize.toUpperCase(),
@@ -685,9 +838,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
               ],
             ),
           ),
+          divider,
 
-          if (cfg.pageCount >= 2) ...[
-            divider,
+          if (!isPassportPhoto && cfg.pageCount >= 2) ...[
             // Print Sides Selection (One Sided vs Two Sided)
             Container(
               color: Colors.white,
@@ -720,12 +873,20 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                 ],
               ),
             ),
+            divider,
           ],
 
-          if (_isCustomService)
+          if (!isPassportPhoto && _isCustomService)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: _buildCustomParametersSection(),
+            ),
+
+          // Pricing Guide (hidden for passport photos)
+          if (!isPassportPhoto)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: _buildPricingGuide(),
             ),
 
           // Proper bottom spacing before the bottom bar
@@ -859,6 +1020,8 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   Widget _buildSettingsCard() {
     final cfg = _current;
     final pricing = _getResolvedPricing();
+    final bool isPassportPhoto = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
+                                 (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
 
     final String sizeKey = _getResolvedSizeKey();
     final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
@@ -879,24 +1042,25 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           ),
           const SizedBox(height: 24),
 
-          // Number of Copies
-          _webSettingLabel('Number of Copies'),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'File ${_currentPageIndex + 1} (${cfg.pageCount} ${cfg.pageCount == 1 ? 'page' : 'pages'})',
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+          // Number of Copies (hidden for passport photos)
+          if (!isPassportPhoto) ...[
+            _webSettingLabel('Number of Copies'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'File ${_currentPageIndex + 1} (${cfg.pageCount} ${cfg.pageCount == 1 ? 'page' : 'pages'})',
+                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+                  ),
                 ),
-              ),
-              _webCountControl(cfg),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-          const Divider(color: AppColors.border),
-          const SizedBox(height: 24),
+                _webCountControl(cfg),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Divider(color: AppColors.border),
+            const SizedBox(height: 24),
+          ],
 
           // Color Mode — Blinkit-style circular indicators
           _webSettingLabel('Color Mode'),
@@ -1115,6 +1279,13 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
   }
 
   Widget _buildPricingGuide() {
+    final bool isPassportPhoto = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
+                                 (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
+
+    if (isPassportPhoto) {
+      return const SizedBox.shrink();
+    }
+
     final pricing = _getResolvedPricing();
     final String sizeKey = _getResolvedSizeKey();
     final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
@@ -1759,6 +1930,23 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
       // Use a secure unique ID for the order itself so it doesn't leak the pickup code in URLs
       final String secureOrderId = isXerox ? 'ORDER_${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}' : '';
 
+      final bool isPassportPhoto = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
+                                   (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
+      final int basePhotoCount = _selectedPaperSize.toLowerCase().contains('8') ? 8 : 4;
+      final int extraPhotoCount = _extraPhotoSets * 4;
+      final int photosPerSet = basePhotoCount + extraPhotoCount;
+      final int totalCopies = pageConfigs.isNotEmpty ? pageConfigs.first.copies : 1;
+      final int totalPhotosSum = photosPerSet * totalCopies;
+
+      final Map<String, dynamic> customParamsMap = Map<String, dynamic>.from(_customValues);
+      if (isPassportPhoto) {
+        customParamsMap['Total Photos for Admin'] = '$totalPhotosSum Photos ($photosPerSet photos × $totalCopies ${totalCopies == 1 ? 'copy' : 'copies'})';
+        customParamsMap['Package Selected'] = '$_selectedPaperSize';
+        if (extraPhotoCount > 0) {
+          customParamsMap['Extra Photos'] = '+$extraPhotoCount Photos ($_extraPhotoSets set${_extraPhotoSets == 1 ? '' : 's'} of +4)';
+        }
+      }
+
       final printSettings = {
         'printMode': widget.printMode.name,
         'orderId': isXerox ? secureOrderId : '', 
@@ -1769,7 +1957,9 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         'shopPhone': widget.shopPhone, // Track shop contact
         'serviceId': widget.serviceId ?? 'ZHwQd18Vy08TZkyBFXjB',
         'serviceName': widget.serviceName ?? 'Documents (Xerox)',
-        'customParameters': _customValues,
+        'customParameters': customParamsMap,
+        if (isPassportPhoto) 'totalPhotos': totalPhotosSum,
+        if (isPassportPhoto) 'photoSummary': '$totalPhotosSum Total Photos ($photosPerSet photos × $totalCopies copies)',
         'doubleSide': pageConfigs.any((c) => c.isDoubleSided),
         'files': List.generate(pageConfigs.length, (i) {
           final model = pickedFiles[i];
@@ -1954,42 +2144,50 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     final String src = kIsWeb ? model.path : (model.file?.path ?? model.path);
     if (src.isEmpty) return;
 
+    final bool isPassportService = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
+                                   (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
+
     final cropped = await ImageCropper().cropImage(
       sourcePath: src,
+      aspectRatio: isPassportService ? const CropAspectRatio(ratioX: 3, ratioY: 4) : null,
       uiSettings: [
         AndroidUiSettings(
-          toolbarTitle: 'Edit Image',
+          toolbarTitle: isPassportService ? 'Edit Photo (3:4 Passport Ratio)' : 'Edit Image',
           toolbarColor: AppColors.primaryBlue,
           toolbarWidgetColor: Colors.white,
-          initAspectRatio: CropAspectRatioPreset.original,
-          lockAspectRatio: false,
-          aspectRatioPresets: [
-            CropAspectRatioPreset.original,
-            CropAspectRatioPreset.square,
-            CropAspectRatioPreset.ratio3x2,
-            CropAspectRatioPreset.ratio4x3,
-            CropAspectRatioPreset.ratio16x9,
-          ],
+          initAspectRatio: isPassportService ? CropAspectRatioPreset.ratio4x3 : CropAspectRatioPreset.original,
+          lockAspectRatio: isPassportService,
+          aspectRatioPresets: isPassportService 
+              ? [CropAspectRatioPreset.ratio4x3, CropAspectRatioPreset.square]
+              : [
+                  CropAspectRatioPreset.original,
+                  CropAspectRatioPreset.square,
+                  CropAspectRatioPreset.ratio3x2,
+                  CropAspectRatioPreset.ratio4x3,
+                  CropAspectRatioPreset.ratio16x9,
+                ],
         ),
         IOSUiSettings(
-          title: 'Edit Image',
-          aspectRatioLockEnabled: false,
-          aspectRatioPresets: [
-            CropAspectRatioPreset.original,
-            CropAspectRatioPreset.square,
-            CropAspectRatioPreset.ratio3x2,
-            CropAspectRatioPreset.ratio4x3,
-            CropAspectRatioPreset.ratio16x9,
-          ],
+          title: isPassportService ? 'Edit Photo (3:4 Passport Ratio)' : 'Edit Image',
+          aspectRatioLockEnabled: isPassportService,
+          aspectRatioPresets: isPassportService
+              ? [CropAspectRatioPreset.ratio4x3, CropAspectRatioPreset.square]
+              : [
+                  CropAspectRatioPreset.original,
+                  CropAspectRatioPreset.square,
+                  CropAspectRatioPreset.ratio3x2,
+                  CropAspectRatioPreset.ratio4x3,
+                  CropAspectRatioPreset.ratio16x9,
+                ],
         ),
         WebUiSettings(
           context: context,
           presentStyle: (kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS))
               ? WebPresentStyle.page 
               : WebPresentStyle.dialog,
-          size: const CropperSize(width: 520, height: 520),
-          translations: const WebTranslations(
-            title: 'Edit Image',
+          size: isPassportService ? const CropperSize(width: 390, height: 520) : const CropperSize(width: 520, height: 520),
+          translations: WebTranslations(
+            title: isPassportService ? 'Edit Photo (3:4 Passport Format)' : 'Edit Image',
             rotateLeftTooltip: 'Rotate Left',
             rotateRightTooltip: 'Rotate Right',
             cropButton: 'DONE',

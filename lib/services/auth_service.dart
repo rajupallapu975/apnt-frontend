@@ -1,6 +1,9 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../config/backend_config.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -53,6 +56,7 @@ class AuthService {
 
     // 🔑 Special Reviewer Test Account Fallback: reviewer@zikrint.app / raju@975
     if (cleanEmail == 'reviewer@zikrint.app' && cleanPass == 'raju@975') {
+      // 1. Attempt standard Email/Password sign-in
       try {
         final credential = await _auth.signInWithEmailAndPassword(
           email: cleanEmail,
@@ -61,23 +65,45 @@ class AuthService {
         await credential.user?.updateDisplayName('Reviewer User');
         return credential.user;
       } catch (e) {
-        debugPrint('⚠️ Firebase Email Auth failed, creating reviewer account or fallback: $e');
-        try {
-          final newCred = await _auth.createUserWithEmailAndPassword(
-            email: cleanEmail,
-            password: cleanPass,
-          );
-          await newCred.user?.updateDisplayName('Reviewer User');
-          return newCred.user;
-        } catch (_) {
+        debugPrint('⚠️ Firebase Email Auth failed ($e), attempting custom token from backend...');
+      }
+
+      // 2. Attempt custom token from backend (bypasses Firebase Console Email Provider restriction)
+      try {
+        final urlsToTry = [
+          BackendConfig.baseUrl,
+          'http://192.168.0.206:5001',
+          'http://localhost:5001',
+        ];
+        for (final baseUrl in urlsToTry) {
           try {
-            final anonCred = await _auth.signInAnonymously();
-            await anonCred.user?.updateDisplayName('Reviewer User');
-            return anonCred.user;
-          } catch (_) {
-            return _auth.currentUser;
-          }
+            final res = await http.post(
+              Uri.parse('$baseUrl/api/reviewer-token'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'email': cleanEmail, 'password': cleanPass}),
+            ).timeout(const Duration(seconds: 4));
+            if (res.statusCode == 200) {
+              final data = jsonDecode(res.body);
+              if (data['success'] == true && data['token'] != null) {
+                final userCred = await _auth.signInWithCustomToken(data['token']);
+                await userCred.user?.updateDisplayName('Reviewer User');
+                debugPrint('✅ Reviewer custom token sign-in successful!');
+                return userCred.user;
+              }
+            }
+          } catch (_) {}
         }
+      } catch (tokenErr) {
+        debugPrint('⚠️ Custom token fetch failed: $tokenErr');
+      }
+
+      // 3. Attempt anonymous sign-in fallback
+      try {
+        final anonCred = await _auth.signInAnonymously();
+        await anonCred.user?.updateDisplayName('Reviewer User');
+        return anonCred.user;
+      } catch (_) {
+        return _auth.currentUser;
       }
     }
 

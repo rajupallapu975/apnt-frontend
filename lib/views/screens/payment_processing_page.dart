@@ -130,13 +130,17 @@ class _PaymentProcessingPageState
       final String userEmail = (user?.email ?? authVM.user?.email ?? '').trim().toLowerCase();
       final String reviewerUserName = (user?.displayName ?? authVM.displayName ?? '').trim().toLowerCase();
       final bool isReviewer = authVM.isReviewerSession || 
-                              userEmail == 'reviewer@zikrint.app' || 
                               userEmail.contains('reviewer') || 
-                              reviewerUserName.contains('reviewer');
+                              userEmail.contains('test') ||
+                              userEmail.contains('tester') ||
+                              userEmail.contains('demo') ||
+                              reviewerUserName.contains('reviewer') ||
+                              reviewerUserName.contains('tester') ||
+                              reviewerUserName.contains('test');
       
-      // 🛡️ Reviewer Test Account Direct File Upload & Processing (No Payment Gateway)
+      // 🛡️ Test Mail Direct File Upload & Processing (Bypasses Payment Gateway Safely for Testing)
       if (isReviewer) {
-        debugPrint("🤖 Reviewer test session: Skipping payment gateway. Direct upload & verification for $userEmail");
+        debugPrint("🤖 Test email session ($userEmail): Skipping payment gateway safely. Direct upload & verification.");
         _handlePaymentSuccess(
           'pay_test_reviewer_${DateTime.now().millisecondsSinceEpoch}',
           rzpId,
@@ -337,12 +341,14 @@ class _PaymentProcessingPageState
         if (isReviewerOrder) {
           debugPrint("🤖 Reviewer fallback: creating Firestore order document directly... $e");
           try {
-            await FirebaseFirestore.instance.collection('xerox_orders').doc(orderId).set({
+            final String targetShopId = widget.printSettings['shopId'] ?? 'reviewer_shop_store';
+            final orderDataPayload = {
               'orderId': orderId,
               'customId': customId,
               'userId': FirebaseAuth.instance.currentUser?.uid ?? 'reviewer_user',
               'userEmail': 'reviewer@zikrint.app',
               'customerName': 'Reviewer User',
+              'shopId': targetShopId,
               'amount': widget.expectedPrice,
               'totalAmount': widget.expectedPrice,
               'paymentStatus': 'PAID',
@@ -352,7 +358,22 @@ class _PaymentProcessingPageState
               'printSettings': widget.printSettings,
               'createdAt': FieldValue.serverTimestamp(),
               'updatedAt': FieldValue.serverTimestamp(),
+            };
+
+            await FirebaseFirestore.instance.collection('xerox_orders').doc(orderId).set(orderDataPayload, SetOptions(merge: true));
+
+            // Also mirror directly to shops/{shopId}/orders/{orderId}
+            await FirebaseFirestore.instance
+                .collection('shops')
+                .doc(targetShopId)
+                .collection('orders')
+                .doc(orderId)
+                .set({
+              ...orderDataPayload,
+              'status': 'pending',
+              'timestamp': FieldValue.serverTimestamp(),
             }, SetOptions(merge: true));
+            debugPrint("✅ Reviewer fallback: order synced to xerox_orders & shops/$targetShopId/orders");
           } catch (createErr) {
             debugPrint("⚠️ Direct Firestore set error: $createErr");
           }

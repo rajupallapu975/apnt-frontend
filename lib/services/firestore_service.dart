@@ -11,6 +11,7 @@ import '../models/print_order_model.dart';
 import '../utils/app_exceptions.dart';
 import 'local_storage_service.dart';
 import 'backend_service.dart';
+import '../viewmodels/auth_viewmodel.dart';
 // rxdart already imported above
 
 class FirestoreService {
@@ -516,9 +517,10 @@ class FirestoreService {
     final user = _auth.currentUser;
     final String uid = user?.uid ?? 'guest_user';
     final String? email = user?.email;
-    final bool isReviewer = (email != null && email.toLowerCase() == 'reviewer@zikrint.app') || 
-                            (user?.displayName != null && user!.displayName!.toLowerCase().contains('reviewer')) || 
-                            uid == 'reviewer_user';
+    final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+
+    final db2 = _getFirestoreForProject('zikrint-944a4');
+    final db3 = _getFirestoreForProject('think-ink');
 
     // 🏎️ 1. Fetch Streams (Single-field queries without composite index requirement)
     final List<Stream<List<PrintOrderModel>>> streams = [
@@ -542,6 +544,26 @@ class FirestoreService {
             return <PrintOrderModel>[];
           }),
     ];
+
+    if (db2 != _firestore) {
+      streams.add(
+        db2.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+      );
+    }
+
+    if (db3 != _firestore) {
+      streams.add(
+        db3.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+      );
+    }
 
     // 🛡️ Reviewer Test Streams - Only included for Reviewer Account
     if (isReviewer) {
@@ -611,8 +633,7 @@ class FirestoreService {
         final uEmail = (o.userEmail ?? '').toLowerCase();
         final cName = (o.customerName ?? '').toLowerCase();
 
-        final bool isOrderBelongsToReviewer = uId == uid.toLowerCase() ||
-                                             uEmail.contains('reviewer') ||
+        final bool isOrderBelongsToReviewer = uEmail.contains('reviewer') ||
                                              cName.contains('reviewer') ||
                                              uId.contains('reviewer') ||
                                              cId.contains('reviewer') ||

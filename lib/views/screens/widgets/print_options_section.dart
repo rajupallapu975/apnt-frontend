@@ -171,30 +171,32 @@ class PrintOptionsSection extends StatelessWidget {
             ),
             divider,
 
-            // Paper Size
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Choose paper size', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8.0,
-                  children: supportedPaperSizes.map((size) {
-                    final isSelected = selectedPaperSize == size;
-                    return ChoiceChip(
-                      label: Text(size),
-                      selected: isSelected,
-                      selectedColor: AppColors.primaryBlue.withValues(alpha: 0.05),
-                      checkmarkColor: AppColors.primaryBlue,
-                      onSelected: (val) {
-                        if (val) onPaperSizeChanged(size);
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-            divider,
+            // Paper Size (hidden if 1 or 0 paper sizes)
+            if (supportedPaperSizes.length > 1) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Choose paper size', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8.0,
+                    children: supportedPaperSizes.map((size) {
+                      final isSelected = selectedPaperSize == size;
+                      return ChoiceChip(
+                        label: Text(size),
+                        selected: isSelected,
+                        selectedColor: AppColors.primaryBlue.withValues(alpha: 0.05),
+                        checkmarkColor: AppColors.primaryBlue,
+                        onSelected: (val) {
+                          if (val) onPaperSizeChanged(size);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              divider,
+            ],
 
             // Double Sided
             SwitchListTile.adaptive(

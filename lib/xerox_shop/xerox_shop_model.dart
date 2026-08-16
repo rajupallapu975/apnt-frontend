@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class XeroxShopModel {
   final String id;
   final String name;
@@ -19,9 +17,6 @@ class XeroxShopModel {
   final String? closingTime;
   final Map<String, dynamic> zikrinterServices;
 
-  final double? latitude;
-  final double? longitude;
-
   XeroxShopModel({
     required this.id,
     required this.name,
@@ -39,17 +34,7 @@ class XeroxShopModel {
     this.openingTime,
     this.closingTime,
     this.zikrinterServices = const {},
-    this.latitude,
-    this.longitude,
   });
-
-  String get mapsUrl {
-    if (latitude != null && longitude != null) {
-      return 'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude';
-    }
-    final q = address.isNotEmpty && address != 'No Address provided' ? '$name, $address' : name;
-    return 'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(q)}';
-  }
 
   bool get isCurrentlyOpen {
     if (isOpen) return true;
@@ -102,19 +87,6 @@ class XeroxShopModel {
         ? null 
         : rawMobile.toString();
 
-    double? lat;
-    double? lng;
-    if (map['latitude'] is num) {
-      lat = (map['latitude'] as num).toDouble();
-    }
-    if (map['longitude'] is num) {
-      lng = (map['longitude'] as num).toDouble();
-    }
-    if (lat == null && map['location'] is GeoPoint) {
-      lat = (map['location'] as GeoPoint).latitude;
-      lng = (map['location'] as GeoPoint).longitude;
-    }
-
     return XeroxShopModel(
       id: id,
       name: map['shopName'] ?? 'Unknown Shop',
@@ -132,8 +104,6 @@ class XeroxShopModel {
       openingTime: map['openingTime'] ?? '09:00 AM',
       closingTime: map['closingTime'] ?? '09:00 PM',
       zikrinterServices: map['zikrinterServices'] as Map<String, dynamic>? ?? const {},
-      latitude: lat,
-      longitude: lng,
     );
   }
 }

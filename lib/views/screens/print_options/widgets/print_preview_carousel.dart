@@ -46,7 +46,10 @@ class PrintPreviewCarousel extends StatelessWidget {
             double widthDim = 210.0;
             double heightDim = 297.0;
             final cleanSize = paperSize.toUpperCase();
-            if (cleanSize == 'A3') {
+            if (cleanSize.contains('PHOTOS') || cleanSize.contains('PASSPORT') || cleanSize.contains('PHOTO')) {
+              widthDim = 3.0;
+              heightDim = 4.0;
+            } else if (cleanSize == 'A3') {
               widthDim = 297.0;
               heightDim = 420.0;
             } else if (cleanSize == 'A2') {

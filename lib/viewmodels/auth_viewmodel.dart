@@ -15,6 +15,7 @@ class AuthViewModel extends ChangeNotifier {
   String? _displayName;
   bool _isLoading = true;
   bool _isReviewerSession = false;
+  static bool _globalReviewerSession = false;
   bool _showEmailLogin = false;
 
   bool _isAttemptingAnonSignIn = false;
@@ -22,6 +23,24 @@ class AuthViewModel extends ChangeNotifier {
 
   bool get isReviewerSession => _isReviewerSession;
   bool get showEmailLogin => _showEmailLogin;
+
+  static bool get isCurrentReviewerSession {
+    if (_globalReviewerSession) return true;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+    final email = (user.email ?? '').toLowerCase();
+    final dName = (user.displayName ?? '').toLowerCase();
+    final uid = user.uid.toLowerCase();
+    return email == 'reviewer@zikrint.app' ||
+           email.contains('reviewer') ||
+           dName.contains('reviewer') ||
+           uid == 'reviewer_user';
+  }
+
+  void _setReviewerSession(bool val) {
+    _isReviewerSession = val;
+    _globalReviewerSession = val;
+  }
 
   AuthViewModel() {
     // ⚙️ Stream auth config from backend (controls showEmailLogin)
@@ -42,8 +61,9 @@ class AuthViewModel extends ChangeNotifier {
         _isAttemptingAnonSignIn = false;
         final email = (user.email ?? '').toLowerCase();
         final dName = (user.displayName ?? '').toLowerCase();
-        if (email == 'reviewer@zikrint.app' || dName.contains('reviewer') || _isReviewerSession) {
-          _isReviewerSession = true;
+        final uid = user.uid.toLowerCase();
+        if (email == 'reviewer@zikrint.app' || email.contains('reviewer') || dName.contains('reviewer') || uid == 'reviewer_user' || _isReviewerSession) {
+          _setReviewerSession(true);
           _displayName = 'Reviewer User';
         }
         await _loadUserProfile();
@@ -226,7 +246,7 @@ class AuthViewModel extends ChangeNotifier {
       final user = await _authService.signInWithEmail(cleanEmail, cleanPass);
 
     if (cleanEmail == 'reviewer@zikrint.app' && cleanPass == 'raju@975') {
-      _isReviewerSession = true;
+      _setReviewerSession(true);
       _user = user ?? _authService.currentUser ?? FirebaseAuth.instance.currentUser;
       _displayName = 'Reviewer User';
       _isLoading = false;
@@ -237,6 +257,8 @@ class AuthViewModel extends ChangeNotifier {
 
       if (user != null) {
         _user = user;
+        final isRev = cleanEmail == 'reviewer@zikrint.app' || (user.displayName ?? '').toLowerCase().contains('reviewer');
+        _setReviewerSession(isRev);
         _displayName = user.displayName ?? user.email ?? 'Reviewer User';
         _isLoading = false;
         notifyListeners();
@@ -245,6 +267,7 @@ class AuthViewModel extends ChangeNotifier {
       }
     } catch (e) {
       if (cleanEmail == 'reviewer@zikrint.app' && cleanPass == 'raju@975') {
+        _setReviewerSession(true);
         _user = _authService.currentUser ?? FirebaseAuth.instance.currentUser;
         _displayName = 'Reviewer User';
         _isLoading = false;
@@ -254,13 +277,17 @@ class AuthViewModel extends ChangeNotifier {
       }
       _isLoading = false;
       notifyListeners();
+      rethrow;
     }
+
+    _isLoading = false;
+    notifyListeners();
     return false;
   }
 
   /// 🚪 Sign out
   Future<void> signOut() async {
-    _isReviewerSession = false;
+    _setReviewerSession(false);
     _displayName = null;
     _phoneNumber = null;
     _user = null;

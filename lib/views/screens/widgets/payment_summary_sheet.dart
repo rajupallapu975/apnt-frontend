@@ -33,6 +33,11 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
 
   final bool _isInit = true;
   bool _needsPhone = false;
+  bool get _isPassportPhotoService {
+    final String sName = (widget.printSettings['serviceName'] ?? '').toString().toLowerCase();
+    final String sId = (widget.printSettings['serviceId'] ?? '').toString();
+    return sName.contains('passport') || sId.contains('yPiaqNqbvhABcunanu5X');
+  }
   bool _isProcessing = false;
   bool _isWaitingForRequest = true;
 
@@ -373,7 +378,7 @@ class _PaymentSummarySheetState extends State<PaymentSummarySheet> {
             ),
           ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
 
-          if (widget.totalPages < 5) ...[
+          if (!_isPassportPhotoService && widget.totalPages < 5) ...[
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(16),

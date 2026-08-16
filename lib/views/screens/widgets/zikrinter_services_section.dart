@@ -3,23 +3,139 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
 import '../../../utils/app_colors.dart';
 import '../zikrinter_service_details_page.dart';
-import '../zikrinter_all_services_page.dart';
 
 class ZikrinterServicesSection extends StatelessWidget {
   final List<dynamic> services;
 
   const ZikrinterServicesSection({super.key, required this.services});
 
+  void _showComingSoonModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final textScaler = MediaQuery.textScalerOf(ctx);
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag Handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Zikrint Logo Badge
+              Container(
+                width: 84,
+                height: 84,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primaryBlue.withOpacity(0.08),
+                  border: Border.all(
+                    color: AppColors.primaryBlue.withOpacity(0.2),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withOpacity(0.15),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'assets/images/zikrint_logo_transparent.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.print_rounded,
+                    size: 42,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Title
+              Text(
+                'We Will Update Soon!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: textScaler.scale(20),
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF1E2532),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Description
+              Text(
+                'We are expanding our service offerings to bring you more convenience and top quality printing features. Stay tuned for exciting new additions coming soon!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: textScaler.scale(13),
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 26),
+
+              // Close / Action Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Got It',
+                    style: GoogleFonts.inter(
+                      fontSize: textScaler.scale(15),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (services.isEmpty) return const SizedBox.shrink();
-
-    // Show max 5 service cards + 1 "More" card = 6 total
-    final showAll = services.length <= 5;
-    final displayCount = showAll ? services.length : 5;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -37,41 +153,11 @@ class ZikrinterServicesSection extends StatelessWidget {
                 letterSpacing: -0.5,
               ),
             ),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ZikrinterAllServicesPage(services: services),
-                ),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'More Services',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryBlue,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: AppColors.primaryBlue),
-                  ],
-                ),
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 16),
 
-        // ── Grid ──────────────────────────────────────────────────────────────
+        // ── Services Grid ───────────────────────────────────────────────────
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -79,16 +165,10 @@ class ZikrinterServicesSection extends StatelessWidget {
             crossAxisCount: 3,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 0.72, // taller than wide — Blinkit style
+            childAspectRatio: 0.72,
           ),
-          itemCount: (services.length > 5 ? 5 : services.length) + 1, // +1 for "More" card
+          itemCount: services.length,
           itemBuilder: (context, index) {
-            final displayCount = services.length > 5 ? 5 : services.length;
-            // ── "More Services" card ─────────────────────────────────────────
-            if (index == displayCount) {
-              return _MoreCard(services: services);
-            }
-
             final doc = services[index];
             final data = doc.data() as Map<String, dynamic>? ?? {};
             final serviceName = data['serviceName'] ?? data['name'] ?? 'Service';
@@ -117,6 +197,10 @@ class ZikrinterServicesSection extends StatelessWidget {
             );
           },
         ),
+        const SizedBox(height: 14),
+
+        // ── Full-Row Expanded "More Services" Banner Card ────────────────────
+        _FullRowMoreCard(onTap: () => _showComingSoonModal(context)),
       ],
     );
   }
@@ -169,7 +253,7 @@ class _ServiceCard extends StatelessWidget {
           border: Border.all(color: const Color(0xFFEEF0F4), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Colors.black.withOpacity(0.04),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -178,7 +262,6 @@ class _ServiceCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Uniform Square Image Area ──────────────────────────────────
             Expanded(
               flex: 3,
               child: ClipRRect(
@@ -188,12 +271,12 @@ class _ServiceCard extends StatelessWidget {
                 ),
                 child: Container(
                   width: double.infinity,
-                  color: Colors.white, // Pure white — same for ALL cards
+                  color: Colors.white,
                   padding: const EdgeInsets.all(8),
                   child: imageUrl.isNotEmpty
                       ? CachedNetworkImage(
                           imageUrl: imageUrl,
-                          fit: BoxFit.contain, // Full image visible, no cropping
+                          fit: BoxFit.contain,
                           alignment: Alignment.center,
                           placeholder: (_, __) => Container(color: Colors.white),
                           errorWidget: (_, __, ___) => _PlaceholderIcon(),
@@ -202,8 +285,6 @@ class _ServiceCard extends StatelessWidget {
                 ),
               ),
             ),
-
-            // ── Service Info ───────────────────────────────────────────────
             Expanded(
               flex: 2,
               child: Padding(
@@ -212,7 +293,6 @@ class _ServiceCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Service name — 2 lines max so cards stay uniform
                     Text(
                       serviceName,
                       maxLines: 2,
@@ -224,14 +304,12 @@ class _ServiceCard extends StatelessWidget {
                         height: 1.3,
                       ),
                     ),
-
-                    // Price pill
                     if (startingPrice > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                          color: AppColors.primaryBlue.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -254,59 +332,142 @@ class _ServiceCard extends StatelessWidget {
   }
 }
 
-// ─── "More Services" Card ─────────────────────────────────────────────────────
-class _MoreCard extends StatelessWidget {
-  final List<dynamic> services;
-  const _MoreCard({required this.services});
+// ─── Full-Row Expanded "More Services" Banner Card ───────────────────────────
+class _FullRowMoreCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _FullRowMoreCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ZikrinterAllServicesPage(services: services),
-        ),
-      ),
+    final textScaler = MediaQuery.textScalerOf(context);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppColors.primaryBlue.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primaryBlue.withOpacity(0.08),
+              AppColors.primaryBlue.withOpacity(0.03),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.15), width: 1),
+            color: AppColors.primaryBlue.withOpacity(0.2),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
           children: [
+            // Zikrint Logo Badge
             Container(
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
+              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                color: Colors.white,
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.primaryBlue.withOpacity(0.2),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withOpacity(0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: const Icon(
-                Icons.grid_view_rounded,
-                color: AppColors.primaryBlue,
-                size: 18,
+              child: Image.asset(
+                'assets/images/zikrint_logo_transparent.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.grid_view_rounded,
+                  color: AppColors.primaryBlue,
+                  size: 20,
+                ),
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              'More',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w800,
-                fontSize: 11,
-                color: AppColors.primaryBlue,
+            const SizedBox(width: 14),
+
+            // Flexible Title & Subtitle for Scaling Fonts
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'More Services',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: textScaler.scale(14),
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1E2532),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Tap to explore upcoming features & updates',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: textScaler.scale(11),
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              'View All',
-              style: GoogleFonts.inter(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+            const SizedBox(width: 8),
+
+            // Arrow Pill Action Button
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Explore',
+                    style: GoogleFonts.inter(
+                      fontSize: textScaler.scale(11),
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 9,
+                    color: Colors.white,
+                  ),
+                ],
               ),
             ),
           ],
@@ -324,7 +485,7 @@ class _PlaceholderIcon extends StatelessWidget {
       child: Icon(
         Icons.print_rounded,
         size: 28,
-        color: AppColors.primaryBlue.withValues(alpha: 0.25),
+        color: AppColors.primaryBlue.withOpacity(0.25),
       ),
     );
   }

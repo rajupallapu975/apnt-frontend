@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../xerox_shop/xerox_shop_model.dart';
+import '../viewmodels/auth_viewmodel.dart';
 
 class ShopService {
   /// Stream to fetch all active shops offering the specified service.
@@ -36,6 +38,8 @@ class ShopService {
     String searchQuery = '',
     String filterType = 'Nearest', // 'Nearest', 'Rating', 'Lowest Price'
   }) {
+    final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+
     final combined = <String, DocumentSnapshot>{};
     for (final doc in primaryDocs) {
       if (doc.exists) combined[doc.id] = doc;
@@ -48,6 +52,21 @@ class ShopService {
 
     combined.forEach((id, doc) {
       final data = doc.data() as Map<String, dynamic>? ?? {};
+      final String shopName = (data['shopName'] ?? '').toString().toLowerCase();
+      final String shopEmail = (data['email'] ?? '').toString().toLowerCase();
+      final bool isTestShopDoc = id == 'reviewer_shop_store' || 
+                              data['isTestShop'] == true || 
+                              shopName.contains('test') || 
+                              shopName.contains('reviewer') ||
+                              shopEmail.contains('test') ||
+                              shopEmail.contains('reviewer');
+
+      // 🛡️ Strict Test Shop Isolation:
+      // Real users -> Exclude test shops
+      // Test reviewer -> Include test shops only
+      if (!isReviewer && isTestShopDoc) return;
+      if (isReviewer && !isTestShopDoc) return;
+
       final isActive = data['isActive'] ?? true;
       if (!isActive) return;
 

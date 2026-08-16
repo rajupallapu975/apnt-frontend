@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'xerox_shop_model.dart';
 import '../services/backend_service.dart';
 import '../config/backend_config.dart';
+import '../viewmodels/auth_viewmodel.dart';
 
 class XeroxShopViewModel extends ChangeNotifier {
   bool _isLoading = false;
@@ -131,7 +132,25 @@ class XeroxShopViewModel extends ChangeNotifier {
         }
       }
 
+      final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+
       _shops = snapshot.docs
+          .where((doc) {
+            if (doc.id == 'serviceVersion') return false;
+            final data = doc.data();
+            final String shopName = (data['shopName'] ?? '').toString().toLowerCase();
+            final String shopEmail = (data['email'] ?? '').toString().toLowerCase();
+            final bool isTestShopDoc = doc.id == 'reviewer_shop_store' || 
+                                    data['isTestShop'] == true || 
+                                    shopName.contains('test') || 
+                                    shopName.contains('reviewer') ||
+                                    shopEmail.contains('test') ||
+                                    shopEmail.contains('reviewer');
+
+            if (!isReviewer && isTestShopDoc) return false;
+            if (isReviewer && !isTestShopDoc) return false;
+            return true;
+          })
           .map((doc) => XeroxShopModel.fromMap(doc.data(), doc.id))
           .toList();
 

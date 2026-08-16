@@ -13,6 +13,7 @@ import '../../utils/app_colors.dart';
 import '../../xerox_shop/xerox_shop_model.dart';
 import '../../models/file_model.dart';
 import '../../models/print_order_model.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../services/pricing_service.dart';
 import 'print_options/print_options_page.dart';
 
@@ -387,10 +388,26 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
       ..._secondaryDocs,
     };
 
+    final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+
     final providerShops = <_ShopWithService>{};
 
     combinedDocs.forEach((id, doc) {
+      if (id == 'serviceVersion') return;
       final shopData = doc.data() as Map<String, dynamic>? ?? {};
+      final String shopName = (shopData['shopName'] ?? '').toString().toLowerCase();
+      final String shopEmail = (shopData['email'] ?? '').toString().toLowerCase();
+      final bool isTestShopDoc = id == 'reviewer_shop_store' || 
+                              shopData['isTestShop'] == true || 
+                              shopName.contains('test') || 
+                              shopName.contains('reviewer') ||
+                              shopEmail.contains('test') ||
+                              shopEmail.contains('reviewer');
+
+      // 🛡️ Strict Test Shop Isolation
+      if (!isReviewer && isTestShopDoc) return;
+      if (isReviewer && !isTestShopDoc) return;
+
       final zikrinterServices = shopData['zikrinterServices'] as Map<String, dynamic>? ?? {};
       final serviceConfig = zikrinterServices[widget.serviceId] as Map<String, dynamic>?;
       

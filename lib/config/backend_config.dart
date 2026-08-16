@@ -11,11 +11,9 @@ class BackendConfig {
   static String get baseUrl {
     // 🛡️ AWS Production Backend URL
     const String liveUrl = "https://zikrint.duckdns.org"; 
-    //const String liveUrl = "http://192.168.1.206:5001"; // Or your PC's local IP address
+    // const String liveUrl = "http://192.168.0.206:5001"; // Local PC IP address
     return liveUrl;
   }
-
-  
 
   /// Create Order endpoint
   static String get createOrderUrl => "$baseUrl/create-order";

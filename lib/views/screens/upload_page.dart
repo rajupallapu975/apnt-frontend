@@ -1148,7 +1148,7 @@ class _UploadPageState extends State<UploadPage> {
         // 🔀 Filter based on active vs completed sub-tab
         if (_ordersSubTabIndex == 0) {
           final currentUser = FirebaseAuth.instance.currentUser;
-          // Active Orders Sub-tab: Merge live stream active & local storage active orders for this user ONLY
+          // Active Orders Sub-tab: Live stream active orders are authoritative
           return FutureBuilder<List<PrintOrderModel>>(
             future: LocalStorageService().getLocalOrders(
               userId: currentUser?.uid,
@@ -1164,7 +1164,7 @@ class _UploadPageState extends State<UploadPage> {
               }
               for (final o in localOrders) {
                 if (!o.isPicked && o.status != OrderStatus.completed && !o.orderDone) {
-                  combinedMap[o.orderId] = o;
+                  combinedMap.putIfAbsent(o.orderId, () => o);
                 }
               }
 
@@ -1504,18 +1504,18 @@ class _UploadPageState extends State<UploadPage> {
                   const SizedBox(height: 12),
                   InkWell(
                     onTap: () async {
-                      String url;
-                      try {
-                        final xeroxVM = context.read<XeroxShopViewModel>();
-                        final matched = xeroxVM.shops.firstWhere((s) => s.id == order.shopId);
-                        url = matched.mapsUrl;
-                      } catch (_) {
-                        String? shopAddr = order.printSettings['shopAddress'];
-                        final query = (shopAddr != null && shopAddr.isNotEmpty && shopAddr != 'N/A')
-                            ? shopAddr
-                            : (order.shopName ?? 'Xerox Shop');
-                        url = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}';
+                      String? shopAddr = order.printSettings['shopAddress'];
+                      if (shopAddr == null || shopAddr.isEmpty || shopAddr == 'N/A') {
+                        try {
+                          final xeroxVM = context.read<XeroxShopViewModel>();
+                          final matched = xeroxVM.shops.firstWhere((s) => s.id == order.shopId);
+                          if (matched.address.isNotEmpty) shopAddr = matched.address;
+                        } catch (_) {}
                       }
+                      final query = (shopAddr != null && shopAddr.isNotEmpty && shopAddr != 'N/A')
+                          ? shopAddr
+                          : (order.shopName ?? 'Xerox Shop');
+                      final url = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}';
                       final uri = Uri.parse(url);
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);
