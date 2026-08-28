@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../utils/app_colors.dart';
+import '../../../utils/service_availability_helper.dart';
 import 'zikrinter_service_details_page.dart';
 
 class ZikrinterAllServicesPage extends StatelessWidget {
@@ -66,8 +67,10 @@ class ZikrinterAllServicesPage extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: InkWell(
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () => ServiceAvailabilityHelper.checkAndNavigate(
+                    context: context,
+                    serviceId: doc.id,
+                    onAvailable: () => Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => ZikrinterServiceDetailsPage(
@@ -81,8 +84,8 @@ class ZikrinterAllServicesPage extends StatelessWidget {
                           actionButtonLabel: actionButtonLabel,
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                   borderRadius: BorderRadius.circular(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

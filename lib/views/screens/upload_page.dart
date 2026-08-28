@@ -8,6 +8,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/upload_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/service_availability_helper.dart';
 import '../../widgets/common/modern_card.dart';
 import '../../models/print_order_model.dart';
 import '../../models/file_model.dart';
@@ -818,8 +819,10 @@ class _UploadPageState extends State<UploadPage> {
                 SizedBox(
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
+                    onPressed: () => ServiceAvailabilityHelper.checkAndNavigate(
+                      context: context,
+                      serviceId: doc.id,
+                      onAvailable: () => Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => ZikrinterServiceDetailsPage(
@@ -836,8 +839,8 @@ class _UploadPageState extends State<UploadPage> {
                             actionButtonLabel: data['actionLabel'],
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2E7D32),
                       foregroundColor: Colors.white,
@@ -1998,24 +2001,28 @@ class ServiceSearchDelegate extends SearchDelegate<void> {
                   ],
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textTertiary),
-                onTap: () {
-                  close(context, null);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ZikrinterServiceDetailsPage(
-                        serviceId: doc.id,
-                        serviceName: serviceName,
-                        description: description,
-                        imageUrl: imageUrl,
-                        images: images,
-                        startingPrice: startingPrice,
-                        globalParams: globalParams,
-                        actionButtonLabel: actionButtonLabel,
+                onTap: () => ServiceAvailabilityHelper.checkAndNavigate(
+                  context: context,
+                  serviceId: doc.id,
+                  onAvailable: () {
+                    close(context, null);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ZikrinterServiceDetailsPage(
+                          serviceId: doc.id,
+                          serviceName: serviceName,
+                          description: description,
+                          imageUrl: imageUrl,
+                          images: images,
+                          startingPrice: startingPrice,
+                          globalParams: globalParams,
+                          actionButtonLabel: actionButtonLabel,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           );

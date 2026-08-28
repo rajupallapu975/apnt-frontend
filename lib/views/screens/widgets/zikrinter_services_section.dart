@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../utils/app_colors.dart';
+import '../../../utils/service_availability_helper.dart';
 import '../zikrinter_service_details_page.dart';
 
 class ZikrinterServicesSection extends StatelessWidget {
@@ -231,18 +232,22 @@ class _ServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ZikrinterServiceDetailsPage(
-            serviceId: serviceId,
-            serviceName: serviceName,
-            description: description,
-            imageUrl: imageUrl,
-            images: images,
-            startingPrice: startingPrice,
-            globalParams: globalParams,
-            actionButtonLabel: actionButtonLabel,
+      onTap: () => ServiceAvailabilityHelper.checkAndNavigate(
+        context: context,
+        serviceId: serviceId,
+        onAvailable: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ZikrinterServiceDetailsPage(
+              serviceId: serviceId,
+              serviceName: serviceName,
+              description: description,
+              imageUrl: imageUrl,
+              images: images,
+              startingPrice: startingPrice,
+              globalParams: globalParams,
+              actionButtonLabel: actionButtonLabel,
+            ),
           ),
         ),
       ),

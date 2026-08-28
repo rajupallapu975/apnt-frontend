@@ -81,20 +81,20 @@ service cloud.firestore {
     // 🏪 Shops — catalogue data browsed during shop selection. Read-only for clients;
     // all shop mutation happens in the admin project via the backend.
     match /shops/{shopId} {
-      allow read:  if isSignedIn();
+      allow read:  if true;
       allow write: if false;
 
       // Any legacy mirror subcollections are backend-only. The client's stray delete of
       // shops/{id}/orders/{id} in this project is wrapped in catchError and is a no-op.
       match /{document=**} {
-        allow read:  if isSignedIn();
+        allow read:  if true;
         allow write: if false;
       }
     }
 
     // 📋 Service catalogue — read-only reference data.
     match /services/{serviceId} {
-      allow read:  if isSignedIn();
+      allow read:  if true;
       allow write: if false;
     }
 
@@ -111,7 +111,7 @@ service cloud.firestore {
 
     // ⚙️ App config (service version poll on the upload screen).
     match /app_config/{document} {
-      allow read:  if isSignedIn();
+      allow read:  if true;
       allow write: if false;
     }
 

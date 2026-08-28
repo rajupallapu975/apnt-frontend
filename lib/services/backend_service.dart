@@ -268,4 +268,26 @@ class BackendService {
       debugPrint("❌ Cloudinary Deletion Status/Error Trace: $e");
     }
   }
+
+  /* =================================================
+     SERVICE AVAILABILITY CHECK
+  ================================================= */
+  Future<bool> checkServiceAvailability(String serviceId) async {
+    try {
+      final response = await http.get(
+        Uri.parse("${BackendConfig.baseUrl}/api/services/$serviceId"),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['service'] != null) {
+          final isAvailable = data['service']['isAvailable'];
+          return isAvailable != false;
+        }
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
 }
