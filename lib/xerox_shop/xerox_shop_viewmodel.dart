@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'xerox_shop_model.dart';
 import '../services/backend_service.dart';
 import '../config/backend_config.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/tester_viewmodel.dart';
 
 class XeroxShopViewModel extends ChangeNotifier {
   bool _isLoading = false;
@@ -111,47 +111,52 @@ class XeroxShopViewModel extends ChangeNotifier {
         }
       }
 
-      // 🚀 HYBRID FETCH: Try Primary first, then Secondary (Admin Project) if Primary is empty/fails
-      FirebaseFirestore firestore = FirebaseFirestore.instance;
-      
-      debugPrint("📡 Fetching from Primary Firestore: collection('shops')...");
-      var snapshot = await firestore.collection('shops').get().timeout(const Duration(seconds: 15));
-      
-      // If Primary is empty or fails, try the Secondary Admin project
-      if (snapshot.docs.isEmpty) {
-        debugPrint("⚠️ Primary shops collection is empty. Checking Secondary Admin Project...");
-        try {
-          final adminApp = Firebase.app('zikrint_admin');
-          final adminFirestore = FirebaseFirestore.instanceFor(app: adminApp);
-          snapshot = await adminFirestore.collection('shops').get().timeout(const Duration(seconds: 10));
-          debugPrint("✅ Secondary Fetch Success: ${snapshot.docs.length} shops found in Admin project");
-        } catch (e) {
-          debugPrint("❌ Secondary Fetch also failed: $e");
-          // Re-throw if both failed AND we have no data
-          if (snapshot.docs.isEmpty) throw Exception("No shops found in either Primary or Secondary projects.");
+      // 🚀 HYBRID FETCH: Always fetch from BOTH Primary and Secondary (Admin Project) and merge
+      final Map<String, DocumentSnapshot> combinedDocs = {};
+
+      // 1. Fetch from Primary Firestore
+      try {
+        debugPrint("📡 Fetching from Primary Firestore: collection('shops')...");
+        final primarySnap = await FirebaseFirestore.instance.collection('shops').get().timeout(const Duration(seconds: 8));
+        for (final doc in primarySnap.docs) {
+          if (doc.id != 'serviceVersion') {
+            combinedDocs[doc.id] = doc;
+          }
         }
+      } catch (e) {
+        debugPrint("⚠️ Primary shops fetch error: $e");
       }
 
-      final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+      // 2. Fetch from Secondary Admin Project (where real shops live)
+      try {
+        final adminApp = Firebase.app('zikrint_admin');
+        final adminFirestore = FirebaseFirestore.instanceFor(app: adminApp);
+        debugPrint("📡 Fetching from Secondary Admin Firestore: collection('shops')...");
+        final adminSnap = await adminFirestore.collection('shops').get().timeout(const Duration(seconds: 8));
+        for (final doc in adminSnap.docs) {
+          if (doc.id != 'serviceVersion') {
+            combinedDocs[doc.id] = doc;
+          }
+        }
+      } catch (e) {
+        debugPrint("⚠️ Admin shops fetch error: $e");
+      }
 
-      _shops = snapshot.docs
+      final bool isReviewer = TesterViewModel.isCurrentReviewerSession;
+
+      _shops = combinedDocs.values
           .where((doc) {
-            if (doc.id == 'serviceVersion') return false;
-            final data = doc.data();
-            final String shopName = (data['shopName'] ?? '').toString().toLowerCase();
+            final data = doc.data() as Map<String, dynamic>? ?? {};
             final String shopEmail = (data['email'] ?? '').toString().toLowerCase();
             final bool isTestShopDoc = doc.id == 'reviewer_shop_store' || 
                                     data['isTestShop'] == true || 
-                                    shopName.contains('test') || 
-                                    shopName.contains('reviewer') ||
-                                    shopEmail.contains('test') ||
-                                    shopEmail.contains('reviewer');
+                                    shopEmail == 'reviewer@zikrint.app';
 
             if (!isReviewer && isTestShopDoc) return false;
             if (isReviewer && !isTestShopDoc) return false;
             return true;
           })
-          .map((doc) => XeroxShopModel.fromMap(doc.data(), doc.id))
+          .map((doc) => XeroxShopModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
 
       debugPrint("✅ Final Shop Fetch Count: ${_shops.length} shops total");

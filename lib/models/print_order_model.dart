@@ -36,6 +36,7 @@ class PrintOrderModel {
 
   final String? customId; // Sequential ID (order_1, order_2)
   final String projectId;
+  final bool deletedByUser;
 
   // Cover Page details
   final bool generateCoverPage;
@@ -100,6 +101,7 @@ class PrintOrderModel {
     this.orderDone = false,
     this.customId,
     this.projectId = 'psfc-43b5a',
+    this.deletedByUser = false,
     this.generateCoverPage = false,
     this.coverPageCharge = 0.0,
     this.coverPageUrl,
@@ -169,27 +171,46 @@ class PrintOrderModel {
       userEmail: data['userEmail']?.toString(),
       customerName: data['customerName']?.toString(),
       projectId: data['projectId']?.toString() ?? 'psfc-43b5a',
+      deletedByUser: data['deletedByUser'] == true,
     );
   }
 
   factory PrintOrderModel.fromLocalMap(Map<String, dynamic> data) {
+    DateTime parsedDate;
+    final rawDate = data['createdAt'];
+    if (rawDate is Timestamp) {
+      parsedDate = rawDate.toDate();
+    } else if (rawDate is Map && rawDate['_seconds'] != null) {
+      parsedDate = DateTime.fromMillisecondsSinceEpoch((rawDate['_seconds'] as num).toInt() * 1000);
+    } else if (rawDate is String) {
+      parsedDate = DateTime.tryParse(rawDate) ?? DateTime.now();
+    } else {
+      parsedDate = DateTime.now();
+    }
+
     return PrintOrderModel(
-      orderId: data['orderId'] ?? '',
-      pickupCode: data['pickupCode'] ?? '',
-      userId: data['userId'] ?? '',
-      createdAt: DateTime.parse(data['createdAt']),
+      orderId: (data['orderId'] ?? data['id'] ?? '').toString(),
+      pickupCode: (data['pickupCode'] ?? data['orderCode'] ?? '').toString(),
+      userId: (data['userId'] ?? '').toString(),
+      createdAt: parsedDate,
       status: OrderStatus.values.firstWhere(
-        (e) => e.name == data['status'],
-        orElse: () => OrderStatus.active,
+        (e) => e.name == data['status']?.toString().toLowerCase(),
+        orElse: () {
+          final s = data['status']?.toString().toLowerCase() ?? '';
+          if (s == 'completed') return OrderStatus.completed;
+          if (s == 'failed') return OrderStatus.failed;
+          if (s == 'refunded') return OrderStatus.refunded;
+          return OrderStatus.active;
+        },
       ),
       printMode: data['printMode'] == 'xeroxShop' ? PrintMode.xeroxShop : PrintMode.autonomous,
-      printSettings: data['printSettings'] ?? {},
-      totalPages: (data['totalPages'] ?? data['pages'] ?? 0) as int,
-      totalPrice: (data['totalPrice'] ?? data['amount'] ?? 0).toDouble(),
+      printSettings: data['printSettings'] is Map ? Map<String, dynamic>.from(data['printSettings'] as Map) : {},
+      totalPages: ((data['totalPages'] ?? data['pages'] ?? 0) as num).toInt(),
+      totalPrice: ((data['totalPrice'] ?? data['amount'] ?? 0) as num).toDouble(),
       fileUrls: List<String>.from(data['fileUrls'] ?? []),
       publicIds: List<String>.from(data['publicIds'] ?? []),
       localFilePaths: List<String>.from(data['localFilePaths'] ?? []),
-      reason: data['reason'],
+      reason: data['reason']?.toString(),
       xeroxId: data['xeroxId']?.toString(),
       codeRevealed: data['codeRevealed'] == true,
       scanned: data['scanned'] == true,
@@ -211,6 +232,7 @@ class PrintOrderModel {
       razorpayPaymentId: data['razorpayPaymentId']?.toString(),
       paymentStatus: data['paymentStatus']?.toString(),
       projectId: data['projectId']?.toString() ?? 'psfc-43b5a',
+      deletedByUser: data['deletedByUser'] == true,
     );
   }
 
@@ -305,6 +327,7 @@ class PrintOrderModel {
       if (serviceName != null) 'serviceName': serviceName,
       if (razorpayPaymentId != null) 'razorpayPaymentId': razorpayPaymentId,
       if (paymentStatus != null) 'paymentStatus': paymentStatus,
+      'deletedByUser': deletedByUser,
     };
   }
 
@@ -344,6 +367,7 @@ class PrintOrderModel {
       'razorpayPaymentId': razorpayPaymentId,
       'paymentStatus': paymentStatus,
       'projectId': projectId,
+      'deletedByUser': deletedByUser,
     };
   }
 
@@ -374,6 +398,7 @@ class PrintOrderModel {
     String? razorpayPaymentId,
     String? paymentStatus,
     String? projectId,
+    bool? deletedByUser,
   }) {
     return PrintOrderModel(
       orderId: orderId ?? this.orderId,
@@ -402,6 +427,7 @@ class PrintOrderModel {
       razorpayPaymentId: razorpayPaymentId ?? this.razorpayPaymentId,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       projectId: projectId ?? this.projectId,
+      deletedByUser: deletedByUser ?? this.deletedByUser,
     );
   }
 }

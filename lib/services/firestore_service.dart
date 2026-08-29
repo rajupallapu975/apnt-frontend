@@ -11,7 +11,7 @@ import '../models/print_order_model.dart';
 import '../utils/app_exceptions.dart';
 import 'local_storage_service.dart';
 import 'backend_service.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/tester_viewmodel.dart';
 // rxdart already imported above
 
 class FirestoreService {
@@ -417,6 +417,14 @@ class FirestoreService {
             .snapshots()
             .map((snapshot) => snapshot.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
             .onErrorReturn(<PrintOrderModel>[]),
+
+        // Permanent Order History (UID)
+        _firestore.collection('users')
+            .doc(uid)
+            .collection('order_history')
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturn(<PrintOrderModel>[]),
       ];
 
       if (db2 != _firestore) {
@@ -496,15 +504,16 @@ class FirestoreService {
           );
         }
       }
-
       final preparedStreams = streams.map((s) => s.startWith(<PrintOrderModel>[])).toList();
 
       return Rx.combineLatest(preparedStreams, (List<List<PrintOrderModel>> results) {
         final all = results.expand((list) => list).toList();
         final uniqueIds = <String>{};
         final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
-        unique.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return unique;
+        
+        final filtered = unique.where((o) => !o.deletedByUser).toList();
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return filtered;
       });
     }).asBroadcastStream();
   }
@@ -514,149 +523,147 @@ class FirestoreService {
   ================================================= */
 
   Stream<List<PrintOrderModel>> getActiveOrders() {
-    final user = _auth.currentUser;
-    final String uid = user?.uid ?? 'guest_user';
-    final String? email = user?.email;
-    final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
-
-    final db2 = _getFirestoreForProject('zikrint-944a4');
-    final db3 = _getFirestoreForProject('think-ink');
-
-    // 🏎️ 1. Fetch Streams (Single-field queries without composite index requirement)
-    final List<Stream<List<PrintOrderModel>>> streams = [
-      // Kiosk (UID)
-      _ordersCollection
-          .where('userId', isEqualTo: uid)
-          .snapshots()
-          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-          .onErrorReturnWith((err, stack) {
-            debugPrint("⚠️ Kiosk Stream Error: $err");
-            return <PrintOrderModel>[];
-          }),
-      
-      // Xerox (UID) - Project 1
-      _firestore.collection('xerox_orders')
-          .where('userId', isEqualTo: uid)
-          .snapshots()
-          .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-          .onErrorReturnWith((err, stack) {
-            debugPrint("⚠️ Xerox UID Stream Error: $err");
-            return <PrintOrderModel>[];
-          }),
-    ];
-
-    if (db2 != _firestore) {
-      streams.add(
-        db2.collection('xerox_orders')
-            .where('userId', isEqualTo: uid)
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
-      );
-    }
-
-    if (db3 != _firestore) {
-      streams.add(
-        db3.collection('xerox_orders')
-            .where('userId', isEqualTo: uid)
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
-      );
-    }
-
-    // 🛡️ Reviewer Test Streams - Only included for Reviewer Account
-    if (isReviewer) {
-      streams.addAll([
-        _firestore.collection('xerox_orders')
-            .where('userEmail', isEqualTo: 'reviewer@zikrint.app')
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[]),
-        _firestore.collection('xerox_orders')
-            .where('userId', isEqualTo: 'reviewer_user')
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[]),
-        _firestore.collection('xerox_orders')
-            .where('customerName', isEqualTo: 'Reviewer User')
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[]),
-      ]);
-    } else {
-      // Guest User Stream only for guest non-reviewer
-      streams.add(
-        _firestore.collection('xerox_orders')
-            .where('userId', isEqualTo: 'guest_user')
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
-      );
-    }
-
-    if (email != null && email.isNotEmpty) {
-      streams.add(
-        _ordersCollection
-            .where('userId', isEqualTo: email)
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
-      );
-      streams.add(
-        _firestore.collection('xerox_orders')
-            .where('userId', isEqualTo: email)
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
-      );
-      streams.add(
-        _firestore.collection('xerox_orders')
-            .where('userEmail', isEqualTo: email)
-            .snapshots()
-            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
-            .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
-      );
-    }
-
-    final preparedStreams = streams.map((s) => s.startWith(<PrintOrderModel>[])).toList();
-
-    return Rx.combineLatest(preparedStreams, (List<List<PrintOrderModel>> results) {
-      final all = results.expand((list) => list).toList();
-      final uniqueIds = <String>{};
-      final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
-      
-      final activeOnly = unique.where((o) {
-        final uId = o.userId.toLowerCase();
-        final cId = (o.customId ?? '').toLowerCase();
-        final oId = o.orderId.toLowerCase();
-        final uEmail = (o.userEmail ?? '').toLowerCase();
-        final cName = (o.customerName ?? '').toLowerCase();
-
-        final bool isOrderBelongsToReviewer = uEmail.contains('reviewer') ||
-                                             cName.contains('reviewer') ||
-                                             uId.contains('reviewer') ||
-                                             cId.contains('reviewer') ||
-                                             oId.contains('reviewer');
-
-        if (isReviewer) {
-          if (!isOrderBelongsToReviewer) return false;
-        } else {
-          if (isOrderBelongsToReviewer) return false;
-        }
-
-        final st = o.status.toString().toUpperCase();
-        final ordSt = (o.orderStatus ?? '').toLowerCase();
-        return !st.contains('CANCELLED') && !st.contains('DELETED') && ordSt != 'files purged';
-      }).toList();
-
-      activeOnly.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      if (isReviewer) {
-        debugPrint("📡 [Firestore Stream Emitted for Tester]: ${activeOnly.length} active order(s) retrieved from Cloud.");
+    return _auth.authStateChanges().switchMap((user) {
+      if (user == null) {
+        return Stream.value(<PrintOrderModel>[]);
       }
 
-      return activeOnly;
+      final String uid = user.uid;
+      final String? email = user.email;
+      final bool isReviewer = TesterViewModel.isCurrentReviewerSession;
+
+      final db2 = _getFirestoreForProject('zikrint-944a4');
+      final db3 = _getFirestoreForProject('think-ink');
+
+      // 🏎️ 1. Fetch Streams (Single-field queries without composite index requirement)
+      final List<Stream<List<PrintOrderModel>>> streams = [
+        // Kiosk (UID)
+        _ordersCollection
+            .where('userId', isEqualTo: uid)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturnWith((err, stack) {
+              debugPrint("⚠️ Kiosk Stream Error: $err");
+              return <PrintOrderModel>[];
+            }),
+        
+        // Xerox (UID) - Project 1
+        _firestore.collection('xerox_orders')
+            .where('userId', isEqualTo: uid)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+            .onErrorReturnWith((err, stack) {
+              debugPrint("⚠️ Xerox UID Stream Error: $err");
+              return <PrintOrderModel>[];
+            }),
+      ];
+
+      if (db2 != _firestore) {
+        streams.add(
+          db2.collection('xerox_orders')
+              .where('userId', isEqualTo: uid)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+        );
+      }
+
+      if (db3 != _firestore) {
+        streams.add(
+          db3.collection('xerox_orders')
+              .where('userId', isEqualTo: uid)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+        );
+      }
+
+      // 🛡️ Reviewer Test Streams - Only included for Reviewer Account
+      if (isReviewer) {
+        streams.addAll([
+          _firestore.collection('xerox_orders')
+              .where('userEmail', isEqualTo: 'reviewer@zikrint.app')
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[]),
+          _firestore.collection('xerox_orders')
+              .where('userId', isEqualTo: 'reviewer_user')
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[]),
+          _firestore.collection('xerox_orders')
+              .where('customerName', isEqualTo: 'Reviewer User')
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[]),
+        ]);
+      } else {
+        // Guest User Stream is handled via user.uid. guest_user hardcoded string is ignored to prevent permission warnings.
+      }
+
+      if (email != null && email.isNotEmpty) {
+        streams.add(
+          _ordersCollection
+              .where('userId', isEqualTo: email)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+        );
+        streams.add(
+          _firestore.collection('xerox_orders')
+              .where('userId', isEqualTo: email)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+        );
+        streams.add(
+          _firestore.collection('xerox_orders')
+              .where('userEmail', isEqualTo: email)
+              .snapshots()
+              .map((s) => s.docs.map((doc) => PrintOrderModel.fromFirestore(doc)).toList())
+              .onErrorReturnWith((err, stack) => <PrintOrderModel>[])
+        );
+      }
+
+      final preparedStreams = streams.map((s) => s.startWith(<PrintOrderModel>[])).toList();
+
+      return Rx.combineLatest(preparedStreams, (List<List<PrintOrderModel>> results) {
+        final all = results.expand((list) => list).toList();
+        final uniqueIds = <String>{};
+        final unique = all.where((o) => uniqueIds.add(o.orderId)).toList();
+        
+        final activeOnly = unique.where((o) {
+          final uId = o.userId.toLowerCase();
+          final cId = (o.customId ?? '').toLowerCase();
+          final oId = o.orderId.toLowerCase();
+          final uEmail = (o.userEmail ?? '').toLowerCase();
+          final cName = (o.customerName ?? '').toLowerCase();
+
+          final bool isOrderBelongsToReviewer = uEmail.contains('reviewer') ||
+                                               cName.contains('reviewer') ||
+                                               uId.contains('reviewer') ||
+                                               cId.contains('reviewer') ||
+                                               oId.contains('reviewer');
+
+          if (isReviewer) {
+            if (!isOrderBelongsToReviewer) return false;
+          } else {
+            if (isOrderBelongsToReviewer) return false;
+          }
+
+          final st = o.status.toString().toUpperCase();
+          final ordSt = (o.orderStatus ?? '').toLowerCase();
+          return !st.contains('CANCELLED') && !st.contains('DELETED') && ordSt != 'files purged' && !o.deletedByUser;
+        }).toList();
+
+        activeOnly.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        if (isReviewer) {
+          debugPrint("📡 [Firestore Stream Emitted for Tester]: ${activeOnly.length} active order(s) retrieved from Cloud.");
+        }
+
+        return activeOnly;
+      });
     }).asBroadcastStream();
   }
 
@@ -814,7 +821,11 @@ class FirestoreService {
 
       // 🥈 Fallback: Manual aggregation if user doc doesn't have fields yet
       final user = _auth.currentUser;
-      final querySnapshot = await _ordersCollection
+      final kioskSnapshot = await _ordersCollection
+          .where('userId', isEqualTo: user?.uid)
+          .get();
+
+      final xeroxSnapshot = await _firestore.collection('xerox_orders')
           .where('userId', isEqualTo: user?.uid)
           .get();
 
@@ -823,12 +834,14 @@ class FirestoreService {
       int totalPages = 0;
       int totalFiles = 0;
 
-      for (var doc in querySnapshot.docs) {
+      final allDocs = [...kioskSnapshot.docs, ...xeroxSnapshot.docs];
+
+      for (var doc in allDocs) {
         final data = doc.data() as Map<String, dynamic>;
         final status = data['status']?.toString().toUpperCase() ?? '';
         
         if (status == 'COMPLETED' || status == 'ACTIVE') {
-          totalAmount += (data['totalPrice'] ?? 0.0).toDouble();
+          totalAmount += (data['amount'] ?? data['totalPrice'] ?? 0.0).toDouble();
           totalOrders++;
           totalPages += (data['totalPages'] as num? ?? 0).toInt();
           totalFiles += (data['printSettings']?['files'] as List? ?? []).length;
@@ -1023,6 +1036,108 @@ class FirestoreService {
           '✅ Order ${order.orderId} archived locally');
     } catch (e) {
       debugPrint('❌ Error archiving order: $e');
+    }
+  }
+
+  /* =================================================
+     DELETE ORDERS FROM HISTORY IN FIRESTORE (Soft Delete)
+  ================================================= */
+
+  /// Soft-delete an order from the user's completed history list in Firestore
+  Future<void> deleteOrderFromHistory(PrintOrderModel order) async {
+    try {
+      final uid = _currentUserId;
+      if (uid != null) {
+        await _firestore.collection('users').doc(uid).collection('order_history').doc(order.orderId).set({
+          'deletedByUser': true,
+        }, SetOptions(merge: true));
+      }
+
+      final db = _getFirestoreForProject(order.projectId);
+      final isXerox = order.printMode == PrintMode.xeroxShop;
+      final collection = isXerox ? 'xerox_orders' : 'orders';
+      
+      await db.collection(collection).doc(order.orderId).update({
+        'deletedByUser': true,
+      }).catchError((_) => null);
+      debugPrint("✅ Soft-deleted order ${order.orderId} from history in Firestore");
+    } catch (e) {
+      debugPrint("❌ Error soft-deleting order from history: $e");
+      rethrow;
+    }
+  }
+
+  /// Soft-delete all completed orders in history for the active user in Firestore
+  Future<void> clearAllOrdersFromHistory() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    
+    final uid = user.uid;
+    final email = user.email;
+    
+    try {
+      // 0. User Order History Subcollection
+      final historyDocs = await _firestore.collection('users').doc(uid).collection('order_history').get();
+      final historyBatch = _firestore.batch();
+      for (final doc in historyDocs.docs) {
+        historyBatch.update(doc.reference, {'deletedByUser': true});
+      }
+      await historyBatch.commit().catchError((_) => null);
+
+      // 1. Primary DB kiosk orders
+      final kioskDocs = await _ordersCollection.where('userId', isEqualTo: uid).get();
+      // 2. Primary DB xerox orders
+      final xeroxDocs = await _firestore.collection('xerox_orders').where('userId', isEqualTo: uid).get();
+      
+      final batch = _firestore.batch();
+      for (final doc in kioskDocs.docs) {
+        batch.update(doc.reference, {'deletedByUser': true});
+      }
+      for (final doc in xeroxDocs.docs) {
+        batch.update(doc.reference, {'deletedByUser': true});
+      }
+      await batch.commit().catchError((_) => null);
+      
+      // 3. Project 2
+      final db2 = _getFirestoreForProject('zikrint-944a4');
+      if (db2 != _firestore) {
+        final docs2 = await db2.collection('xerox_orders').where('userId', isEqualTo: uid).get();
+        final batch2 = db2.batch();
+        for (final doc in docs2.docs) {
+          batch2.update(doc.reference, {'deletedByUser': true});
+        }
+        await batch2.commit();
+      }
+      
+      // 4. Project 3
+      final db3 = _getFirestoreForProject('think-ink');
+      if (db3 != _firestore) {
+        final docs3 = await db3.collection('xerox_orders').where('userId', isEqualTo: uid).get();
+        final batch3 = db3.batch();
+        for (final doc in docs3.docs) {
+          batch3.update(doc.reference, {'deletedByUser': true});
+        }
+        await batch3.commit();
+      }
+      
+      if (email != null && email.isNotEmpty) {
+        // Also clean up by user email for legacy entries
+        final emailKioskDocs = await _ordersCollection.where('userId', isEqualTo: email).get();
+        final emailXeroxDocs = await _firestore.collection('xerox_orders').where('userId', isEqualTo: email).get();
+        
+        final batchEmail = _firestore.batch();
+        for (final doc in emailKioskDocs.docs) {
+          batchEmail.update(doc.reference, {'deletedByUser': true});
+        }
+        for (final doc in emailXeroxDocs.docs) {
+          batchEmail.update(doc.reference, {'deletedByUser': true});
+        }
+        await batchEmail.commit();
+      }
+      
+      debugPrint("✅ Soft-deleted all completed orders from history in Firestore");
+    } catch (e) {
+      debugPrint("❌ Error clearing completed orders history: $e");
     }
   }
 

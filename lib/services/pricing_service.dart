@@ -4,33 +4,86 @@ class XeroxPricing {
   final Map<String, double> normalBwPrices;
   final Map<String, double> doubleBwPrices;
   final Map<String, double> bulkBwPrices;
+  final Map<String, double> doubleBulkBwPrices;
   final Map<String, int> bwBulkStartPages;
 
   final Map<String, double> normalColorPrices;
   final Map<String, double> doubleColorPrices;
   final Map<String, double> bulkColorPrices;
+  final Map<String, double> doubleBulkColorPrices;
   final Map<String, int> colorBulkStartPages;
 
   XeroxPricing({
     required this.normalBwPrices,
     required this.doubleBwPrices,
     required this.bulkBwPrices,
+    required this.doubleBulkBwPrices,
     required this.bwBulkStartPages,
     required this.normalColorPrices,
     required this.doubleColorPrices,
     required this.bulkColorPrices,
+    required this.doubleBulkColorPrices,
     required this.colorBulkStartPages,
   });
 
   double get normalBwPrice => normalBwPrices['a4'] ?? 2.0;
-  double get doubleBwPrice => doubleBwPrices['a4'] ?? 4.0;
-  double get bulkBwPrice => bulkBwPrices['a4'] ?? 1.5;
+  double get doubleBwPrice => doubleBwPrices['a4'] ?? 0.0;
+  double get bulkBwPrice => bulkBwPrices['a4'] ?? 0.0;
+  double get doubleBulkBwPrice => doubleBulkBwPrices['a4'] ?? 0.0;
   int get bwBulkStartPage => bwBulkStartPages['a4'] ?? 10;
 
   double get normalColorPrice => normalColorPrices['a4'] ?? 10.0;
-  double get doubleColorPrice => doubleColorPrices['a4'] ?? 20.0;
-  double get bulkColorPrice => bulkColorPrices['a4'] ?? 8.0;
+  double get doubleColorPrice => doubleColorPrices['a4'] ?? 0.0;
+  double get bulkColorPrice => bulkColorPrices['a4'] ?? 0.0;
+  double get doubleBulkColorPrice => doubleBulkColorPrices['a4'] ?? 0.0;
   int get colorBulkStartPage => colorBulkStartPages['a4'] ?? 10;
+
+  bool isBwAvailable(String sizeKey) {
+    final key = sizeKey.toLowerCase();
+    final p = normalBwPrices[key] ?? normalBwPrices['a4'] ?? 0.0;
+    return p > 0.0;
+  }
+
+  bool isColorAvailable(String sizeKey) {
+    final key = sizeKey.toLowerCase();
+    final p = normalColorPrices[key] ?? normalColorPrices['a4'] ?? 0.0;
+    return p > 0.0;
+  }
+
+  bool isDoubleSidedAvailable(String sizeKey, bool isColor) {
+    final key = sizeKey.toLowerCase();
+    if (isColor) {
+      final p = doubleColorPrices[key] ?? doubleColorPrices['a4'] ?? 0.0;
+      return p > 0.0;
+    } else {
+      final p = doubleBwPrices[key] ?? doubleBwPrices['a4'] ?? 0.0;
+      return p > 0.0;
+    }
+  }
+
+  bool isBulkBwAvailable(String sizeKey) {
+    final key = sizeKey.toLowerCase();
+    final p = bulkBwPrices[key] ?? bulkBwPrices['a4'] ?? 0.0;
+    return p > 0.0;
+  }
+
+  bool isDoubleBulkBwAvailable(String sizeKey) {
+    final key = sizeKey.toLowerCase();
+    final p = doubleBulkBwPrices[key] ?? doubleBulkBwPrices['a4'] ?? 0.0;
+    return p > 0.0;
+  }
+
+  bool isBulkColorAvailable(String sizeKey) {
+    final key = sizeKey.toLowerCase();
+    final p = bulkColorPrices[key] ?? bulkColorPrices['a4'] ?? 0.0;
+    return p > 0.0;
+  }
+
+  bool isDoubleBulkColorAvailable(String sizeKey) {
+    final key = sizeKey.toLowerCase();
+    final p = doubleBulkColorPrices[key] ?? doubleBulkColorPrices['a4'] ?? 0.0;
+    return p > 0.0;
+  }
 
   factory XeroxPricing.fromShopData(Map<String, dynamic> shopData, Map<String, dynamic>? globalServiceParams, {String? serviceId}) {
     final zikrinterServices = shopData['zikrinterServices'] as Map<String, dynamic>? ?? {};
@@ -40,21 +93,35 @@ class XeroxPricing {
     final Map<String, double> normalBwPrices = {};
     final Map<String, double> doubleBwPrices = {};
     final Map<String, double> bulkBwPrices = {};
+    final Map<String, double> doubleBulkBwPrices = {};
     final Map<String, int> bwBulkStartPages = {};
 
     final Map<String, double> normalColorPrices = {};
     final Map<String, double> doubleColorPrices = {};
     final Map<String, double> bulkColorPrices = {};
+    final Map<String, double> doubleBulkColorPrices = {};
     final Map<String, int> colorBulkStartPages = {};
 
-    // 1. Read base values for A4 (using top-level fallbacks if legacy)
-    double baseNormalBw = _toDouble(shopData['pricePerBWPage']) ?? _toDouble(config['pricePerBWPage']) ?? _toDouble(config['bw_singleSidePrice']) ?? 2.0;
-    double baseDoubleBw = _toDouble(shopData['doubleBwPrice']) ?? _toDouble(config['doubleBwPrice']) ?? _toDouble(config['bw_doubleSidePrice']) ?? (baseNormalBw * 2.0);
-    double baseBulkBw = _toDouble(shopData['bulkBwPrice']) ?? _toDouble(config['bulkBwPrice']) ?? _toDouble(config['bw_bulkPrintingPrice']) ?? 1.5;
+    final bool hasExplicitShopConfig = (shopData.isNotEmpty && shopData.containsKey('zikrinterServices')) || config.isNotEmpty;
+
+    // 1. Read base values for A4
+    double? rawNormalBw = _toDouble(shopData['pricePerBWPage']) ?? _toDouble(config['pricePerBWPage']) ?? _toDouble(config['bw_singleSidePrice']);
+    double baseNormalBw = rawNormalBw ?? (hasExplicitShopConfig ? 0.0 : 2.0);
+    double? rawDoubleBw = _toDouble(shopData['doubleBwPrice']) ?? _toDouble(config['doubleBwPrice']) ?? _toDouble(config['bw_doubleSidePrice']);
+    double baseDoubleBw = rawDoubleBw ?? 0.0;
+    double? rawBulkBw = _toDouble(shopData['bulkBwPrice']) ?? _toDouble(config['bulkBwPrice']) ?? _toDouble(config['bw_bulkPrintingPrice']);
+    double baseBulkBw = rawBulkBw ?? 0.0;
+    double? rawDoubleBulkBw = _toDouble(shopData['doubleBulkBwPrice']) ?? _toDouble(config['doubleBulkBwPrice']) ?? _toDouble(config['bw_double_bulkPrintingPrice']) ?? _toDouble(config['double_bulkPrintingPrice']);
+    double baseDoubleBulkBw = rawDoubleBulkBw ?? 0.0;
     
-    double baseNormalColor = _toDouble(shopData['pricePerColorPage']) ?? _toDouble(config['pricePerColorPage']) ?? _toDouble(config['color_singleSidePrice']) ?? 10.0;
-    double baseDoubleColor = _toDouble(shopData['doubleColorPrice']) ?? _toDouble(config['doubleColorPrice']) ?? _toDouble(config['color_doubleSidePrice']) ?? (baseNormalColor * 2.0);
-    double baseBulkColor = _toDouble(shopData['bulkColorPrice']) ?? _toDouble(config['bulkColorPrice']) ?? _toDouble(config['color_bulkPrintingPrice']) ?? 8.0;
+    double? rawNormalColor = _toDouble(shopData['pricePerColorPage']) ?? _toDouble(config['pricePerColorPage']) ?? _toDouble(config['color_singleSidePrice']);
+    double baseNormalColor = rawNormalColor ?? (hasExplicitShopConfig ? 0.0 : 10.0);
+    double? rawDoubleColor = _toDouble(shopData['doubleColorPrice']) ?? _toDouble(config['doubleColorPrice']) ?? _toDouble(config['color_doubleSidePrice']);
+    double baseDoubleColor = rawDoubleColor ?? 0.0;
+    double? rawBulkColor = _toDouble(shopData['bulkColorPrice']) ?? _toDouble(config['bulkColorPrice']) ?? _toDouble(config['color_bulkPrintingPrice']);
+    double baseBulkColor = rawBulkColor ?? 0.0;
+    double? rawDoubleBulkColor = _toDouble(shopData['doubleBulkColorPrice']) ?? _toDouble(config['doubleBulkColorPrice']) ?? _toDouble(config['color_double_bulkPrintingPrice']);
+    double baseDoubleBulkColor = rawDoubleBulkColor ?? 0.0;
 
     int baseBwBulkStart = _toInt(shopData['bwBulkStartPage']) ?? _toInt(shopData['bulkStartPage']) ?? _toInt(config['bwBulkStartPage']) ?? _toInt(config['bulkStartPage']) ?? _toInt(config['bw_bulkPrinting']?['setPages']) ?? 10;
     int baseColorBulkStart = _toInt(shopData['colorBulkStartPage']) ?? _toInt(shopData['bulkStartPage']) ?? _toInt(config['colorBulkStartPage']) ?? _toInt(config['bulkStartPage']) ?? _toInt(config['color_bulkPrinting']?['setPages']) ?? 10;
@@ -77,21 +144,25 @@ class XeroxPricing {
       double? normalBw;
       double? doubleBw;
       double? bulkBw;
+      double? doubleBulkBw;
       int? bwBulkStart;
       double? normalColor;
       double? doubleColor;
       double? bulkColor;
+      double? doubleBulkColor;
       int? colorBulkStart;
 
       if (sizeConfig != null) {
         normalBw = _toDouble(sizeConfig['bw']?['singleSidePrice']);
         doubleBw = _toDouble(sizeConfig['bw']?['doubleSidePrice']);
         bulkBw = _toDouble(sizeConfig['bw']?['bulkPrintingPrice']);
+        doubleBulkBw = _toDouble(sizeConfig['bw']?['doubleBulkPrintingPrice'] ?? sizeConfig['bw']?['double_bulkPrintingPrice']);
         bwBulkStart = _toInt(sizeConfig['bw']?['bulkStartPage'] ?? sizeConfig['bw']?['setPages']);
         
         normalColor = _toDouble(sizeConfig['color']?['singleSidePrice']);
         doubleColor = _toDouble(sizeConfig['color']?['doubleSidePrice']);
         bulkColor = _toDouble(sizeConfig['color']?['bulkPrintingPrice']);
+        doubleBulkColor = _toDouble(sizeConfig['color']?['doubleBulkPrintingPrice'] ?? sizeConfig['color']?['double_bulkPrintingPrice']);
         colorBulkStart = _toInt(sizeConfig['color']?['bulkStartPage'] ?? sizeConfig['color']?['setPages']);
       }
 
@@ -99,37 +170,43 @@ class XeroxPricing {
       normalBw ??= _toDouble(config['${sizeKey}_bw_singleSidePrice']);
       doubleBw ??= _toDouble(config['${sizeKey}_bw_doubleSidePrice']);
       bulkBw ??= _toDouble(config['${sizeKey}_bw_bulkPrintingPrice']);
+      doubleBulkBw ??= _toDouble(config['${sizeKey}_bw_double_bulkPrintingPrice']);
       bwBulkStart ??= _toInt(config['${sizeKey}_bw_bulkPrinting']?['setPages']);
 
       normalColor ??= _toDouble(config['${sizeKey}_color_singleSidePrice']);
       doubleColor ??= _toDouble(config['${sizeKey}_color_doubleSidePrice']);
       bulkColor ??= _toDouble(config['${sizeKey}_color_bulkPrintingPrice']);
+      doubleBulkColor ??= _toDouble(config['${sizeKey}_color_double_bulkPrintingPrice']);
       colorBulkStart ??= _toInt(config['${sizeKey}_color_bulkPrinting']?['setPages']);
 
       // Base legacy fallback
       if (sizeKey == 'legal') {
-        normalBw ??= _toDouble(config['legal_bw_singleSidePrice']) ?? _toDouble(config['legal_singleSidePrice']);
-        doubleBw ??= _toDouble(config['legal_bw_doubleSidePrice']) ?? _toDouble(config['legal_doubleSidePrice']);
-        bulkBw ??= _toDouble(config['legal_bw_bulkPrintingPrice']) ?? _toDouble(config['legal_bulkPrintingPrice']);
-        bwBulkStart ??= _toInt(config['legal_bw_bulkPrinting']?['setPages']) ?? _toInt(config['legal_bulkPrinting']?['setPages']);
+        normalBw ??= _toDouble(config['legal_bw_singleSidePrice']) ?? _toDouble(config['legal_singleSidePrice']) ?? (baseNormalBw > 0 ? baseNormalBw : null);
+        doubleBw ??= _toDouble(config['legal_bw_doubleSidePrice']) ?? _toDouble(config['legal_doubleSidePrice']) ?? (baseDoubleBw > 0 ? baseDoubleBw : null);
+        bulkBw ??= _toDouble(config['legal_bw_bulkPrintingPrice']) ?? _toDouble(config['legal_bulkPrintingPrice']) ?? (baseBulkBw > 0 ? baseBulkBw : null);
+        doubleBulkBw ??= _toDouble(config['legal_bw_double_bulkPrintingPrice']) ?? (baseDoubleBulkBw > 0 ? baseDoubleBulkBw : null);
+        bwBulkStart ??= _toInt(config['legal_bw_bulkPrinting']?['setPages']) ?? _toInt(config['legal_bulkPrinting']?['setPages']) ?? baseBwBulkStart;
         
-        normalColor ??= _toDouble(config['legal_color_singleSidePrice']);
-        doubleColor ??= _toDouble(config['legal_color_doubleSidePrice']);
-        bulkColor ??= _toDouble(config['legal_color_bulkPrintingPrice']);
-        colorBulkStart ??= _toInt(config['legal_color_bulkPrinting']?['setPages']);
+        normalColor ??= _toDouble(config['legal_color_singleSidePrice']) ?? (baseNormalColor > 0 ? baseNormalColor : null);
+        doubleColor ??= _toDouble(config['legal_color_doubleSidePrice']) ?? (baseDoubleColor > 0 ? baseDoubleColor : null);
+        bulkColor ??= _toDouble(config['legal_color_bulkPrintingPrice']) ?? (baseBulkColor > 0 ? baseBulkColor : null);
+        doubleBulkColor ??= _toDouble(config['legal_color_double_bulkPrintingPrice']) ?? (baseDoubleBulkColor > 0 ? baseDoubleBulkColor : null);
+        colorBulkStart ??= _toInt(config['legal_color_bulkPrinting']?['setPages']) ?? baseColorBulkStart;
       } else if (sizeKey == 'a4') {
-        normalBw ??= baseNormalBw;
-        doubleBw ??= baseDoubleBw;
-        bulkBw ??= baseBulkBw;
+        normalBw ??= (baseNormalBw > 0 ? baseNormalBw : null);
+        doubleBw ??= (baseDoubleBw > 0 ? baseDoubleBw : null);
+        bulkBw ??= (baseBulkBw > 0 ? baseBulkBw : null);
+        doubleBulkBw ??= (baseDoubleBulkBw > 0 ? baseDoubleBulkBw : null);
         bwBulkStart ??= baseBwBulkStart;
 
-        normalColor ??= baseNormalColor;
-        doubleColor ??= baseDoubleColor;
-        bulkColor ??= baseBulkColor;
+        normalColor ??= (baseNormalColor > 0 ? baseNormalColor : null);
+        doubleColor ??= (baseDoubleColor > 0 ? baseDoubleColor : null);
+        bulkColor ??= (baseBulkColor > 0 ? baseBulkColor : null);
+        doubleBulkColor ??= (baseDoubleBulkColor > 0 ? baseDoubleBulkColor : null);
         colorBulkStart ??= baseColorBulkStart;
       }
 
-      // Size-aware defaults (scale up from A4 base)
+      // Size-aware defaults (scale up from A4 base only if base is configured)
       final double sizeMultiplier = sizeKey == 'a3'
           ? 1.5
           : sizeKey == 'a2'
@@ -138,15 +215,16 @@ class XeroxPricing {
                   ? 3.0
                   : 1.0;
 
-      // Final mappings with size-scaled defaults
-      normalBwPrices[sizeKey] = normalBw ?? (baseNormalBw * sizeMultiplier).ceilToDouble();
-      doubleBwPrices[sizeKey] = doubleBw ?? (baseDoubleBw * sizeMultiplier).ceilToDouble();
-      bulkBwPrices[sizeKey] = bulkBw ?? (baseBulkBw * sizeMultiplier).ceilToDouble();
+      normalBwPrices[sizeKey] = normalBw ?? (baseNormalBw > 0 ? (baseNormalBw * sizeMultiplier).ceilToDouble() : 0.0);
+      doubleBwPrices[sizeKey] = doubleBw ?? (baseDoubleBw > 0 ? (baseDoubleBw * sizeMultiplier).ceilToDouble() : 0.0);
+      bulkBwPrices[sizeKey] = bulkBw ?? (baseBulkBw > 0 ? (baseBulkBw * sizeMultiplier).ceilToDouble() : 0.0);
+      doubleBulkBwPrices[sizeKey] = doubleBulkBw ?? (baseDoubleBulkBw > 0 ? (baseDoubleBulkBw * sizeMultiplier).ceilToDouble() : 0.0);
       bwBulkStartPages[sizeKey] = bwBulkStart ?? baseBwBulkStart;
 
-      normalColorPrices[sizeKey] = normalColor ?? (baseNormalColor * sizeMultiplier).ceilToDouble();
-      doubleColorPrices[sizeKey] = doubleColor ?? (baseDoubleColor * sizeMultiplier).ceilToDouble();
-      bulkColorPrices[sizeKey] = bulkColor ?? (baseBulkColor * sizeMultiplier).ceilToDouble();
+      normalColorPrices[sizeKey] = normalColor ?? (baseNormalColor > 0 ? (baseNormalColor * sizeMultiplier).ceilToDouble() : 0.0);
+      doubleColorPrices[sizeKey] = doubleColor ?? (baseDoubleColor > 0 ? (baseDoubleColor * sizeMultiplier).ceilToDouble() : 0.0);
+      bulkColorPrices[sizeKey] = bulkColor ?? (baseBulkColor > 0 ? (baseBulkColor * sizeMultiplier).ceilToDouble() : 0.0);
+      doubleBulkColorPrices[sizeKey] = doubleBulkColor ?? (baseDoubleBulkColor > 0 ? (baseDoubleBulkColor * sizeMultiplier).ceilToDouble() : 0.0);
       colorBulkStartPages[sizeKey] = colorBulkStart ?? baseColorBulkStart;
     }
 
@@ -154,10 +232,12 @@ class XeroxPricing {
       normalBwPrices: normalBwPrices,
       doubleBwPrices: doubleBwPrices,
       bulkBwPrices: bulkBwPrices,
+      doubleBulkBwPrices: doubleBulkBwPrices,
       bwBulkStartPages: bwBulkStartPages,
       normalColorPrices: normalColorPrices,
       doubleColorPrices: doubleColorPrices,
       bulkColorPrices: bulkColorPrices,
+      doubleBulkColorPrices: doubleBulkColorPrices,
       colorBulkStartPages: colorBulkStartPages,
     );
   }
@@ -406,44 +486,88 @@ class PricingService {
         totalColorPages += chargeableSheets;
         totalColorPagesWithCopies += sheetsWithCopies;
 
-        final double normalPrice = isDoubleSided 
-            ? (pricing.doubleColorPrices[sizeKey] ?? pricing.doubleColorPrices['a4'] ?? 20.0) 
-            : (pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0);
-        final double bulkPrice = pricing.bulkColorPrices[sizeKey] ?? pricing.bulkColorPrices['a4'] ?? 8.0;
+        final double normalSinglePrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 0.0;
+        final double rawDoublePrice = pricing.doubleColorPrices[sizeKey] ?? pricing.doubleColorPrices['a4'] ?? 0.0;
+        final double doublePrice = rawDoublePrice > 0.0 ? rawDoublePrice : (normalSinglePrice * 2.0);
+
+        final double singleBulkPrice = pricing.bulkColorPrices[sizeKey] ?? pricing.bulkColorPrices['a4'] ?? 0.0;
+        final double doubleBulkPrice = pricing.doubleBulkColorPrices[sizeKey] ?? pricing.doubleBulkColorPrices['a4'] ?? 0.0;
         final int bulkStart = pricing.colorBulkStartPages[sizeKey] ?? pricing.colorBulkStartPages['a4'] ?? 10;
 
-        final bool isBulk = sheetsWithCopies >= bulkStart;
-        if (isBulk) isColorBulkApplied = true;
+        final double normalPrice = isDoubleSided ? doublePrice : normalSinglePrice;
+        double rate = normalPrice;
+        bool isBulk = false;
 
-        final double rate = isBulk ? bulkPrice : normalPrice;
+        if (sheetsWithCopies >= bulkStart) {
+          if (isDoubleSided) {
+            if (doubleBulkPrice > 0.0) {
+              rate = doubleBulkPrice < normalPrice ? doubleBulkPrice : normalPrice;
+              if (rate < normalPrice) {
+                isBulk = true;
+                isColorBulkApplied = true;
+              }
+            }
+          } else {
+            if (singleBulkPrice > 0.0) {
+              rate = singleBulkPrice < normalPrice ? singleBulkPrice : normalPrice;
+              if (rate < normalPrice) {
+                isBulk = true;
+                isColorBulkApplied = true;
+              }
+            }
+          }
+        }
+
         itemCost = sheetsWithCopies * rate;
         itemOriginalCost = sheetsWithCopies * normalPrice;
 
         colorCost += itemCost;
         colorOriginalCost += itemOriginalCost;
 
-        paramType = isBulk ? 'bulkPrinting' : (isDoubleSided ? 'doubleSide' : 'singleSide');
+        paramType = isBulk ? (isDoubleSided ? 'double_bulkPrinting' : 'bulkPrinting') : (isDoubleSided ? 'doubleSide' : 'singleSide');
       } else {
         totalBwPages += chargeableSheets;
         totalBwPagesWithCopies += sheetsWithCopies;
 
-        final double normalPrice = isDoubleSided 
-            ? (pricing.doubleBwPrices[sizeKey] ?? pricing.doubleBwPrices['a4'] ?? 4.0) 
-            : (pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0);
-        final double bulkPrice = pricing.bulkBwPrices[sizeKey] ?? pricing.bulkBwPrices['a4'] ?? 1.5;
+        final double normalSinglePrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 0.0;
+        final double rawDoublePrice = pricing.doubleBwPrices[sizeKey] ?? pricing.doubleBwPrices['a4'] ?? 0.0;
+        final double doublePrice = rawDoublePrice > 0.0 ? rawDoublePrice : (normalSinglePrice * 2.0);
+
+        final double singleBulkBwPrice = pricing.bulkBwPrices[sizeKey] ?? pricing.bulkBwPrices['a4'] ?? 0.0;
+        final double doubleBulkBwPrice = pricing.doubleBulkBwPrices[sizeKey] ?? pricing.doubleBulkBwPrices['a4'] ?? 0.0;
         final int bulkStart = pricing.bwBulkStartPages[sizeKey] ?? pricing.bwBulkStartPages['a4'] ?? 10;
 
-        final bool isBulk = sheetsWithCopies >= bulkStart;
-        if (isBulk) isBwBulkApplied = true;
+        final double normalPrice = isDoubleSided ? doublePrice : normalSinglePrice;
+        double rate = normalPrice;
+        bool isBulk = false;
 
-        final double rate = isBulk ? bulkPrice : normalPrice;
+        if (sheetsWithCopies >= bulkStart) {
+          if (isDoubleSided) {
+            if (doubleBulkBwPrice > 0.0) {
+              rate = doubleBulkBwPrice < normalPrice ? doubleBulkBwPrice : normalPrice;
+              if (rate < normalPrice) {
+                isBulk = true;
+                isBwBulkApplied = true;
+              }
+            }
+          } else {
+            if (singleBulkBwPrice > 0.0) {
+              rate = singleBulkBwPrice < normalPrice ? singleBulkBwPrice : normalPrice;
+              if (rate < normalPrice) {
+                isBulk = true;
+                isBwBulkApplied = true;
+              }
+            }
+          }
+        }
+
         itemCost = sheetsWithCopies * rate;
         itemOriginalCost = sheetsWithCopies * normalPrice;
 
         bwCost += itemCost;
         bwOriginalCost += itemOriginalCost;
 
-        paramType = isBulk ? 'bulkPrinting' : (isDoubleSided ? 'doubleSide' : 'singleSide');
+        paramType = isBulk ? (isDoubleSided ? 'double_bulkPrinting' : 'bulkPrinting') : (isDoubleSided ? 'doubleSide' : 'singleSide');
       }
 
       // Calculate dynamic commission for this item

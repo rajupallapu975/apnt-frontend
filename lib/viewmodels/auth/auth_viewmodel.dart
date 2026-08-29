@@ -1,46 +1,26 @@
 import 'package:apnt/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/firestore_service.dart';
-import '../services/local_storage_service.dart';
+import '../../services/firestore_service.dart';
+import '../../services/local_storage_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
+import '../../services/auth/google_auth_service.dart';
+import 'tester_viewmodel.dart';
 
 class AuthViewModel extends ChangeNotifier {
-  final AuthService _authService = AuthService();
+  final GoogleAuthService _authService = GoogleAuthService();
 
   User? _user;
   String? _phoneNumber;
   String? _displayName;
   bool _isLoading = true;
-  bool _isReviewerSession = false;
-  static bool _globalReviewerSession = false;
   bool _showEmailLogin = false;
 
   bool _isAttemptingAnonSignIn = false;
   bool _anonSignInFailed = false;
 
-  bool get isReviewerSession => _isReviewerSession;
   bool get showEmailLogin => _showEmailLogin;
-
-  static bool get isCurrentReviewerSession {
-    if (_globalReviewerSession) return true;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return false;
-    final email = (user.email ?? '').toLowerCase();
-    final dName = (user.displayName ?? '').toLowerCase();
-    final uid = user.uid.toLowerCase();
-    return email == 'reviewer@zikrint.app' ||
-           email.contains('reviewer') ||
-           dName.contains('reviewer') ||
-           uid == 'reviewer_user';
-  }
-
-  void _setReviewerSession(bool val) {
-    _isReviewerSession = val;
-    _globalReviewerSession = val;
-  }
 
   AuthViewModel() {
     // ⚙️ Stream auth config from backend (controls showEmailLogin)
@@ -59,23 +39,24 @@ class AuthViewModel extends ChangeNotifier {
       if (user != null) {
         _anonSignInFailed = false;
         _isAttemptingAnonSignIn = false;
-        final email = (user.email ?? '').toLowerCase();
-        final dName = (user.displayName ?? '').toLowerCase();
-        final uid = user.uid.toLowerCase();
-        if (email == 'reviewer@zikrint.app' || email.contains('reviewer') || dName.contains('reviewer') || uid == 'reviewer_user' || _isReviewerSession) {
-          _setReviewerSession(true);
+        
+        if (TesterViewModel.isCurrentReviewerSession) {
           _displayName = 'Reviewer User';
+        } else if (!user.isAnonymous) {
+          _displayName = user.displayName ?? (user.email != null ? user.email!.split('@').first : 'User');
         }
         await _loadUserProfile();
         _syncUserProfileToFirestore(user);
-        // 🔔 Restart notification listeners with correct user email
+        // 🔔 Restart notification listeners and load cloud notifications
         NotificationService().initOrderListeners();
+        NotificationService().loadNotifications();
         _signInSecondaryAppsAnonymously();
         _isLoading = false;
         notifyListeners();
       } else {
-        if (!_isReviewerSession) {
+        if (!TesterViewModel.isCurrentReviewerSession) {
           _phoneNumber = null;
+          _displayName = null;
         }
         if (!_anonSignInFailed && !_isAttemptingAnonSignIn) {
           _signInAnonymously();
@@ -161,7 +142,7 @@ class AuthViewModel extends ChangeNotifier {
       phone = await LocalStorageService().getLastPhone();
     }
 
-    if (_isReviewerSession || (_user?.email ?? '').toLowerCase() == 'reviewer@zikrint.app') {
+    if (TesterViewModel.isCurrentReviewerSession || (_user?.email ?? '').toLowerCase() == 'reviewer@zikrint.app') {
       _displayName = 'Reviewer User';
     } else {
       _displayName = name;
@@ -217,80 +198,35 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final user = await _authService.signInWithGoogle();
-      _isLoading = false;
-      notifyListeners();
-
+      final user = await _authService.signIn();
       if (user != null) {
+        _user = user;
+        _displayName = user.displayName ?? (user.email != null ? user.email!.split('@').first : 'User');
+        await _loadUserProfile();
+        _syncUserProfileToFirestore(user);
+        NotificationService().initOrderListeners();
+        _signInSecondaryAppsAnonymously();
+        _isLoading = false;
+        notifyListeners();
         HapticFeedback.lightImpact(); // ✅ SUCCESS FEEDBACK
         return true;
       }
+      _isLoading = false;
+      notifyListeners();
     } catch (e) {
+      debugPrint("❌ Google Sign-In caught in ViewModel: $e");
       _isLoading = false;
       notifyListeners();
     }
-    return false;
-  }
-
-  /// 📧 Email Sign In (Reviewer Test Account)
-  Future<bool> signInWithEmail(String email, String password) async {
-    if (_isLoading) return false;
-
-    _isLoading = true;
-    notifyListeners();
-
-    final cleanEmail = email.trim().toLowerCase();
-    final cleanPass = password.trim();
-
-    try {
-      final user = await _authService.signInWithEmail(cleanEmail, cleanPass);
-
-    if (cleanEmail == 'reviewer@zikrint.app' && cleanPass == 'raju@975') {
-      _setReviewerSession(true);
-      _user = user ?? _authService.currentUser ?? FirebaseAuth.instance.currentUser;
-      _displayName = 'Reviewer User';
-      _isLoading = false;
-      notifyListeners();
-      HapticFeedback.lightImpact();
-      return true;
-    }
-
-      if (user != null) {
-        _user = user;
-        final isRev = cleanEmail == 'reviewer@zikrint.app' || (user.displayName ?? '').toLowerCase().contains('reviewer');
-        _setReviewerSession(isRev);
-        _displayName = user.displayName ?? user.email ?? 'Reviewer User';
-        _isLoading = false;
-        notifyListeners();
-        HapticFeedback.lightImpact();
-        return true;
-      }
-    } catch (e) {
-      if (cleanEmail == 'reviewer@zikrint.app' && cleanPass == 'raju@975') {
-        _setReviewerSession(true);
-        _user = _authService.currentUser ?? FirebaseAuth.instance.currentUser;
-        _displayName = 'Reviewer User';
-        _isLoading = false;
-        notifyListeners();
-        HapticFeedback.lightImpact();
-        return true;
-      }
-      _isLoading = false;
-      notifyListeners();
-      rethrow;
-    }
-
-    _isLoading = false;
-    notifyListeners();
     return false;
   }
 
   /// 🚪 Sign out
-  Future<void> signOut() async {
-    _setReviewerSession(false);
+  Future<void> signOut([TesterViewModel? testerVM]) async {
     _displayName = null;
     _phoneNumber = null;
     _user = null;
+    testerVM?.setReviewerSession(false);
     await LocalStorageService().clearAllData();
     await _authService.signOut();
     notifyListeners();
@@ -318,7 +254,6 @@ class AuthViewModel extends ChangeNotifier {
       _user = null;
       _phoneNumber = null;
       _displayName = null;
-      _isReviewerSession = false;
       _isLoading = false;
       notifyListeners();
 

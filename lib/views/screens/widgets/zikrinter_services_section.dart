@@ -325,6 +325,23 @@ class _ServiceCard extends StatelessWidget {
                             color: AppColors.primaryBlue,
                           ),
                         ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Unavailable',
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
                       ),
                   ],
                 ),

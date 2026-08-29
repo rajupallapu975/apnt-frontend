@@ -419,8 +419,12 @@ class _BindingSelectionPageState extends State<BindingSelectionPage> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        "₹${price.toStringAsFixed(0)}",
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                        price > 0 ? "₹${price.toStringAsFixed(0)}" : "Unavailable",
+                        style: GoogleFonts.inter(
+                          fontSize: 16, 
+                          fontWeight: FontWeight.w900, 
+                          color: price > 0 ? AppColors.textPrimary : AppColors.error,
+                        ),
                       ),
                     ],
                   ),

@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/print_order_model.dart';
 import '../../services/firestore_service.dart';
 import '../../services/local_storage_service.dart';
+import '../../services/backend_service.dart';
 import '../../utils/app_colors.dart';
 import '../../widgets/common/modern_card.dart';
 
@@ -43,6 +44,20 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
       debugPrint("⚠️ Remote history load timeout/error: $e");
     }
 
+    if (user != null) {
+      try {
+        final restOrders = await BackendService().getOrderHistory(user.uid);
+        for (final raw in restOrders) {
+          final id = (raw['orderId'] ?? raw['id'] ?? '').toString();
+          if (id.isNotEmpty) {
+            remoteOrders.add(PrintOrderModel.fromLocalMap(raw));
+          }
+        }
+      } catch (e) {
+        debugPrint("⚠️ REST history load error: $e");
+      }
+    }
+
     final combinedMap = <String, PrintOrderModel>{};
     for (var o in localOrders) {
       combinedMap[o.orderId] = o;
@@ -55,9 +70,12 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
 
     // Focused on COMPLETED orders per user request
     _completedOrders = orders.where((o) => 
-      o.status == OrderStatus.completed || 
-      o.isPicked ||
-      o.orderDone
+      !o.deletedByUser && (
+        o.status == OrderStatus.completed || 
+        o.isPicked ||
+        o.orderDone ||
+        (o.orderStatus ?? '').toLowerCase().contains('completed')
+      )
     ).toList();
     _completedOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     setState(() => _isLoading = false);
@@ -194,6 +212,11 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
     );
 
     if (confirmed == true) {
+      try {
+        await FirestoreService().deleteOrderFromHistory(order);
+      } catch (e) {
+        debugPrint("⚠️ Failed to delete order from remote history: $e");
+      }
       await _localStorage.deleteOrderLocally(order.orderId);
       _loadHistory();
     }
@@ -205,7 +228,7 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Clear All History?'),
-        content: const Text('This will permanently remove ALL completed orders from your local list. This cannot be undone.'),
+        content: const Text('This will permanently remove ALL completed orders. This cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
@@ -218,6 +241,7 @@ class _CompletedOrdersPageState extends State<CompletedOrdersPage> {
     );
 
     if (confirmed == true) {
+      await FirestoreService().clearAllOrdersFromHistory();
       await _localStorage.clearAllOrdersLocally();
       _loadHistory();
     }

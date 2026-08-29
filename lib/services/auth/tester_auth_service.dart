@@ -2,52 +2,17 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import '../config/backend_config.dart';
+import 'base_auth_service.dart';
+import '../../config/backend_config.dart';
 
-class AuthService {
+class TesterAuthService implements BaseAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// 👤 Current User
+  @override
   User? get currentUser => _auth.currentUser;
 
-  /// 🔁 Auth state
+  @override
   Stream<User?> get user => _auth.authStateChanges();
-
-  /// 🔐 Google Sign-In
-  Future<User?> signInWithGoogle() async {
-    try {
-      // 🌐 WEB
-      if (kIsWeb) {
-        final provider = GoogleAuthProvider();
-        final credential = await _auth.signInWithPopup(provider);
-        return credential.user;
-      }
-
-      // 📱 MOBILE
-      final GoogleSignIn googleSignIn = GoogleSignIn();
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-      if (googleUser == null) return null; // User cancelled the sign-in
-
-      final googleAuth = await googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-        accessToken: googleAuth.accessToken,
-      );
-
-      final result = await _auth.signInWithCredential(credential);
-
-      return result.user;
-    } catch (e) {
-      debugPrint('❌ Google Sign-In Error: $e');
-      if (e is FirebaseAuthException) {
-        throw Exception("Auth Error: ${e.message}");
-      }
-      throw Exception("Authentication Failed: $e");
-    }
-  }
 
   /// 📧 Email & Password Sign-In (For Reviewer Test Account)
   Future<User?> signInWithEmail(String email, String password) async {
@@ -72,8 +37,6 @@ class AuthService {
       try {
         final urlsToTry = [
           BackendConfig.baseUrl,
-          'http://192.168.0.206:5001',
-          'http://localhost:5001',
         ];
         for (final baseUrl in urlsToTry) {
           try {
@@ -81,14 +44,15 @@ class AuthService {
               Uri.parse('$baseUrl/api/reviewer-token'),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode({'email': cleanEmail, 'password': cleanPass}),
-            ).timeout(const Duration(seconds: 4));
+            ).timeout(const Duration(seconds: 3));
             if (res.statusCode == 200) {
               final data = jsonDecode(res.body);
               if (data['success'] == true && data['token'] != null) {
                 final userCred = await _auth.signInWithCustomToken(data['token']);
                 await userCred.user?.updateDisplayName('Reviewer User');
+                await userCred.user?.reload();
                 debugPrint('✅ Reviewer custom token sign-in successful!');
-                return userCred.user;
+                return _auth.currentUser ?? userCred.user;
               }
             }
           } catch (_) {}
@@ -101,7 +65,9 @@ class AuthService {
       try {
         final anonCred = await _auth.signInAnonymously();
         await anonCred.user?.updateDisplayName('Reviewer User');
-        return anonCred.user;
+        await anonCred.user?.reload();
+        debugPrint('✅ Reviewer anonymous sign-in fallback successful!');
+        return _auth.currentUser ?? anonCred.user;
       } catch (_) {
         return _auth.currentUser;
       }
@@ -122,28 +88,22 @@ class AuthService {
     }
   }
 
-  /// 🚪 Logout
+  @override
   Future<void> signOut() async {
     try {
       await _auth.signOut();
-      if (!kIsWeb) {
-        await GoogleSignIn().signOut();
-      }
     } catch (e) {
       debugPrint('❌ Logout Error: $e');
       throw Exception("Logout Error: $e");
     }
   }
 
-  /// 🗑️ Delete Account permanently from Firebase Auth
+  @override
   Future<void> deleteAccount() async {
     try {
       final user = _auth.currentUser;
       if (user != null) {
         await user.delete();
-      }
-      if (!kIsWeb) {
-        await GoogleSignIn().signOut();
       }
     } catch (e) {
       debugPrint('❌ Account Deletion Error: $e');

@@ -130,13 +130,15 @@ class ZikrinterAllServicesPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Starting from ₹${startingPrice.toStringAsFixed(0)}',
+                              startingPrice > 0 
+                                  ? 'Starting from ₹${startingPrice.toStringAsFixed(0)}'
+                                  : 'Unavailable',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.primaryBlue,
+                                color: startingPrice > 0 ? AppColors.primaryBlue : AppColors.error,
                               ),
                             ),
                           ],

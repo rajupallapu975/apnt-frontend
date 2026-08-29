@@ -1,8 +1,10 @@
+import 'package:apnt/viewmodels/auth/tester_viewmodel.dart';
+import 'package:apnt/views/screens/auth/login_view.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/auth_viewmodel.dart';
 import '../utils/app_colors.dart';
 import '../widgets/common/primary_button.dart';
 import '../services/firestore_service.dart';
@@ -420,32 +422,23 @@ class ProfilePage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          authVM.displayName ?? user?.displayName ?? 'Welcome User',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryBlack),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primaryBlue),
-                        tooltip: 'Edit Profile',
-                        constraints: const BoxConstraints(),
-                        padding: const EdgeInsets.all(4),
-                        onPressed: () => _showEditProfileSheet(context, authVM),
-                      ),
-                    ],
+                  Text(
+                    authVM.displayName ?? user?.displayName ?? 'Welcome User',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryBlack),
                   ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
                   const SizedBox(height: 4),
                   Text(
                     user?.email ?? 'Not signed in',
                     style: GoogleFonts.manrope(fontSize: 14, color: AppColors.greyDark, fontWeight: FontWeight.w500),
                   ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2, end: 0),
+                  if (authVM.phoneNumber != null && authVM.phoneNumber!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      authVM.phoneNumber!,
+                      style: GoogleFonts.manrope(fontSize: 14, color: AppColors.greyDark, fontWeight: FontWeight.w600),
+                    ).animate().fadeIn(delay: 350.ms).slideY(begin: 0.2, end: 0),
+                  ],
                 ],
               ),
             ),
@@ -470,14 +463,6 @@ class ProfilePage extends StatelessWidget {
                     color: AppColors.primaryBlue,
                     onTap: () => _showOrdersStats(context),
                   ).animate().fadeIn(delay: 400.ms).slideX(begin: 0.1, end: 0),
-                  const SizedBox(height: 16),
-                  _profileItem(
-                    icon: Icons.phone_android_rounded,
-                    title: 'Mobile Number',
-                    subtitle: authVM.phoneNumber ?? 'Add your mobile number',
-                    color: AppColors.success,
-                    onTap: () => _showEditPhoneSheet(context, authVM),
-                  ).animate().fadeIn(delay: 450.ms).slideX(begin: 0.1, end: 0),
                   const SizedBox(height: 16),
                   _profileItem(
                     icon: Icons.help_outline_rounded,
@@ -522,8 +507,15 @@ class ProfilePage extends StatelessWidget {
                       );
 
                       if (confirmed == true) {
-                        await authVM.signOut();
-                        if (context.mounted) Navigator.pop(context);
+                        final testerVM = context.read<TesterViewModel>();
+                        await testerVM.signOut();
+                        await authVM.signOut(testerVM);
+                        if (context.mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const LoginView()),
+                            (route) => false,
+                          );
+                        }
                       }
                     },
                   ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.3, end: 0),

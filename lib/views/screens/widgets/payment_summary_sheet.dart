@@ -1,9 +1,10 @@
+import 'package:apnt/viewmodels/auth/auth_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
-import '../../../viewmodels/auth_viewmodel.dart';
+import '../../../viewmodels/auth/auth_viewmodel.dart';
 import '../../../utils/app_colors.dart';
 
 class PaymentSummarySheet extends StatefulWidget {

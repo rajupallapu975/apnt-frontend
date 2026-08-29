@@ -82,11 +82,11 @@ class ServiceInfoSection extends StatelessWidget {
                 ),
               ),
               Text(
-                '₹${startingPrice.toStringAsFixed(0)}',
+                startingPrice > 0 ? '₹${startingPrice.toStringAsFixed(0)}' : 'Unavailable',
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  color: AppColors.primaryBlue,
+                  color: startingPrice > 0 ? AppColors.primaryBlue : AppColors.error,
                 ),
               ),
               const Spacer(),

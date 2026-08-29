@@ -67,6 +67,30 @@ class LocalStorageService {
     }
 
     await prefs.setString(_keyOrders, jsonEncode(ordersList));
+
+    // 🗑️ Clean up local files if the order is completed, scanned, or picked up
+    if (order.status == OrderStatus.completed || order.isPicked || order.orderDone) {
+      await deleteLocalOrderFiles(order);
+    }
+  }
+
+  /// Delete local physical files associated with an order to free up space
+  Future<void> deleteLocalOrderFiles(PrintOrderModel order) async {
+    if (order.localFilePaths.isEmpty) return;
+    
+    for (final path in order.localFilePaths) {
+      if (path.isNotEmpty && path != 'web_stored' && path != 'error_saving') {
+        try {
+          final file = File(path);
+          if (await file.exists()) {
+            await file.delete();
+            debugPrint("🗑️ Cleaned up completed order local file: $path");
+          }
+        } catch (e) {
+          debugPrint("⚠️ Failed to delete local file $path: $e");
+        }
+      }
+    }
   }
 
   /// Get all locally saved orders (history), strictly filtered by active user ID & email

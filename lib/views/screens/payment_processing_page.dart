@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:apnt/models/print_order_model.dart';
 import 'package:apnt/services/notification_service.dart';
-import 'package:apnt/viewmodels/auth_viewmodel.dart';
+import 'package:apnt/viewmodels/auth/auth_viewmodel.dart';
+import 'package:apnt/viewmodels/auth/tester_viewmodel.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -104,6 +105,7 @@ class _PaymentProcessingPageState
 
     try {
       final authVM = context.read<AuthViewModel>();
+      final testerVM = context.read<TesterViewModel>();
       
       setState(() {
         _status = "Preparing your print request...";
@@ -129,7 +131,7 @@ class _PaymentProcessingPageState
       final user = FirebaseAuth.instance.currentUser;
       final String userEmail = (user?.email ?? authVM.user?.email ?? '').trim().toLowerCase();
       final String reviewerUserName = (user?.displayName ?? authVM.displayName ?? '').trim().toLowerCase();
-      final bool isReviewer = authVM.isReviewerSession || 
+      final bool isReviewer = testerVM.isReviewerSession || 
                               userEmail.contains('reviewer') || 
                               userEmail.contains('test') ||
                               userEmail.contains('tester') ||
@@ -336,6 +338,7 @@ class _PaymentProcessingPageState
           printMode: widget.printSettings['printMode'] ?? 'autonomous',
           customId: customId,
           customerName: context.read<AuthViewModel>().displayName,
+          customerPhone: userPhone,
         );
       } catch (e) {
         if (isReviewerOrder) {
@@ -348,6 +351,7 @@ class _PaymentProcessingPageState
               'userId': FirebaseAuth.instance.currentUser?.uid ?? 'reviewer_user',
               'userEmail': 'reviewer@zikrint.app',
               'customerName': 'Reviewer User',
+              'customerPhone': userPhone,
               'shopId': targetShopId,
               'amount': widget.expectedPrice,
               'totalAmount': widget.expectedPrice,

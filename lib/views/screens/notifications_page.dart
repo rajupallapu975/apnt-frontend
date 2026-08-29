@@ -19,6 +19,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     super.initState();
     // Mark all as read when opening the page
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationService>().loadNotifications();
       context.read<NotificationService>().markAsRead();
     });
   }

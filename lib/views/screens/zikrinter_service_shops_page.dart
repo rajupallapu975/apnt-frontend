@@ -13,7 +13,7 @@ import '../../utils/app_colors.dart';
 import '../../xerox_shop/xerox_shop_model.dart';
 import '../../models/file_model.dart';
 import '../../models/print_order_model.dart';
-import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/auth/tester_viewmodel.dart';
 import '../../services/pricing_service.dart';
 import 'print_options/print_options_page.dart';
 
@@ -388,7 +388,7 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
       ..._secondaryDocs,
     };
 
-    final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+    final bool isReviewer = TesterViewModel.isCurrentReviewerSession;
 
     final providerShops = <_ShopWithService>{};
 
@@ -699,8 +699,12 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                                         style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
                                                       ),
                                                       Text(
-                                                        '₹${startingPrice.toStringAsFixed(0)}',
-                                                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primaryBlue),
+                                                        startingPrice > 0 ? '₹${startingPrice.toStringAsFixed(0)}' : 'Unavailable',
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 16, 
+                                                          fontWeight: FontWeight.w900, 
+                                                          color: startingPrice > 0 ? AppColors.primaryBlue : AppColors.error,
+                                                        ),
                                                       ),
                                                     ],
                                                   ),
@@ -747,9 +751,12 @@ class _ZikrinterServiceShopsPageState extends State<ZikrinterServiceShopsPage> {
                                                     style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
                                                   ),
                                                   const SizedBox(height: 8),
-                                                  _detailRow(Icons.brightness_medium_rounded, 'B&W Rate: ₹${startingPrice.toStringAsFixed(1)} / page'),
-                                                  _detailRow(Icons.color_lens_outlined, 'Color Rate: ₹${colorPrice.toStringAsFixed(1)} / page'),
-                                                  _detailRow(Icons.discount_outlined, 'Bulk Discount: ₹${bulkBwPrice.toStringAsFixed(1)} / page after $bulkStart pages'),
+                                                  _detailRow(Icons.brightness_medium_rounded, 'B&W Rate: ${startingPrice > 0 ? '₹${startingPrice.toStringAsFixed(1)} / page' : 'Unavailable'}'),
+                                                  _detailRow(Icons.color_lens_outlined, 'Color Rate: ${colorPrice > 0 ? '₹${colorPrice.toStringAsFixed(1)} / page' : 'Unavailable'}'),
+                                                  if (bulkBwPrice > 0)
+                                                    _detailRow(Icons.discount_outlined, 'Bulk Discount: ₹${bulkBwPrice.toStringAsFixed(1)} / page after $bulkStart pages')
+                                                  else
+                                                    _detailRow(Icons.discount_outlined, 'Bulk Discount: Unavailable'),
                                                   _detailRow(Icons.settings_outlined, 'Options: Portrait, Landscape, Single, Double Sided'),
 
                                                   const SizedBox(height: 16),

@@ -1,3 +1,4 @@
+import 'package:apnt/views/screens/auth/login_view.dart';
 import 'package:apnt/xerox_shop/xerox_shop_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../viewmodels/upload_viewmodel.dart';
-import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/auth/auth_viewmodel.dart';
+import '../../viewmodels/auth/tester_viewmodel.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/service_availability_helper.dart';
 import '../../widgets/common/modern_card.dart';
@@ -22,6 +24,7 @@ import '../../services/notification_service.dart';
 import '../../services/pwa_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/local_storage_service.dart';
+import '../../services/backend_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'qr_scanner_page.dart';
@@ -65,6 +68,7 @@ class _UploadPageState extends State<UploadPage> {
 
   List<FakeDocumentSnapshot> _backendServicesList = [];
   bool _isLoadingServices = true;
+  bool _isServerDown = false;
   StreamSubscription? _versionSubscription;
 
   void _listenToServiceVersion() {
@@ -82,23 +86,120 @@ class _UploadPageState extends State<UploadPage> {
     });
   }
 
+  static final List<FakeDocumentSnapshot> _defaultServicesCatalog = [
+    FakeDocumentSnapshot('ZHwQd18Vy08TZkyBFXjB', {
+      'serviceName': 'Documents (Xerox)',
+      'name': 'Documents (Xerox)',
+      'startingPrice': 2.0,
+      'isPrimary': true,
+      'serviceType': 'xerox',
+      'description': 'Precision black & white and color document printing on premium paper.',
+      'actionLabel': 'Upload Files',
+      'paperSizes': ['A4', 'Legal', 'A3'],
+    }),
+    FakeDocumentSnapshot('yPiaqNqbvhABcunanu5X', {
+      'serviceName': 'Passport Size Photos',
+      'name': 'Passport Size Photos',
+      'startingPrice': 30.0,
+      'serviceType': 'passport',
+      'description': 'Official passport and visa size photos with premium photo finish.',
+      'actionLabel': 'Order Photos',
+      'paperSizes': ['Passport (8 Photos)', 'Passport (16 Photos)', 'Passport (32 Photos)'],
+    }),
+    FakeDocumentSnapshot('project_binding', {
+      'serviceName': 'Project Binding',
+      'name': 'Project Binding',
+      'startingPrice': 25.0,
+      'serviceType': 'binding',
+      'description': 'Professional spiral, softcover, and hardcover book binding for college & office.',
+      'actionLabel': 'Order Binding',
+      'paperSizes': ['A4 Spiral', 'A4 Softcover', 'A4 Hardcover'],
+    }),
+  ];
+
   Future<void> _fetchServicesFromBackend() async {
     try {
-      final response = await http.get(Uri.parse('${BackendConfig.baseUrl}/api/services'));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true && mounted) {
-          final List<dynamic> services = data['services'] ?? [];
-          setState(() {
-            _backendServicesList = services
-                .map((s) => FakeDocumentSnapshot(s['id'] ?? '', s as Map<String, dynamic>))
-                .toList();
-            _isLoadingServices = false;
-          });
+      // 1. Try Backend REST API first
+      try {
+        final response = await http
+            .get(Uri.parse('${BackendConfig.baseUrl}/api/services'))
+            .timeout(const Duration(seconds: 4));
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true && mounted) {
+            final List<dynamic> services = data['services'] ?? [];
+            if (services.isNotEmpty) {
+              setState(() {
+                _backendServicesList = services
+                    .map((s) => FakeDocumentSnapshot(s['id'] ?? '', s as Map<String, dynamic>))
+                    .toList();
+                _isServerDown = false;
+              });
+              return;
+            }
+          }
         }
+      } catch (httpErr) {
+        debugPrint("⚠️ Backend services API fetch error: $httpErr");
+      }
+
+      // 2. Fetch directly from Services collection across available Firestore instances
+      final List<String> appNames = ['psfc', 'zikrinter', 'zikrint_admin'];
+      for (final appName in appNames) {
+        try {
+          FirebaseFirestore fs;
+          if (appName == 'psfc') {
+            fs = FirebaseFirestore.instance;
+          } else {
+            fs = FirebaseFirestore.instanceFor(app: Firebase.app(appName));
+          }
+
+          // Try 'services' collection
+          var snapshot = await fs.collection('services').get().timeout(const Duration(seconds: 5));
+          if (snapshot.docs.isEmpty) {
+            // Try 'zikrinter' collection
+            snapshot = await fs.collection('zikrinter').get().timeout(const Duration(seconds: 5));
+          }
+
+          if (snapshot.docs.isNotEmpty && mounted) {
+            final validDocs = snapshot.docs.where((d) {
+              final dData = d.data();
+              return dData['isDeleted'] != true;
+            }).toList();
+
+            if (validDocs.isNotEmpty) {
+              setState(() {
+                _backendServicesList = validDocs
+                    .map((doc) => FakeDocumentSnapshot(doc.id, doc.data()))
+                    .toList();
+                _isServerDown = false;
+              });
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 3. Fallback to default services catalogue (Always show services)
+      if (mounted) {
+        setState(() {
+          if (_backendServicesList.isEmpty) {
+            _backendServicesList = List.from(_defaultServicesCatalog);
+          }
+          _isServerDown = false;
+        });
       }
     } catch (e) {
       debugPrint("Error fetching services: $e");
+      if (mounted) {
+        setState(() {
+          if (_backendServicesList.isEmpty) {
+            _backendServicesList = List.from(_defaultServicesCatalog);
+          }
+          _isServerDown = false;
+        });
+      }
+    } finally {
       if (mounted) {
         setState(() {
           _isLoadingServices = false;
@@ -144,9 +245,17 @@ class _UploadPageState extends State<UploadPage> {
             child: Text("CANCEL", style: GoogleFonts.inter(color: AppColors.textTertiary, fontWeight: FontWeight.w700)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              authVM.signOut();
+              final testerVM = context.read<TesterViewModel>();
+              await testerVM.signOut();
+              await authVM.signOut(testerVM);
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginView()),
+                  (route) => false,
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
@@ -531,12 +640,14 @@ class _UploadPageState extends State<UploadPage> {
                   onRefresh: () async {
                     final xeroxVM = context.read<XeroxShopViewModel>();
                     await xeroxVM.fetchShops();
+                    await _fetchServicesFromBackend();
                     await Future.delayed(const Duration(milliseconds: 500));
-                    if (mounted) setState(() {});
                   },
                   child: _isLoadingServices
                       ? const Center(child: CircularProgressIndicator())
-                      : () {
+                      : _isServerDown
+                          ? _buildServerDownSection()
+                          : () {
                           final allDocs = _backendServicesList;
                           FakeDocumentSnapshot? primaryDoc;
                           try {
@@ -582,8 +693,8 @@ class _UploadPageState extends State<UploadPage> {
                               children: [
                                 if (primaryDoc != null)
                                   _buildDynamicHeroSection(uploadVM, primaryDoc)
-                                else
-                                  _buildHeroSection(uploadVM),
+                                else if (allDocs.isNotEmpty)
+                                  _buildDynamicHeroSection(uploadVM, allDocs.first),
                                   
                                 if (uploadVM.pendingFiles.isNotEmpty) ...[
                                   const SizedBox(height: 24),
@@ -661,110 +772,70 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
-  // ─── Documents Hero Card ─────────────────────────────────────────────────────
-  Widget _buildHeroSection(UploadViewModel uploadVM) {
-    const bulletColor = AppColors.primaryBlue;
-    final bulletStyle = GoogleFonts.inter(
-      fontSize: 15,
-      fontWeight: FontWeight.w500,
-      color: AppColors.textSecondary,
-      height: 1.5,
-    );
-
-    return ModernCard(
-      padding: const EdgeInsets.all(28),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // ── Left: Text Content ──
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Documents (Xerox)',
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF2D3142),
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _bullet(bulletStyle, bulletColor, 'A4 from ₹2/page • A3 from ₹3/page'),
-                const SizedBox(height: 6),
-                _bullet(bulletStyle, bulletColor, 'Max 10MB per file'),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _showModeSheet,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                    ),
-                    child: Text(
-                      'Upload Files',
-                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-              ],
+  // ─── Server Down Section ─────────────────────────────────────────────────────
+  Widget _buildServerDownSection() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                size: 64,
+                color: AppColors.error,
+              ),
             ),
-          ),
-          const SizedBox(width: 20),
-          // ── Right: Document Fan Illustration ──
-          Expanded(
-            flex: 2,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  height: 110,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Back card
-                      Transform.rotate(
-                        angle: 0.2,
-                        child: _illustrationCard(Icons.image_rounded, AppColors.success.withValues(alpha: 0.7), 'JPG'),
-                      ),
-                      // Middle card
-                      Transform.rotate(
-                        angle: -0.1,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 20),
-                          child: _illustrationCard(Icons.article_rounded, AppColors.primaryBlue.withValues(alpha: 0.8), 'DOC'),
-                        ),
-                      ),
-                      // Front card
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8, top: 8),
-                        child: _illustrationCard(Icons.picture_as_pdf_rounded, AppColors.error.withValues(alpha: 0.85), 'PDF'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'A4 SIZE',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
-                    color: AppColors.textTertiary,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 24),
+            Text(
+              'Our server is down',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF2D3142),
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'We are working on that. Please try again in a few moments.',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _isLoadingServices = true;
+                });
+                _fetchServicesFromBackend();
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              ),
+            ),
+          ],
+        ),
       ),
-    ).animate().fadeIn().slideY(begin: -0.05, end: 0, duration: 400.ms);
+    );
   }
 
   Widget _buildDynamicHeroSection(UploadViewModel uploadVM, dynamic doc) {
@@ -1152,32 +1223,16 @@ class _UploadPageState extends State<UploadPage> {
         if (_ordersSubTabIndex == 0) {
           final currentUser = FirebaseAuth.instance.currentUser;
           // Active Orders Sub-tab: Live stream active orders are authoritative
-          return FutureBuilder<List<PrintOrderModel>>(
-            future: LocalStorageService().getLocalOrders(
-              userId: currentUser?.uid,
-              userEmail: currentUser?.email,
-            ),
-            builder: (context, localSnapshot) {
-              final localOrders = localSnapshot.data ?? [];
-              final streamActive = rawOrders.where((o) => !o.isPicked && o.status != OrderStatus.completed && !o.orderDone).toList();
-
-              final Map<String, PrintOrderModel> combinedMap = {};
-              for (final o in streamActive) {
-                combinedMap[o.orderId] = o;
-              }
-              for (final o in localOrders) {
-                if (!o.isPicked && o.status != OrderStatus.completed && !o.orderDone) {
-                  combinedMap.putIfAbsent(o.orderId, () => o);
-                }
-              }
-
-              final activeOrders = combinedMap.values.toList();
-              activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final activeOrders = rawOrders
+              .where((o) => !o.isPicked && o.status != OrderStatus.completed && !o.orderDone)
+              .toList();
+          activeOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
               // 🧪 Terminal Console Logger for Tester Account Active Orders
               final authVM = context.read<AuthViewModel>();
+              final testerVM = context.read<TesterViewModel>();
               final String currentUserEmail = (currentUser?.email ?? authVM.user?.email ?? '').toLowerCase();
-              final bool isReviewerAccount = authVM.isReviewerSession || currentUserEmail == 'reviewer@zikrint.app' || currentUserEmail.contains('reviewer');
+              final bool isReviewerAccount = testerVM.isReviewerSession || currentUserEmail == 'reviewer@zikrint.app' || currentUserEmail.contains('reviewer');
 
               if (isReviewerAccount) {
                 debugPrint("\n==================================================");
@@ -1229,28 +1284,60 @@ class _UploadPageState extends State<UploadPage> {
                   ],
                 ],
               );
-            },
-          );
         } else {
-          // Completed Orders Sub-tab: Merge live stream completed & local storage completed orders
+          // Completed Orders Sub-tab: Merge live stream, Firestore order_history & backend REST API
+          final currentUser = FirebaseAuth.instance.currentUser;
           return FutureBuilder<List<PrintOrderModel>>(
-            future: LocalStorageService().getLocalOrders(),
-            builder: (context, localSnapshot) {
-              final localOrders = localSnapshot.data ?? [];
-              final streamCompleted = rawOrders.where((o) => o.status == OrderStatus.completed || o.isPicked || o.orderDone).toList();
+            future: () async {
+              final List<PrintOrderModel> list = [];
+              final local = await LocalStorageService().getLocalOrders(
+                userId: currentUser?.uid,
+                userEmail: currentUser?.email,
+              );
+              list.addAll(local);
+
+              try {
+                final remote = await FirestoreService().getUserOrders().first.timeout(const Duration(seconds: 4));
+                list.addAll(remote);
+              } catch (_) {}
+
+              if (currentUser != null) {
+                try {
+                  final restOrders = await BackendService().getOrderHistory(currentUser.uid);
+                  for (final raw in restOrders) {
+                    final id = (raw['orderId'] ?? raw['id'] ?? '').toString();
+                    if (id.isNotEmpty) {
+                      list.add(PrintOrderModel.fromLocalMap(raw));
+                    }
+                  }
+                } catch (_) {}
+              }
 
               final Map<String, PrintOrderModel> combinedMap = {};
-              for (final o in streamCompleted) {
-                combinedMap[o.orderId] = o;
+              for (final o in rawOrders) {
+                if (o.status == OrderStatus.completed || o.isPicked || o.orderDone || (o.orderStatus ?? '').toLowerCase().contains('completed')) {
+                  combinedMap[o.orderId] = o;
+                }
               }
-              for (final o in localOrders) {
-                if (o.status == OrderStatus.completed || o.isPicked || o.orderDone) {
+              for (final o in list) {
+                if (o.status == OrderStatus.completed || o.isPicked || o.orderDone || (o.orderStatus ?? '').toLowerCase().contains('completed')) {
                   combinedMap[o.orderId] = o;
                 }
               }
 
-              final completedOrders = combinedMap.values.toList();
-              completedOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+              final res = combinedMap.values.where((o) => !o.deletedByUser).toList();
+              res.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+              return res;
+            }(),
+            builder: (context, localSnapshot) {
+              final completedOrders = localSnapshot.data ?? [];
+
+              if (localSnapshot.connectionState == ConnectionState.waiting && completedOrders.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
 
               if (completedOrders.isEmpty) {
                 return Container(

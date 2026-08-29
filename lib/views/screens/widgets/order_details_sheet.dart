@@ -178,7 +178,11 @@ class OrderDetailsSheet extends StatelessWidget {
                           builder: (context) {
                             final bool isOrderDone = order.status == OrderStatus.completed || order.isPicked || order.orderDone;
                             final bool isReady = isPrinted || order.isPrintingCompleted || isOrderDone;
-                            final Color statusCol = isReady ? AppColors.success : Colors.orange;
+                            final String norm = (liveStatus ?? order.orderStatus ?? '').toLowerCase().trim();
+                            final bool isPrinting = norm == 'printing' || norm == 'in_progress' || norm == 'in progress';
+                            final Color statusCol = isReady 
+                                ? AppColors.success 
+                                : (isPrinting ? AppColors.primaryBlue : Colors.orange);
 
                             return Container(
                               width: double.infinity,
@@ -202,7 +206,7 @@ class OrderDetailsSheet extends StatelessWidget {
                                     child: Icon(
                                       isReady
                                           ? Icons.check_circle_rounded
-                                          : Icons.hourglass_bottom_rounded,
+                                          : (isPrinting ? Icons.print_rounded : Icons.hourglass_bottom_rounded),
                                       size: 22,
                                       color: statusCol,
                                     ),
@@ -211,8 +215,6 @@ class OrderDetailsSheet extends StatelessWidget {
                                   Expanded(
                                     child: Builder(
                                       builder: (context) {
-                                         final String norm = (liveStatus ?? order.orderStatus ?? '').toLowerCase().trim();
-                                         final bool isPrinting = norm == 'printing' || norm == 'in_progress' || norm == 'in progress';
                                          final String statusTitle = isOrderDone
                                             ? 'ORDER COMPLETED'
                                             : (isReady

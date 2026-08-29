@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../config/backend_config.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/tester_viewmodel.dart';
 
 class CreateOrderResponse {
   final String orderId;
@@ -112,6 +112,7 @@ class BackendService {
     String printMode = 'autonomous', // New: added printMode
     String? customId, // Sequential ID (order_1)
     String? customerName,
+    String? customerPhone,
   }) async {
     final user = _auth.currentUser;
     final String userId = user?.uid ?? "guest_user";
@@ -136,6 +137,7 @@ class BackendService {
           "printMode": printMode, // Pass mode to backend
           "customId": customId,
           "customerName": customerName ?? 'Reviewer User',
+          "customerPhone": customerPhone,
         }),
       ).timeout(const Duration(seconds: 30));
 
@@ -158,7 +160,7 @@ class BackendService {
   ================================================= */
   Future<List<Map<String, dynamic>>> getXeroxShops() async {
     try {
-      final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+      final bool isReviewer = TesterViewModel.isCurrentReviewerSession;
 
       final url = "${BackendConfig.getXeroxShopsUrl}?isTestUser=$isReviewer";
       debugPrint("📡 Fetching shops from: $url");
@@ -288,6 +290,75 @@ class BackendService {
       return true;
     } catch (_) {
       return true;
+    }
+  }
+
+  /* =================================================
+     USER NOTIFICATIONS & ORDER HISTORY (REST API)
+  ================================================= */
+  Future<List<Map<String, dynamic>>> getNotifications(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse("${BackendConfig.baseUrl}/api/user/notifications?userId=$userId"),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['notifications'] is List) {
+          return List<Map<String, dynamic>>.from(data['notifications']);
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint("⚠️ BackendService getNotifications error: $e");
+      return [];
+    }
+  }
+
+  Future<bool> markNotificationsAsRead(String userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse("${BackendConfig.baseUrl}/api/user/notifications/mark-read"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"userId": userId}),
+      ).timeout(const Duration(seconds: 10));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> clearNotifications(String userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse("${BackendConfig.baseUrl}/api/user/notifications/clear"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"userId": userId}),
+      ).timeout(const Duration(seconds: 10));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getOrderHistory(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse("${BackendConfig.baseUrl}/api/user/order-history?userId=$userId"),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['orders'] is List) {
+          return List<Map<String, dynamic>>.from(data['orders']);
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint("⚠️ BackendService getOrderHistory error: $e");
+      return [];
     }
   }
 }

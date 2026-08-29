@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/backend_config.dart';
-import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/auth/tester_viewmodel.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -132,7 +132,7 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     });
 
     try {
-      final bool isReviewer = AuthViewModel.isCurrentReviewerSession;
+      final bool isReviewer = TesterViewModel.isCurrentReviewerSession;
 
       final response = await http.get(Uri.parse('${BackendConfig.baseUrl}/api/services/${widget.serviceId}/shops?paperSize=$_selectedSize&isTestUser=$isReviewer'));
       if (response.statusCode == 200) {
@@ -368,9 +368,12 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                       style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryBlack),
                     ),
                     const SizedBox(height: 12),
-                    _detailRow(Icons.brightness_medium_rounded, 'B&W Rate: ₹${bwPrice.toStringAsFixed(1)} / page'),
-                    _detailRow(Icons.color_lens_outlined, 'Color Rate: ₹${colorPrice.toStringAsFixed(1)} / page'),
-                    _detailRow(Icons.discount_outlined, 'Bulk Discount: ₹${bulkBwPrice.toStringAsFixed(1)} / page after $bulkStart pages'),
+                    _detailRow(Icons.brightness_medium_rounded, 'B&W Rate: ${bwPrice > 0 ? '₹${bwPrice.toStringAsFixed(1)} / page' : 'Unavailable'}'),
+                    _detailRow(Icons.color_lens_outlined, 'Color Rate: ${colorPrice > 0 ? '₹${colorPrice.toStringAsFixed(1)} / page' : 'Unavailable'}'),
+                    if (bulkBwPrice > 0)
+                      _detailRow(Icons.discount_outlined, 'Bulk Discount: ₹${bulkBwPrice.toStringAsFixed(1)} / page after $bulkStart pages')
+                    else
+                      _detailRow(Icons.discount_outlined, 'Bulk Discount: Unavailable'),
                     _detailRow(Icons.settings_outlined, 'Options: Portrait, Landscape, Single, Double Sided'),
                   ],
                 ),
@@ -789,8 +792,12 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                             style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                           ),
                           Text(
-                            '₹${widget.startingPrice.toStringAsFixed(0)}',
-                            style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.primaryBlue),
+                            widget.startingPrice > 0 ? '₹${widget.startingPrice.toStringAsFixed(0)}' : 'Unavailable',
+                            style: GoogleFonts.inter(
+                              fontSize: 20, 
+                              fontWeight: FontWeight.w900, 
+                              color: widget.startingPrice > 0 ? AppColors.primaryBlue : AppColors.error,
+                            ),
                           ),
                         ],
                       ),
@@ -1144,8 +1151,12 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'B/W: ₹${bwPrice.toStringAsFixed(0)}',
-                    style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    bwPrice > 0 ? 'B/W: ₹${bwPrice.toStringAsFixed(0)}' : 'B/W: Unavailable',
+                    style: GoogleFonts.inter(
+                      fontSize: 11, 
+                      fontWeight: FontWeight.w700, 
+                      color: bwPrice > 0 ? AppColors.textPrimary : AppColors.error,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1156,8 +1167,12 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'Color: ₹${colorPrice.toStringAsFixed(0)}',
-                    style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    colorPrice > 0 ? 'Color: ₹${colorPrice.toStringAsFixed(0)}' : 'Color: Unavailable',
+                    style: GoogleFonts.inter(
+                      fontSize: 11, 
+                      fontWeight: FontWeight.w700, 
+                      color: colorPrice > 0 ? AppColors.textPrimary : AppColors.error,
+                    ),
                   ),
                 ),
                 const Spacer(),
@@ -1293,36 +1308,44 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
     double bwSingle = 0.0;
     double bwDouble = 0.0;
     double bwBulk = 0.0;
+    double bwDoubleBulk = 0.0;
     double colorSingle = 0.0;
     double colorDouble = 0.0;
     double colorBulk = 0.0;
+    double colorDoubleBulk = 0.0;
     
     final sizeConfig = config['paperSizes']?[sizeKey];
     if (sizeConfig != null) {
       bwSingle = toDouble(sizeConfig['bw']?['singleSidePrice']) ?? 0.0;
       bwDouble = toDouble(sizeConfig['bw']?['doubleSidePrice']) ?? 0.0;
       bwBulk = toDouble(sizeConfig['bw']?['bulkPrintingPrice']) ?? 0.0;
+      bwDoubleBulk = toDouble(sizeConfig['bw']?['doubleBulkPrintingPrice'] ?? sizeConfig['bw']?['double_bulkPrintingPrice']) ?? 0.0;
       
       colorSingle = toDouble(sizeConfig['color']?['singleSidePrice']) ?? 0.0;
       colorDouble = toDouble(sizeConfig['color']?['doubleSidePrice']) ?? 0.0;
       colorBulk = toDouble(sizeConfig['color']?['bulkPrintingPrice']) ?? 0.0;
+      colorDoubleBulk = toDouble(sizeConfig['color']?['doubleBulkPrintingPrice'] ?? sizeConfig['color']?['double_bulkPrintingPrice']) ?? 0.0;
     } else {
       bwSingle = toDouble(config['${sizeKey}_bw_singleSidePrice']) ?? 0.0;
       bwDouble = toDouble(config['${sizeKey}_bw_doubleSidePrice']) ?? 0.0;
       bwBulk = toDouble(config['${sizeKey}_bw_bulkPrintingPrice']) ?? 0.0;
+      bwDoubleBulk = toDouble(config['${sizeKey}_bw_double_bulkPrintingPrice']) ?? 0.0;
       
       colorSingle = toDouble(config['${sizeKey}_color_singleSidePrice']) ?? 0.0;
       colorDouble = toDouble(config['${sizeKey}_color_doubleSidePrice']) ?? 0.0;
       colorBulk = toDouble(config['${sizeKey}_color_bulkPrintingPrice']) ?? 0.0;
+      colorDoubleBulk = toDouble(config['${sizeKey}_color_double_bulkPrintingPrice']) ?? 0.0;
       
       if (sizeKey == 'a4') {
         bwSingle = toDouble(config['bw_singleSidePrice']) ?? bwSingle;
         bwDouble = toDouble(config['bw_doubleSidePrice']) ?? bwDouble;
         bwBulk = toDouble(config['bw_bulkPrintingPrice']) ?? bwBulk;
+        bwDoubleBulk = toDouble(config['bw_double_bulkPrintingPrice']) ?? toDouble(config['double_bulkPrintingPrice']) ?? bwDoubleBulk;
         
         colorSingle = toDouble(config['color_singleSidePrice']) ?? toDouble(config['singleSidePrice']) ?? colorSingle;
         colorDouble = toDouble(config['color_doubleSidePrice']) ?? toDouble(config['doubleSidePrice']) ?? colorDouble;
         colorBulk = toDouble(config['color_bulkPrintingPrice']) ?? toDouble(config['bulkPrintingPrice']) ?? colorBulk;
+        colorDoubleBulk = toDouble(config['color_double_bulkPrintingPrice']) ?? colorDoubleBulk;
       }
     }
 
@@ -1414,10 +1437,12 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
                         _pricingRow('Black & White (Single Side)', bwSingle),
                         _pricingRow('Black & White (Double Side)', bwDouble),
                         _pricingRow('Black & White (Bulk Rate)', bwBulk),
+                        _pricingRow('Black & White (Double Side Bulk)', bwDoubleBulk),
                         const Divider(height: 24),
                         _pricingRow('Color (Single Side)', colorSingle),
                         _pricingRow('Color (Double Side)', colorDouble),
                         _pricingRow('Color (Bulk Rate)', colorBulk),
+                        _pricingRow('Color (Double Side Bulk)', colorDoubleBulk),
                       ],
                     ),
                   ),
@@ -1495,6 +1520,7 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
   }
 
   Widget _pricingRow(String label, double price) {
+    final bool isAvailable = price > 0.0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -1504,12 +1530,20 @@ class _ZikrinterServiceDetailsPageState extends State<ZikrinterServiceDetailsPag
             child: Text(
               label,
               softWrap: true,
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+              style: GoogleFonts.inter(
+                fontSize: 13, 
+                color: isAvailable ? AppColors.textSecondary : AppColors.textTertiary, 
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           Text(
-            '₹${price.toStringAsFixed(1)}',
-            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            isAvailable ? '₹${price.toStringAsFixed(1)}' : 'Unavailable',
+            style: GoogleFonts.inter(
+              fontSize: 14, 
+              fontWeight: FontWeight.bold, 
+              color: isAvailable ? AppColors.textPrimary : AppColors.error.withValues(alpha: 0.8),
+            ),
           ),
         ],
       ),

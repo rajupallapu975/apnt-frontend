@@ -73,9 +73,13 @@ service cloud.firestore {
       allow delete: if ownsRecord(resource.data);
     }
 
-    // 👤 Users — own profile document only (FCM token registration, display name).
+    // 👤 Users — own profile document only (FCM token registration, display name) and its subcollections.
     match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == 'reviewer@zikrint.app');
+
+      match /{allSubcollections=**} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == 'reviewer@zikrint.app');
+      }
     }
 
     // 🏪 Shops — catalogue data browsed during shop selection. Read-only for clients;

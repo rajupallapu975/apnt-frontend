@@ -146,15 +146,25 @@ class ShopDetailsSection extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                _guideRow('B&W Printing (Normal)', '₹${pricing.normalBwPrice.toStringAsFixed(2)} / page'),
-                const Divider(height: 20),
-                _guideRow('B&W Printing (Bulk)', '₹${pricing.bulkBwPrice.toStringAsFixed(2)} / page'),
-                _guideSubRow('Applied if total B&W pages ≥ ${pricing.bwBulkStartPage} sheets'),
+                _guideRow(
+                  'B&W Printing (Normal)', 
+                  pricing.normalBwPrice > 0 ? '₹${pricing.normalBwPrice.toStringAsFixed(2)} / page' : 'Unavailable',
+                ),
+                if (pricing.bulkBwPrice > 0) ...[
+                  const Divider(height: 20),
+                  _guideRow('B&W Printing (Bulk)', '₹${pricing.bulkBwPrice.toStringAsFixed(2)} / page'),
+                  _guideSubRow('Applied if total B&W pages ≥ ${pricing.bwBulkStartPage} sheets'),
+                ],
                 const Divider(height: 24),
-                _guideRow('Color Printing (Normal)', '₹${pricing.normalColorPrice.toStringAsFixed(2)} / page'),
-                const Divider(height: 20),
-                _guideRow('Color Printing (Bulk)', '₹${pricing.bulkColorPrice.toStringAsFixed(2)} / page'),
-                _guideSubRow('Applied if total Color pages ≥ ${pricing.colorBulkStartPage} sheets'),
+                _guideRow(
+                  'Color Printing (Normal)', 
+                  pricing.normalColorPrice > 0 ? '₹${pricing.normalColorPrice.toStringAsFixed(2)} / page' : 'Unavailable',
+                ),
+                if (pricing.bulkColorPrice > 0) ...[
+                  const Divider(height: 20),
+                  _guideRow('Color Printing (Bulk)', '₹${pricing.bulkColorPrice.toStringAsFixed(2)} / page'),
+                  _guideSubRow('Applied if total Color pages ≥ ${pricing.colorBulkStartPage} sheets'),
+                ],
               ],
             ),
           ),

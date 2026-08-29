@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:provider/provider.dart';
-import 'viewmodels/auth_viewmodel.dart';
+import 'viewmodels/auth/auth_viewmodel.dart';
+import 'viewmodels/auth/tester_viewmodel.dart';
 import 'viewmodels/upload_viewmodel.dart';
 import 'xerox_shop/xerox_shop_viewmodel.dart';
-import 'views/screens/login_view.dart';
+import 'views/screens/auth/login_view.dart';
 import 'views/screens/upload_page.dart';
-import 'views/screens/name_onboarding_screen.dart';
 import 'views/screens/delete_account_page.dart';
 import 'views/screens/privacy_policy_page.dart';
 import 'utils/app_theme.dart';
@@ -104,10 +104,16 @@ void main() async {
     debugPrint("⚠️ Font preload skipped: $e");
   }
 
+  // 🚀 Initialize secondary Firebase apps and wait for completion before running the app.
+  // This ensures that all services (Firestore, Auth) are fully ready and prevents
+  // query permission errors and stream setup failures on startup.
+  await _initializeSecondaryApps();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => TesterViewModel()),
         ChangeNotifierProvider(create: (_) => UploadViewModel()),
         ChangeNotifierProvider(create: (_) => XeroxShopViewModel()),
         ChangeNotifierProvider.value(value: notificationService),
@@ -115,11 +121,6 @@ void main() async {
       child: const MyApp(),
     ),
   );
-
-  // 🚀 Secondary Firebase apps are not needed for the first frame — initialize
-  // them in the background so startup doesn't skip frames.
-  // FirestoreService.getFirestore falls back to the primary instance until ready.
-  unawaited(_initializeSecondaryApps());
 
   // 🛡️ Start the Background Watchman (Android only)
   if (!kIsWeb && Platform.isAndroid && Firebase.apps.isNotEmpty) {
@@ -145,93 +146,101 @@ Future<void> _initializeSecondaryApps() async {
   await Future.delayed(const Duration(milliseconds: 300));
 
   // 🏪 Initialize Zikrint Admin as a secondary app
-  try {
-    await Firebase.initializeApp(
-      name: "zikrint_admin",
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyAM_UmfDJyCSObGjyb2-Cp0titzv068CLM",
-        authDomain: "zikrint-admin.firebaseapp.com",
-        projectId: "zikrint-admin",
-        storageBucket: "zikrint-admin.firebasestorage.app",
-        messagingSenderId: "71044416645",
-        appId: "1:71044416645:web:20135d3480fc6e3ab7d5ec",
-      ),
-    );
-    debugPrint("🚀 Zikrint Admin Secondary App Initialized");
-  } catch (e) {
-    debugPrint("⚠️ Zikrint Admin Init Error: $e");
+  if (!Firebase.apps.any((app) => app.name == "zikrint_admin")) {
+    try {
+      await Firebase.initializeApp(
+        name: "zikrint_admin",
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyAM_UmfDJyCSObGjyb2-Cp0titzv068CLM",
+          authDomain: "zikrint-admin.firebaseapp.com",
+          projectId: "zikrint-admin",
+          storageBucket: "zikrint-admin.firebasestorage.app",
+          messagingSenderId: "71044416645",
+          appId: "1:71044416645:web:20135d3480fc6e3ab7d5ec",
+        ),
+      );
+      debugPrint("🚀 Zikrint Admin Secondary App Initialized");
+    } catch (e) {
+      debugPrint("⚠️ Zikrint Admin Init Error: $e");
+    }
   }
 
   // ⏳ Introduce another small delay before the next Firebase app initialization
-  await Future.delayed(const Duration(milliseconds: 300));
+  await Future.delayed(const Duration(milliseconds: 200));
 
   // 🏪 Initialize Zikrinter Project as a secondary app for service catalogs
-  try {
-    await Firebase.initializeApp(
-      name: "zikrinter",
-      options: kIsWeb
-          ? const FirebaseOptions(
-              apiKey: 'AIzaSyDB-g9ey111EaWfj5sf2n7KjY1MMjjibh4',
-              appId: '1:947972179342:web:38e04561ca1132f60210df',
-              messagingSenderId: '947972179342',
-              projectId: 'zikrinter',
-              authDomain: 'zikrinter.firebaseapp.com',
-              storageBucket: 'zikrinter.firebasestorage.app',
-            )
-          : (defaultTargetPlatform == TargetPlatform.iOS
-              ? const FirebaseOptions(
-                  apiKey: 'AIzaSyCk48p1rCR74_J2WyFJ9ZGVkjw8AhC-yZ8',
-                  appId: '1:947972179342:ios:271ef98eb23942b70210df',
-                  messagingSenderId: '947972179342',
-                  projectId: 'zikrinter',
-                  storageBucket: 'zikrinter.firebasestorage.app',
-                  iosBundleId: 'com.zikrinter.zikrinter',
-                )
-              : const FirebaseOptions(
-                  apiKey: 'AIzaSyBCKnAcecrspWbELBfO6f0OegcfhyxrS38',
-                  appId: '1:947972179342:android:b9b56746265d8cb00210df',
-                  messagingSenderId: '947972179342',
-                  projectId: 'zikrinter',
-                  storageBucket: 'zikrinter.firebasestorage.app',
-                )),
-    );
-    debugPrint("🚀 Zikrinter Project Secondary App Initialized");
-  } catch (e) {
-    debugPrint("⚠️ Zikrinter Project Init Error: $e");
+  if (!Firebase.apps.any((app) => app.name == "zikrinter")) {
+    try {
+      await Firebase.initializeApp(
+        name: "zikrinter",
+        options: kIsWeb
+            ? const FirebaseOptions(
+                apiKey: 'AIzaSyDB-g9ey111EaWfj5sf2n7KjY1MMjjibh4',
+                appId: '1:947972179342:web:38e04561ca1132f60210df',
+                messagingSenderId: '947972179342',
+                projectId: 'zikrinter',
+                authDomain: 'zikrinter.firebaseapp.com',
+                storageBucket: 'zikrinter.firebasestorage.app',
+              )
+            : (defaultTargetPlatform == TargetPlatform.iOS
+                ? const FirebaseOptions(
+                    apiKey: 'AIzaSyCk48p1rCR74_J2WyFJ9ZGVkjw8AhC-yZ8',
+                    appId: '1:947972179342:ios:271ef98eb23942b70210df',
+                    messagingSenderId: '947972179342',
+                    projectId: 'zikrinter',
+                    storageBucket: 'zikrinter.firebasestorage.app',
+                    iosBundleId: 'com.zikrinter.zikrinter',
+                  )
+                : const FirebaseOptions(
+                    apiKey: 'AIzaSyBCKnAcecrspWbELBfO6f0OegcfhyxrS38',
+                    appId: '1:947972179342:android:b9b56746265d8cb00210df',
+                    messagingSenderId: '947972179342',
+                    projectId: 'zikrinter',
+                    storageBucket: 'zikrinter.firebasestorage.app',
+                  )),
+      );
+      debugPrint("🚀 Zikrinter Project Secondary App Initialized");
+    } catch (e) {
+      debugPrint("⚠️ Zikrinter Project Init Error: $e");
+    }
   }
 
   // 🏪 Initialize Customer Project 2 (Backup 1) as a secondary app
-  try {
-    await Firebase.initializeApp(
-      name: "zikrint-944a4",
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyD34jkVSpxyjHBY_CVoyP2e8xgJdJv6ucw",
-        appId: "1:484986026046:android:bd7da1c8d0dfc217b1796f",
-        messagingSenderId: "484986026046",
-        projectId: "zikrint-944a4",
-      ),
-    );
-    debugPrint("🚀 Customer Project 2 (Backup 1) Initialized");
-  } catch (e) {
-    debugPrint("⚠️ Customer Project 2 Init Error: $e");
+  if (!Firebase.apps.any((app) => app.name == "zikrint-944a4")) {
+    try {
+      await Firebase.initializeApp(
+        name: "zikrint-944a4",
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyD34jkVSpxyjHBY_CVoyP2e8xgJdJv6ucw",
+          appId: "1:484986026046:android:bd7da1c8d0dfc217b1796f",
+          messagingSenderId: "484986026046",
+          projectId: "zikrint-944a4",
+        ),
+      );
+      debugPrint("🚀 Customer Project 2 (Backup 1) Initialized");
+    } catch (e) {
+      debugPrint("⚠️ Customer Project 2 Init Error: $e");
+    }
   }
 
-  await Future.delayed(const Duration(milliseconds: 300));
+  await Future.delayed(const Duration(milliseconds: 200));
 
   // 🏪 Initialize Customer Project 3 (Backup 2) as a secondary app
-  try {
-    await Firebase.initializeApp(
-      name: "think-ink",
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyCZW5G6byY78K9o4a_YW0GqsPwr_t0gstA",
-        appId: "1:802839616382:android:e6a312bfff81a52c4c312f",
-        messagingSenderId: "802839616382",
-        projectId: "think-ink",
-      ),
-    );
-    debugPrint("🚀 Customer Project 3 (Backup 2) Initialized");
-  } catch (e) {
-    debugPrint("⚠️ Customer Project 3 Init Error: $e");
+  if (!Firebase.apps.any((app) => app.name == "think-ink")) {
+    try {
+      await Firebase.initializeApp(
+        name: "think-ink",
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyCZW5G6byY78K9o4a_YW0GqsPwr_t0gstA",
+          appId: "1:802839616382:android:e6a312bfff81a52c4c312f",
+          messagingSenderId: "802839616382",
+          projectId: "think-ink",
+        ),
+      );
+      debugPrint("🚀 Customer Project 3 (Backup 2) Initialized");
+    } catch (e) {
+      debugPrint("⚠️ Customer Project 3 Init Error: $e");
+    }
   }
 
   // 🚀 Authenticate on secondary apps anonymously to bypass PERMISSION_DENIED on multi-app reads
@@ -342,14 +351,15 @@ class AuthWrapper extends StatelessWidget {
     }
 
     final authVM = context.watch<AuthViewModel>();
+    final testerVM = context.watch<TesterViewModel>();
 
     // 🔄 Show splash while auth state is loading
-    if (authVM.isLoading) {
+    if (authVM.isLoading || testerVM.isLoading) {
       return const _SplashScreen();
     }
 
     // 🚀 Direct transition for Reviewer Test Session
-    if (authVM.isReviewerSession) {
+    if (testerVM.isReviewerSession || TesterViewModel.isCurrentReviewerSession) {
       return const UploadPage();
     }
 
@@ -361,12 +371,8 @@ class AuthWrapper extends StatelessWidget {
         if (authVM.displayName == null || authVM.displayName!.trim().isEmpty) {
           return const LoginView();
         }
-      } else {
-        // 🔐 Google User: Must confirm/onboard their name.
-        if (authVM.displayName == null || authVM.displayName!.trim().isEmpty) {
-          return const NameOnboardingScreen();
-        }
       }
+      // 🚀 Google User & Named Guest: Take directly to Home Dashboard
       return const UploadPage();
     }
 

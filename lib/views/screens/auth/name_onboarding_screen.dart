@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../viewmodels/auth_viewmodel.dart';
-import '../../utils/app_colors.dart';
+import '../../../viewmodels/auth/auth_viewmodel.dart';
+import '../../../utils/app_colors.dart';
 
 class NameOnboardingScreen extends StatefulWidget {
   const NameOnboardingScreen({super.key});

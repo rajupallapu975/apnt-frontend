@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:apnt/models/print_order_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firestore_service.dart';
+import 'backend_service.dart';
 // 🛡️ Safe platform abstraction for JS calls
 import '../utils/notification_helper.dart' if (dart.library.js) '../utils/notification_helper_web.dart' as web_js;
 
@@ -60,7 +60,12 @@ class NotificationService extends ChangeNotifier {
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    await loadNotifications();
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      loadNotifications();
+    });
+    if (FirebaseAuth.instance.currentUser != null) {
+      loadNotifications();
+    }
     
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -100,7 +105,7 @@ class NotificationService extends ChangeNotifier {
       debugPrint("Notification Plugin initialization check failed: $e");
     }
 
-    initOrderListeners();
+
 
     // 🚀 Initialize FCM (Background/Killed logic)
     // 🌐 Runs on web too: registers web/firebase-messaging-sw.js and syncs the
@@ -213,27 +218,119 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
+  CollectionReference _getNotificationsCollection() {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? 'guest_user';
+    return FirebaseFirestore.instance.collection('users').doc(uid).collection('notifications');
+  }
+
+  StreamSubscription? _notificationsSubscription;
+
+  Future<void> loadNotifications() async {
+    _notificationsSubscription?.cancel();
+    
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _notifications.clear();
+      notifyListeners();
+      return;
+    }
+
+    _notificationsSubscription = _getNotificationsCollection()
+        .orderBy('time', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      _notifications.clear();
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data() as Map<String, dynamic>;
+          _notifications.add(NotificationItem(
+            id: doc.id,
+            title: data['title'] ?? '',
+            body: data['body'] ?? '',
+            time: data['time'] is Timestamp
+                ? (data['time'] as Timestamp).toDate()
+                : DateTime.parse(data['time'] ?? DateTime.now().toIso8601String()),
+            type: data['type'] ?? 'info',
+            isRead: data['isRead'] ?? false,
+          ));
+        } catch (e) {
+          debugPrint("Error parsing notification: $e");
+        }
+      }
+      notifyListeners();
+    }, onError: (e) async {
+      debugPrint("ℹ️ Notification stream status: $e. Syncing via REST API...");
+      await _loadFromRestApi(user.uid);
+    });
+
+    // Also trigger initial load from REST API to ensure immediate population
+    _loadFromRestApi(user.uid);
+  }
+
+  Future<void> _loadFromRestApi(String userId) async {
+    try {
+      final list = await BackendService().getNotifications(userId);
+      if (list.isNotEmpty) {
+        final existingIds = _notifications.map((n) => n.id).toSet();
+        bool updated = false;
+        for (final data in list) {
+          final id = (data['id'] ?? '').toString();
+          if (id.isNotEmpty && !existingIds.contains(id)) {
+            _notifications.add(NotificationItem(
+              id: id,
+              title: data['title'] ?? '',
+              body: data['body'] ?? '',
+              time: DateTime.tryParse(data['time']?.toString() ?? '') ?? DateTime.now(),
+              type: data['type'] ?? 'info',
+              isRead: data['isRead'] == true,
+            ));
+            updated = true;
+          }
+        }
+        if (updated) {
+          _notifications.sort((a, b) => b.time.compareTo(a.time));
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint("REST API notification load error: $e");
+    }
+  }
+
   Future<void> addNotification({
     required String title,
     required String body,
     required String type,
     bool showLocal = true,
   }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
     final newItem = NotificationItem(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: id,
       title: title,
       body: body,
       time: DateTime.now(),
       type: type,
     );
-    _notifications.insert(0, newItem);
-    await saveNotifications();
+
+    try {
+      await _getNotificationsCollection().doc(id).set({
+        'title': title,
+        'body': body,
+        'time': Timestamp.fromDate(newItem.time),
+        'type': type,
+        'isRead': false,
+      });
+    } catch (e) {
+      debugPrint("Error saving notification to Firestore: $e");
+    }
 
     if (showLocal && !kIsWeb) {
       await _showSystemNotification(title: title, body: body);
     }
-
-    notifyListeners();
   }
 
   Future<void> _showSystemNotification({required String title, required String body}) async {
@@ -259,48 +356,52 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
-  String _getStorageKey() {
+  Future<void> markAsRead() async {
     final user = FirebaseAuth.instance.currentUser;
-    final email = (user?.email ?? '').toLowerCase();
-    final uid = user?.uid ?? 'guest';
-    if (email.contains('reviewer') || uid == 'reviewer_user') {
-      return 'user_notifications_reviewer_test';
+    if (user == null) return;
+
+    for (final n in _notifications) {
+      n.isRead = true;
     }
-    return 'user_notifications_${email.isNotEmpty ? email : uid}';
-  }
-
-  Future<void> loadNotifications() async {
-    final prefs = await SharedPreferences.getInstance();
-    final storageKey = _getStorageKey();
-    final data = prefs.getString(storageKey);
-    if (data != null) {
-      final List<dynamic> list = jsonDecode(data);
-      _notifications.clear();
-      _notifications.addAll(list.map((e) => NotificationItem.fromJson(e)).toList());
-      notifyListeners();
-    } else {
-      _notifications.clear();
-      notifyListeners();
-    }
-  }
-
-  Future<void> saveNotifications() async {
-    final prefs = await SharedPreferences.getInstance();
-    final storageKey = _getStorageKey();
-    final data = jsonEncode(_notifications.map((e) => e.toJson()).toList());
-    await prefs.setString(storageKey, data);
-  }
-
-  void markAsRead() {
-    for (var n in _notifications) { n.isRead = true; }
-    saveNotifications();
     notifyListeners();
+
+    try {
+      final unreadSnapshot = await _getNotificationsCollection().where('isRead', isEqualTo: false).get();
+      if (unreadSnapshot.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in unreadSnapshot.docs) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint("Firestore markAsRead error: $e");
+    }
+
+    await BackendService().markNotificationsAsRead(user.uid);
   }
 
-  void clearAll() {
+  Future<void> clearAll() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     _notifications.clear();
-    saveNotifications();
     notifyListeners();
+
+    try {
+      final snapshot = await _getNotificationsCollection().get();
+      if (snapshot.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in snapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint("Firestore clearAll error: $e");
+    }
+
+    await BackendService().clearNotifications(user.uid);
   }
 
   void notifyOrderCompleted(PrintOrderModel order) {

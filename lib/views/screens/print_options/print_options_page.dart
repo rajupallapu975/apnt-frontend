@@ -598,8 +598,23 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     final divider = Divider(height: 1, thickness: 1, color: AppColors.border.withValues(alpha: 0.4), indent: 24, endIndent: 24);
 
     final String sizeKey = _getResolvedSizeKey();
-    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
-    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
+    final bool isBwAvailable = pricing.isBwAvailable(sizeKey);
+    final bool isColorAvailable = pricing.isColorAvailable(sizeKey);
+
+    // Auto-adjust selected color mode if shop only supports one mode
+    if (cfg.isColor && !isColorAvailable && isBwAvailable) {
+      cfg.isColor = false;
+    } else if (!cfg.isColor && !isBwAvailable && isColorAvailable) {
+      cfg.isColor = true;
+    }
+
+    final bool isDoubleSidedAvailable = pricing.isDoubleSidedAvailable(sizeKey, cfg.isColor);
+    if (cfg.isDoubleSided && !isDoubleSidedAvailable) {
+      cfg.isDoubleSided = false;
+    }
+
+    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 0.0;
+    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 0.0;
     
     final bool isPassportPhoto = (widget.serviceName ?? '').toLowerCase().contains('passport') ||
                                  (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
@@ -740,17 +755,19 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                       _mobileColorTile(
                         colorIndicator: _colorCircle(),
                         label: 'Coloured',
-                        price: '₹${currentColorPrice.toStringAsFixed(0)}/page',
-                        selected: cfg.isColor,
-                        onTap: () => setState(() => cfg.isColor = true),
+                        price: isColorAvailable ? '₹${currentColorPrice.toStringAsFixed(0)}/page' : 'Unavailable',
+                        selected: cfg.isColor && isColorAvailable,
+                        enabled: isColorAvailable,
+                        onTap: isColorAvailable ? () => setState(() => cfg.isColor = true) : null,
                       ),
                       const SizedBox(width: 12),
                       _mobileColorTile(
                         colorIndicator: _bwCircle(),
                         label: 'B & W',
-                        price: '₹${currentBwPrice.toStringAsFixed(0)}/page',
-                        selected: !cfg.isColor,
-                        onTap: () => setState(() => cfg.isColor = false),
+                        price: isBwAvailable ? '₹${currentBwPrice.toStringAsFixed(0)}/page' : 'Unavailable',
+                        selected: !cfg.isColor && isBwAvailable,
+                        enabled: isBwAvailable,
+                        onTap: isBwAvailable ? () => setState(() => cfg.isColor = false) : null,
                       ),
                     ],
                   ),
@@ -858,15 +875,17 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                         label: 'One Sided',
                         sublabel: 'Single side print',
                         selected: !cfg.isDoubleSided,
+                        enabled: true,
                         onTap: () => setState(() => cfg.isDoubleSided = false),
                       ),
                       const SizedBox(width: 12),
                       _mobileSideTile(
                         icon: Icons.filter_2_rounded,
                         label: 'Two Sided',
-                        sublabel: 'Double sided print',
-                        selected: cfg.isDoubleSided,
-                        onTap: () => setState(() => cfg.isDoubleSided = true),
+                        sublabel: isDoubleSidedAvailable ? 'Double sided print' : 'Unavailable',
+                        selected: cfg.isDoubleSided && isDoubleSidedAvailable,
+                        enabled: isDoubleSidedAvailable,
+                        onTap: isDoubleSidedAvailable ? () => setState(() => cfg.isDoubleSided = true) : null,
                       ),
                     ],
                   ),
@@ -1024,8 +1043,12 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
                                  (widget.serviceId ?? '').contains('yPiaqNqbvhABcunanu5X');
 
     final String sizeKey = _getResolvedSizeKey();
-    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
-    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
+    final bool isBwAvailable = pricing.isBwAvailable(sizeKey);
+    final bool isColorAvailable = pricing.isColorAvailable(sizeKey);
+    final bool isDoubleSidedAvailable = pricing.isDoubleSidedAvailable(sizeKey, cfg.isColor);
+
+    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 0.0;
+    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 0.0;
 
     return ModernCard(
       padding: const EdgeInsets.all(32),
@@ -1067,9 +1090,23 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _webColorTile('Black & White', '₹${currentBwPrice.toStringAsFixed(0)}/page', !cfg.isColor, _bwCircle(), () => setState(() => cfg.isColor = false)),
+              _webColorTile(
+                'Black & White', 
+                isBwAvailable ? '₹${currentBwPrice.toStringAsFixed(0)}/page' : 'Unavailable', 
+                !cfg.isColor && isBwAvailable, 
+                _bwCircle(), 
+                isBwAvailable ? () => setState(() => cfg.isColor = false) : null,
+                enabled: isBwAvailable,
+              ),
               const SizedBox(width: 12),
-              _webColorTile('Color', '₹${currentColorPrice.toStringAsFixed(0)}/page', cfg.isColor, _colorCircle(), () => setState(() => cfg.isColor = true)),
+              _webColorTile(
+                'Color', 
+                isColorAvailable ? '₹${currentColorPrice.toStringAsFixed(0)}/page' : 'Unavailable', 
+                cfg.isColor && isColorAvailable, 
+                _colorCircle(), 
+                isColorAvailable ? () => setState(() => cfg.isColor = true) : null,
+                enabled: isColorAvailable,
+              ),
             ],
           ),
 
@@ -1130,9 +1167,21 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             const SizedBox(height: 12),
             Row(
               children: [
-                _webTile('One Sided (Single)', '1 side per sheet', !cfg.isDoubleSided, () => setState(() => cfg.isDoubleSided = false)),
+                _webTile(
+                  'One Sided (Single)', 
+                  '1 side per sheet', 
+                  !cfg.isDoubleSided, 
+                  () => setState(() => cfg.isDoubleSided = false),
+                  enabled: true,
+                ),
                 const SizedBox(width: 12),
-                _webTile('Two Sided (Double)', 'Both sides of sheet', cfg.isDoubleSided, () => setState(() => cfg.isDoubleSided = true)),
+                _webTile(
+                  'Two Sided (Double)', 
+                  isDoubleSidedAvailable ? 'Both sides of sheet' : 'Unavailable', 
+                  cfg.isDoubleSided && isDoubleSidedAvailable, 
+                  isDoubleSidedAvailable ? () => setState(() => cfg.isDoubleSided = true) : null,
+                  enabled: isDoubleSidedAvailable,
+                ),
               ],
             ),
           ],
@@ -1288,9 +1337,26 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
 
     final pricing = _getResolvedPricing();
     final String sizeKey = _getResolvedSizeKey();
-    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? pricing.normalBwPrices['a4'] ?? 2.0;
-    final double currentDoubleBwPrice = pricing.doubleBwPrices[sizeKey] ?? pricing.doubleBwPrices['a4'] ?? 4.0;
-    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? pricing.normalColorPrices['a4'] ?? 10.0;
+    final bool isBwAvailable = pricing.isBwAvailable(sizeKey);
+    final bool isColorAvailable = pricing.isColorAvailable(sizeKey);
+    final bool isDoubleBwAvailable = pricing.isDoubleSidedAvailable(sizeKey, false);
+    final bool isDoubleColorAvailable = pricing.isDoubleSidedAvailable(sizeKey, true);
+    final bool isBulkBwAvailable = pricing.isBulkBwAvailable(sizeKey);
+    final bool isDoubleBulkBwAvailable = pricing.isDoubleBulkBwAvailable(sizeKey);
+    final bool isBulkColorAvailable = pricing.isBulkColorAvailable(sizeKey);
+    final bool isDoubleBulkColorAvailable = pricing.isDoubleBulkColorAvailable(sizeKey);
+
+    final double currentBwPrice = pricing.normalBwPrices[sizeKey] ?? 0.0;
+    final double currentDoubleBwPrice = pricing.doubleBwPrices[sizeKey] ?? 0.0;
+    final double currentBulkBwPrice = pricing.bulkBwPrices[sizeKey] ?? 0.0;
+    final double currentDoubleBulkBwPrice = pricing.doubleBulkBwPrices[sizeKey] ?? 0.0;
+    final int bwBulkStart = pricing.bwBulkStartPages[sizeKey] ?? 10;
+
+    final double currentColorPrice = pricing.normalColorPrices[sizeKey] ?? 0.0;
+    final double currentDoubleColorPrice = pricing.doubleColorPrices[sizeKey] ?? 0.0;
+    final double currentBulkColorPrice = pricing.bulkColorPrices[sizeKey] ?? 0.0;
+    final double currentDoubleBulkColorPrice = pricing.doubleBulkColorPrices[sizeKey] ?? 0.0;
+    final int colorBulkStart = pricing.colorBulkStartPages[sizeKey] ?? 10;
 
     return ModernCard(
       padding: const EdgeInsets.all(20),
@@ -1307,9 +1373,14 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
             ],
           ),
           const SizedBox(height: 16),
-          _priceGuideRow('B&W Print', '₹${currentBwPrice.toStringAsFixed(1)}/page'),
-          _priceGuideRow('Double Sided', '₹${currentDoubleBwPrice.toStringAsFixed(1)}/sheet'),
-          _priceGuideRow('Color Print', '₹${currentColorPrice.toStringAsFixed(1)}/page'),
+          if (isBwAvailable) _priceGuideRow('B&W Print', '₹${currentBwPrice.toStringAsFixed(1)}/page'),
+          if (isDoubleBwAvailable) _priceGuideRow('B&W Double Sided', '₹${currentDoubleBwPrice.toStringAsFixed(1)}/sheet'),
+          if (isBulkBwAvailable) _priceGuideRow('B&W Bulk (≥$bwBulkStart pages)', '₹${currentBulkBwPrice.toStringAsFixed(1)}/page'),
+          if (isDoubleBulkBwAvailable) _priceGuideRow('B&W Double Bulk (≥$bwBulkStart sheets)', '₹${currentDoubleBulkBwPrice.toStringAsFixed(1)}/sheet'),
+          if (isColorAvailable) _priceGuideRow('Color Print', '₹${currentColorPrice.toStringAsFixed(1)}/page'),
+          if (isDoubleColorAvailable) _priceGuideRow('Color Double Sided', '₹${currentDoubleColorPrice.toStringAsFixed(1)}/sheet'),
+          if (isBulkColorAvailable) _priceGuideRow('Color Bulk (≥$colorBulkStart pages)', '₹${currentBulkColorPrice.toStringAsFixed(1)}/page'),
+          if (isDoubleBulkColorAvailable) _priceGuideRow('Color Double Bulk (≥$colorBulkStart sheets)', '₹${currentDoubleBulkColorPrice.toStringAsFixed(1)}/sheet'),
         ],
       ),
     );
@@ -1444,48 +1515,56 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     required String label,
     required String price,
     required bool selected,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    bool enabled = true,
   }) {
     final selColor = AppColors.primaryBlue;
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
+        onTap: enabled ? onTap : null,
+        child: AnimatedOpacity(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: selected ? selColor.withValues(alpha: 0.06) : Colors.white,
-            border: Border.all(
-              color: selected ? selColor : AppColors.border,
-              width: selected ? 2 : 1,
-            ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              colorIndicator,
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: selected ? selColor : AppColors.textPrimary)),
-                    Text(price,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: selected ? selColor.withValues(alpha: 0.7) : AppColors.textSecondary)),
-                  ],
-                ),
+          opacity: enabled ? 1.0 : 0.45,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: selected ? selColor.withValues(alpha: 0.06) : (enabled ? Colors.white : const Color(0xFFF9FAFB)),
+              border: Border.all(
+                color: selected ? selColor : AppColors.border.withValues(alpha: enabled ? 1.0 : 0.4),
+                width: selected ? 2 : 1,
               ),
-            ],
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                colorIndicator,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: selected ? selColor : (enabled ? AppColors.textPrimary : AppColors.textTertiary))),
+                      Text(price,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: enabled ? FontWeight.w500 : FontWeight.w600,
+                              color: selected
+                                  ? selColor.withValues(alpha: 0.7)
+                                  : (enabled ? AppColors.textSecondary : AppColors.error.withValues(alpha: 0.8)))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1497,55 +1576,63 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     required String label,
     required String sublabel,
     required bool selected,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    bool enabled = true,
   }) {
     final selColor = AppColors.primaryBlue;
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
+        onTap: enabled ? onTap : null,
+        child: AnimatedOpacity(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: selected ? selColor.withValues(alpha: 0.06) : Colors.white,
-            border: Border.all(
-              color: selected ? selColor : AppColors.border,
-              width: selected ? 2 : 1,
+          opacity: enabled ? 1.0 : 0.45,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: selected ? selColor.withValues(alpha: 0.06) : (enabled ? Colors.white : const Color(0xFFF9FAFB)),
+              border: Border.all(
+                color: selected ? selColor : AppColors.border.withValues(alpha: enabled ? 1.0 : 0.4),
+                width: selected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(14),
             ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: selected ? selColor.withValues(alpha: 0.12) : AppColors.surface,
-                  shape: BoxShape.circle,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: selected ? selColor.withValues(alpha: 0.12) : (enabled ? AppColors.surface : AppColors.border.withValues(alpha: 0.2)),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 18, color: selected ? selColor : (enabled ? AppColors.textSecondary : AppColors.textTertiary)),
                 ),
-                child: Icon(icon, size: 18, color: selected ? selColor : AppColors.textSecondary),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: selected ? selColor : AppColors.textPrimary)),
-                    Text(sublabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: selected ? selColor.withValues(alpha: 0.7) : AppColors.textSecondary)),
-                  ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: selected ? selColor : (enabled ? AppColors.textPrimary : AppColors.textTertiary))),
+                      Text(sublabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: enabled ? FontWeight.w500 : FontWeight.w600,
+                              color: selected
+                                  ? selColor.withValues(alpha: 0.7)
+                                  : (enabled ? AppColors.textSecondary : AppColors.error.withValues(alpha: 0.8)))),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1616,49 +1703,55 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
     String price,
     bool selected,
     Widget indicator,
-    VoidCallback onTap,
-  ) {
+    VoidCallback? onTap, {
+    bool enabled = true,
+  }) {
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
+        onTap: enabled ? onTap : null,
+        child: AnimatedOpacity(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primaryBlue.withValues(alpha: 0.05) : Colors.white,
-            border: Border.all(
-              color: selected ? AppColors.primaryBlue : AppColors.border,
-              width: selected ? 1.5 : 1,
-            ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              indicator,
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            color: selected ? AppColors.primaryBlue : AppColors.textPrimary)),
-                    Text(price,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: selected
-                                ? AppColors.primaryBlue.withValues(alpha: 0.7)
-                                : AppColors.textSecondary)),
-                  ],
-                ),
+          opacity: enabled ? 1.0 : 0.45,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primaryBlue.withValues(alpha: 0.05) : (enabled ? Colors.white : const Color(0xFFF9FAFB)),
+              border: Border.all(
+                color: selected ? AppColors.primaryBlue : AppColors.border.withValues(alpha: enabled ? 1.0 : 0.4),
+                width: selected ? 1.5 : 1,
               ),
-            ],
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                indicator,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: selected ? AppColors.primaryBlue : (enabled ? AppColors.textPrimary : AppColors.textTertiary))),
+                      Text(price,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: enabled ? FontWeight.w500 : FontWeight.w600,
+                              color: selected
+                                  ? AppColors.primaryBlue.withValues(alpha: 0.7)
+                                  : (enabled ? AppColors.textSecondary : AppColors.error.withValues(alpha: 0.8)))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1822,36 +1915,40 @@ class _PrintOptionsPageState extends State<PrintOptionsPage> {
         ),
       );
 
-  Widget _webTile(String label, String? sublabel, bool selected, VoidCallback onTap) {
+  Widget _webTile(String label, String? sublabel, bool selected, VoidCallback? onTap, {bool enabled = true}) {
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
+        onTap: enabled ? onTap : null,
+        child: AnimatedOpacity(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primaryBlue.withValues(alpha: 0.05) : Colors.white,
-            border: Border.all(
-              color: selected ? AppColors.primaryBlue : AppColors.border,
-              width: selected ? 1.5 : 1,
+          opacity: enabled ? 1.0 : 0.45,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primaryBlue.withValues(alpha: 0.05) : (enabled ? Colors.white : const Color(0xFFF9FAFB)),
+              border: Border.all(
+                color: selected ? AppColors.primaryBlue : AppColors.border.withValues(alpha: enabled ? 1.0 : 0.4),
+                width: selected ? 1.5 : 1,
+              ),
+              borderRadius: BorderRadius.circular(14),
             ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            children: [
-              Text(label,
-                  style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: selected ? AppColors.primaryBlue : AppColors.textPrimary)),
-              if (sublabel != null) ...[
-                const SizedBox(height: 3),
-                Text(sublabel,
+            child: Column(
+              children: [
+                Text(label,
                     style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: selected ? AppColors.primaryBlue.withValues(alpha: 0.7) : AppColors.textSecondary)),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: selected ? AppColors.primaryBlue : (enabled ? AppColors.textPrimary : AppColors.textTertiary))),
+                if (sublabel != null) ...[
+                  const SizedBox(height: 3),
+                  Text(sublabel,
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: selected ? AppColors.primaryBlue.withValues(alpha: 0.7) : (enabled ? AppColors.textSecondary : AppColors.error.withValues(alpha: 0.8)))),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
